@@ -185,6 +185,36 @@ export interface StageCatalog {
   stages: StageDefinition[];
 }
 
+export const PLUGIN_GUIDANCE_MODES = ["draft", "implement", "verify"] as const;
+export type PluginGuidanceMode = (typeof PLUGIN_GUIDANCE_MODES)[number];
+
+export interface PluginStageBinding {
+  stage: string;
+  agent: "lean-pdlc-ux";
+  skills: string[];
+  mode: PluginGuidanceMode;
+  handoff: string;
+  approvalBoundary: string;
+}
+
+export interface PluginStageBindingsDescriptor {
+  schemaVersion: 1;
+  plugin: string;
+  bindings: PluginStageBinding[];
+}
+
+export interface PluginGuidanceResolution {
+  stage: StageDefinition;
+  guidance: {
+    plugin: string;
+    agent: "lean-pdlc-ux";
+    skills: string[];
+    mode: PluginGuidanceMode;
+    handoff: string;
+    approvalBoundary: string;
+  };
+}
+
 export interface JourneyStageRef {
   stageId: string;
   inclusion: JourneyStageInclusion;

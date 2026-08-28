@@ -8,6 +8,7 @@ import { loadStandardProfiles, resolveStandardDefaultsForStages } from "./core/d
 import { JourneyRegistry } from "./core/journey-registry.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsPolicy } from "./core/requirements.ts";
+import { resolvePluginGuidance } from "./core/plugin-guidance.ts";
 import { validatePocDeliveryRecord } from "./core/schema.ts";
 import { FileStateStore } from "./core/state.ts";
 import { StageRegistry } from "./core/stage-registry.ts";
@@ -23,6 +24,7 @@ interface CliOptions {
   root: string;
   record?: string;
   actor?: string;
+  plugin?: string;
 }
 
 interface ParsedArguments {
@@ -38,12 +40,13 @@ function parseArguments(args: string[], currentDirectory: string): ParsedArgumen
     const argument = args[index];
     if (argument === "--help") {
       positional.push("help");
-    } else if (argument === "--root" || argument === "--record" || argument === "--actor") {
+    } else if (argument === "--root" || argument === "--record" || argument === "--actor" || argument === "--plugin") {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Missing value for ${argument}`);
       if (argument === "--root") options.root = resolve(currentDirectory, value);
       else if (argument === "--record") options.record = value;
-      else options.actor = value;
+      else if (argument === "--actor") options.actor = value;
+      else options.plugin = resolve(currentDirectory, value);
       index += 1;
     } else if (argument.startsWith("--")) {
       throw new PdlcError("INVALID_ARGUMENT", `Unknown option: ${argument}`);
@@ -230,6 +233,14 @@ async function status(options: CliOptions): Promise<unknown> {
   };
 }
 
+async function guidance(options: CliOptions, stageId?: string): Promise<unknown> {
+  if (!options.plugin) throw new PdlcError("PLUGIN_REQUIRED", "Guidance requires --plugin <path>");
+  if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Guidance requires a canonical Stage id");
+  const { stages } = await loadDeliveryModel();
+  const resolution = await resolvePluginGuidance(stages, options.plugin, stageId);
+  return { ok: true, ...resolution };
+}
+
 async function validate(options: CliOptions): Promise<unknown> {
   const checks: Record<string, unknown> = {};
 
@@ -350,6 +361,7 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
             "status [--root <path>] [--record <POC-ID>]",
             "validate [--root <path>] [--record <POC-ID|path.json>]",
             "readiness build [--root <path>] [--record <POC-ID>] [--actor <identity>]",
+            "guidance <stage> --plugin <path>",
             "checkpoint <commit|verify|decide> (Phase 2)",
           ],
         },
@@ -358,6 +370,7 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "readiness") return { exitCode: 0, output: await readiness(parsed.options, parsed.subcommand) };
+    if (parsed.command === "guidance") return { exitCode: 0, output: await guidance(parsed.options, parsed.subcommand) };
     if (parsed.command === "checkpoint") {
       throw new PdlcError("CHECKPOINT_NOT_IMPLEMENTED", `Checkpoint '${parsed.subcommand ?? ""}' is defined for Phase 2 and cannot change state yet`);
     }
