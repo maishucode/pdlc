@@ -117,7 +117,7 @@ test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries
     "tools",
     "user-invocable",
   ]);
-  assert.match(body, /only act against a supplied Stage binding/i);
+  assert.match(body, /guidance.*resolve a Stage binding/i);
   assert.match(body, /ux-design.*draft.*UX specification.*textual mockup/i);
   assert.match(body, /implementation.*approved design reference/i);
   assert.match(body, /implementation.*React UI.*tests/i);
@@ -125,6 +125,10 @@ test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries
   assert.match(body, /(?:must not|do not|cannot) approve requirements/i);
   assert.match(body, /(?:must not|do not|cannot) bypass (?:Build Readiness|PDLC gates)/i);
   assert.match(body, /(?:must not|do not|cannot) alter (?:the )?PDLC (?:formal )?state/i);
+  assert.match(body, /tools are static/i, "Copilot tool permissions are static for this one Agent");
+  assert.match(body, /Stage binding.*approved design reference.*user-supplied required context/i);
+  assert.match(body, /cannot independently verify (?:this )?context/i);
+  assert.match(body, /(?:context is missing or ambiguous|missing or ambiguous context).*must not use `?edit`? or `?execute`?/i);
 });
 
 test("keeps UX skills portable, conventionally named, and focused on usable output", async () => {
@@ -252,12 +256,18 @@ test("documents local VS Code and CLI use without runtime integrations", async (
   assert.match(readme, /guidance.*resolves.*instruction only/i);
   assert.match(readme, /select .*Lean PDLC UX/i);
   assert.match(readme, /no automatic background invocation/i);
-  assert.match(readme, /may write React UI code and tests only.*implementation.*approved design reference/i);
-  assert.match(readme, /smallest existing test.*implementation.*developer-verification/i);
+  assert.match(readme, /user-supplied `implementation` context.*approved design reference.*may write scoped React UI code and tests/i);
+  assert.match(readme, /implementation.*developer-verification.*smallest existing test command/i);
   assert.match(readme, /cannot install dependencies/i);
   assert.match(readme, /cannot approve requirements/i);
   assert.match(readme, /cannot alter PDLC formal state/i);
   assert.match(readme, /cannot bypass (?:Build Readiness|PDLC gates)/i);
+  assert.match(readme, /tools are static/i);
+  assert.match(readme, /Stage binding.*approved design reference.*user-supplied required context/i);
+  assert.match(readme, /cannot independently verify (?:this )?context/i);
+  assert.match(readme, /(?:context is missing or ambiguous|missing or ambiguous context).*must not use `?edit`? or `?execute`?/i);
+  assert.match(readme, /cannot enforce stage-scoped permissions/i);
+  assert.match(readme, /future host adapter or split agents/i);
   assert.match(rootReadme, /examples\/copilot-plugins\/lean-pdlc-ux\/README\.md/);
   assert.match(rootReadme, /guidance <stage-id> --plugin <path>/);
 });

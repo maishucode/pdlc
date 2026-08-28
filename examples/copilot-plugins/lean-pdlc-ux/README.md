@@ -22,7 +22,11 @@ The Plugin provides guidance for five canonical Stages:
 
 In VS Code, the user selects **Lean PDLC UX** from the Copilot agent picker when the current Lean PDLC Stage has resolved one of these instructions. There is no automatic background invocation.
 
-The Agent may write React UI code and tests only during `implementation`, after a supplied approved design reference. It may execute the smallest existing test command only during `implementation` or `developer-verification`. It cannot install dependencies, cannot approve requirements, cannot alter PDLC formal state, and cannot bypass Build Readiness or PDLC gates.
+Copilot tools are static for this one Agent. The user must first use `guidance` to obtain a Stage binding, then provide that Stage binding and any approved design reference in Copilot chat as user-supplied required context. The Agent cannot independently verify this context. If the context is missing or ambiguous, it must not use `edit` or `execute`; it asks for the missing binding or reference instead.
+
+With user-supplied `implementation` context and an approved design reference, the Agent may write scoped React UI code and tests. With user-supplied `implementation` or `developer-verification` context, it may execute the smallest existing test command. It cannot install dependencies, cannot approve requirements, cannot alter PDLC formal state, and cannot bypass Build Readiness or PDLC gates.
+
+This one-Plugin lean example cannot enforce stage-scoped permissions technically. Strong technical enforcement needs a future host adapter or split agents; neither is added here.
 
 ## Local validation
 
