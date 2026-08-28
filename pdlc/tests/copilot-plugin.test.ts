@@ -172,11 +172,16 @@ test("documents local VS Code and CLI use without runtime integrations", async (
 
   assert.match(readme, /chat\.pluginLocations/);
   assert.match(readme, /chat\.plugins\.enabled/);
-  assert.match(readme, /does not install a plugin from a local directory/i);
-  assert.doesNotMatch(readme, /copilot plugin install \/absolute\/path/i);
-  assert.match(readme, /copilot plugin install OWNER\/REPO:examples\/copilot-plugins\/lean-pdlc-ux --config-dir \/tmp\/lean-pdlc-copilot-config/i);
-  assert.match(readme, /copilot plugin list --config-dir \/tmp\/lean-pdlc-copilot-config/i);
-  assert.match(readme, /copilot plugin uninstall lean-pdlc-ux --config-dir \/tmp\/lean-pdlc-copilot-config/i);
+  assert.match(readme, /COPILOT_HOME=\/private\/tmp\/lean-pdlc-copilot-home/);
+  assert.match(readme, /copilot plugin install \/absolute\/path\/to\/atlas-pdlc\/examples\/copilot-plugins\/lean-pdlc-ux/i);
+  assert.match(readme, /copilot plugin list/);
+  assert.match(readme, /copilot plugin uninstall lean-pdlc-ux/);
+  assert.match(readme, /copilot plugin install OWNER\/REPO:examples\/copilot-plugins\/lean-pdlc-ux/i);
+  assert.match(readme, /replace .*OWNER\/REPO/i);
+  assert.match(readme, /copilot plugin install --help/i);
+  assert.match(readme, /CLI (?:version )?(?:is )?(?:older|out of date|outdated)|older CLI|upgrade (?:the )?CLI/i);
+  assert.match(readme, /VS Code (?:local )?(?:loader|loading)|chat\.pluginLocations/i);
+  assert.doesNotMatch(readme, /--config-dir/);
   assert.match(readme, /not published as a Copilot plugin source/i);
   assert.match(readme, /no hooks/i);
   assert.match(readme, /no MCP/i);

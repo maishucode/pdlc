@@ -31,17 +31,23 @@ Remove the `chat.pluginLocations` entry and reload to stop loading this local pl
 
 ## Use with Copilot CLI
 
-The current Copilot CLI does not install a plugin from a local directory. Use the VS Code `chat.pluginLocations` configuration above for local development and validation.
-
-After this plugin is published in an accessible GitHub repository or Git URL, install its repository subpath, confirm it is present, and remove it when finished:
+For a CLI smoke test, install this absolute local path into an isolated Copilot home, list it, then remove it:
 
 ```sh
-copilot plugin install OWNER/REPO:examples/copilot-plugins/lean-pdlc-ux --config-dir /tmp/lean-pdlc-copilot-config
-copilot plugin list --config-dir /tmp/lean-pdlc-copilot-config
-copilot plugin uninstall lean-pdlc-ux --config-dir /tmp/lean-pdlc-copilot-config
+COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin install /absolute/path/to/atlas-pdlc/examples/copilot-plugins/lean-pdlc-ux
+COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin list
+COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin uninstall lean-pdlc-ux
 ```
 
-This branch is not published as a Copilot plugin source. Your installed Copilot CLI version may present a scope option; use its `copilot plugin install --help` output if it requires one.
+If `copilot plugin install --help` does not show a local path as a supported input, your CLI version is older than this local-path installation behavior. Use the VS Code local loader via `chat.pluginLocations` while developing, or upgrade the CLI; this does not mean that local directories are unsupported in general.
+
+After this plugin is published in an accessible GitHub repository or Git URL, install its repository subpath with the same isolated home. Replace `OWNER/REPO` with the published repository:
+
+```sh
+COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin install OWNER/REPO:examples/copilot-plugins/lean-pdlc-ux
+```
+
+This branch is not published as a Copilot plugin source.
 
 ## Deliberate boundary
 
