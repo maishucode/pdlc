@@ -1,0 +1,81 @@
+# 01. Start Here: Install Lean PDLC
+
+This guide is for product owners and engineers who want to use Lean PDLC with GitHub Copilot.
+
+## What you install
+
+Lean PDLC is **project content**, not a compiled application. Clone or copy this repository into the project that should use it, commit the selected files, then let Copilot read the repository instructions and Skill.
+
+There is no required release build, `dist/` directory, server, hook, or background process. Bun is only an internal maintainer/Agent runtime for deterministic validation and Build Readiness; delivery users do not run it.
+
+```text
+Your product repository
+├── AGENTS.md                         Shared PDLC boundaries
+├── .agents/skills/lean-pdlc/         Main workflow Skill
+├── .github/                          Copilot adapter and prompt
+└── pdlc/                             Stages, workflow policy, templates, Runner
+```
+
+## Put Lean PDLC in a project
+
+### Option A: start from this repository
+
+Clone the repository and build the POC inside it:
+
+```sh
+git clone https://github.com/maishucode/pdlc.git my-poc
+cd my-poc
+```
+
+### Option B: add Lean PDLC to an existing product repository
+
+Copy the following version-controlled paths into the product repository, preserving their paths:
+
+```text
+AGENTS.md
+.agents/skills/lean-pdlc/
+.github/copilot-instructions.md
+.github/agents/lean-pdlc.agent.md
+.github/prompts/pdlc.prompt.md
+.github/workflows/copilot-setup-steps.yml
+pdlc/
+```
+
+Then commit them with the product. This is deliberately similar to AI DLC's project-local framework model: the team sees the exact workflow version in Git and upgrades it explicitly. Unlike AI DLC v2, Lean PDLC does not need an installer plugin or generated framework tree.
+
+## Enable GitHub Copilot
+
+Open the product repository in VS Code with GitHub Copilot enabled. Copilot reads the repository instructions and discovers the Lean PDLC custom Agent and shared Skill from the files above.
+
+Use one of these entry points:
+
+```text
+/pdlc poc validate whether AI can categorize customer feedback
+```
+
+Or select **Lean PDLC** in the Copilot Agent picker and send:
+
+```text
+poc validate whether AI can categorize customer feedback
+```
+
+If the IDE does not show `/pdlc`, use natural language:
+
+```text
+Use the lean-pdlc skill to start a POC that validates whether AI can categorize customer feedback.
+```
+
+## Confirm the installation
+
+Maintainers can run these commands from the repository root. They are not commands for delivery users:
+
+```sh
+bun test pdlc/tests
+bun pdlc/cli.ts validate
+```
+
+For platform-specific troubleshooting, read [GitHub Copilot Adapter Guide](../GITHUB_COPILOT_ADAPTER.md).
+
+## Next
+
+Continue with [02. Run a POC](02-RUN-A-POC.md).

@@ -131,6 +131,7 @@ The authoritative architecture and organizational ownership model is documented 
 - [Canonical Stages, User Journeys, and Principle Mapping](docs/STAGE_AND_JOURNEY_MODEL.md)
 - [Implementation Blueprint](docs/PDLC_HARNESS_BLUEPRINT.md)
 - [GitHub Copilot Adapter Guide](docs/GITHUB_COPILOT_ADAPTER.md)
+- [User and Plugin Guides](docs/GUIDE/01-START-HERE.md)
 
 ## Repository map
 
