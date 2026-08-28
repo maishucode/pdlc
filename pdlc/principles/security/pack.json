@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "security",
+  "name": "Security POC baseline",
+  "owner": "security-team",
+  "version": "1.0.0",
+  "appliesTo": {
+    "workflows": ["poc", "implementation", "pdlc"],
+    "stages": ["data-integration-boundaries", "risk-classification", "principle-applicability", "solution-design", "build-readiness", "implementation", "developer-verification", "security-verification", "test-execution", "acceptance-verification", "release-readiness", "deployment", "production-validation"],
+    "riskTriggers": ["sensitive-data", "external-access", "credentials", "regulated-data"]
+  },
+  "enforcement": {
+    "poc": "risk-based",
+    "implementation": "required",
+    "pdlc": "required"
+  },
+  "principles": [
+    {
+      "id": "sec-no-production-data",
+      "title": "Do not expose production or regulated data",
+      "requirement": "Use synthetic or approved data unless an explicitly approved control and evidence reference permits otherwise.",
+      "standardDefault": {
+        "key": "security.data-boundary",
+        "topic": "dataIntegrations",
+        "policy": "constraint"
+      }
+    },
+    {
+      "id": "sec-no-embedded-secret",
+      "title": "Do not embed credentials",
+      "requirement": "Keep credentials out of code, prompts, delivery records, logs, and evidence artifacts.",
+      "standardDefault": {
+        "key": "security.credential-boundary",
+        "topic": "dataIntegrations",
+        "policy": "constraint"
+      }
+    }
+  ]
+}

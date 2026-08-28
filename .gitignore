@@ -1,0 +1,5 @@
+.pdlc/locks/
+.pdlc/**/*.tmp
+pocs/**/node_modules/
+pocs/**/dist/
+pocs/**/*.tsbuildinfo

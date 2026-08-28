@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/poc-delivery-record.schema.json",
+  "title": "POC Delivery Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "workflow", "status", "title", "revision", "createdAt", "updatedAt", "assignments", "idea", "requirements", "scope", "risk", "principles", "design", "evidence", "decision"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^POC-[A-Z0-9][A-Z0-9-]*$" },
+    "workflow": { "const": "poc" },
+    "status": { "enum": ["DRAFT", "COMMITTED", "VERIFIED", "CLOSED_KILLED", "CLOSED_PIVOTED", "CLOSED_PRODUCTIZED"] },
+    "title": { "type": "string", "minLength": 1 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "assignments": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["product", "developer", "qa"],
+      "properties": {
+        "product": { "type": "string" },
+        "developer": { "type": "string" },
+        "qa": { "type": "string" }
+      }
+    },
+    "idea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["problem", "hypothesis", "expectedOutcome", "successCriteria", "timebox"],
+      "properties": {
+        "problem": { "type": "string" },
+        "hypothesis": { "type": "string" },
+        "expectedOutcome": { "type": "string" },
+        "successCriteria": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "timebox": { "type": "string" }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["documentRef", "depth", "status", "clarification", "approvedBy", "approvedAt", "approvedContentHash"],
+      "properties": {
+        "documentRef": { "type": "string", "minLength": 1, "pattern": "\\.md$" },
+        "depth": { "enum": ["minimal", "standard", "comprehensive"] },
+        "status": { "enum": ["draft", "approved"] },
+        "clarification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["questionsAnswered", "coverage", "openQuestions", "contradictions"],
+          "properties": {
+            "questionsAnswered": { "type": "integer", "minimum": 0 },
+            "coverage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["productContext", "functionalBehavior", "userScenarios", "uxInteraction", "qualityAttributes", "dataIntegrations", "scopeSuccess"],
+              "properties": {
+                "productContext": { "$ref": "#/$defs/coverageStatus" },
+                "functionalBehavior": { "$ref": "#/$defs/coverageStatus" },
+                "userScenarios": { "$ref": "#/$defs/coverageStatus" },
+                "uxInteraction": { "$ref": "#/$defs/coverageStatus" },
+                "qualityAttributes": { "$ref": "#/$defs/coverageStatus" },
+                "dataIntegrations": { "$ref": "#/$defs/coverageStatus" },
+                "scopeSuccess": { "$ref": "#/$defs/coverageStatus" }
+              }
+            },
+            "openQuestions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+            "contradictions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+          }
+        },
+        "approvedBy": { "type": "string" },
+        "approvedAt": { "type": "string" },
+        "approvedContentHash": { "type": "string" }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inScope", "outOfScope", "productionUse"],
+      "properties": {
+        "inScope": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "outOfScope": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "productionUse": { "const": false }
+      }
+    },
+    "risk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "triggers"],
+      "properties": {
+        "level": { "enum": ["low", "medium", "high", "blocked"] },
+        "triggers": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "principles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["applicable", "exceptions", "applications"],
+      "properties": {
+        "applicable": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "exceptions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "applications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pack", "disposition", "notes"],
+            "properties": {
+              "pack": { "type": "string", "minLength": 1 },
+              "disposition": { "enum": ["adopted", "exception"] },
+              "notes": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "design": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "decisions", "technologies", "domains"],
+      "properties": {
+        "summary": { "type": "string" },
+        "decisions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "technologies": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "domains": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tests", "build", "security", "demo"],
+      "properties": {
+        "tests": { "$ref": "#/$defs/evidenceList" },
+        "build": { "$ref": "#/$defs/evidenceList" },
+        "security": { "$ref": "#/$defs/evidenceList" },
+        "demo": { "$ref": "#/$defs/evidenceList" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "rationale", "followUp"],
+      "properties": {
+        "outcome": { "enum": ["", "kill", "pivot", "productize"] },
+        "rationale": { "type": "string" },
+        "followUp": { "type": "string" }
+      }
+    }
+  },
+  "$defs": {
+    "coverageStatus": { "enum": ["pending", "complete"] },
+    "evidenceList": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "ref", "description"],
+        "properties": {
+          "kind": { "enum": ["file", "url", "ci", "demo"] },
+          "ref": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "capturedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

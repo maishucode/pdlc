@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/journey.schema.json",
+  "title": "PDLC User Journey Definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "name", "description", "status", "stageSequence"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "enum": ["poc", "implementation", "pdlc"] },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["active", "planned"] },
+    "stageSequence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stageId", "inclusion"],
+        "properties": {
+          "stageId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "inclusion": { "enum": ["required", "conditional"] },
+          "activationTags": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "inclusion": { "const": "conditional" } } },
+            "then": { "required": ["activationTags"] },
+            "else": { "not": { "required": ["activationTags"] } }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "solution-architecture",
+  "name": "Solution Architecture baseline",
+  "owner": "solution-architecture-team",
+  "version": "1.0.0",
+  "appliesTo": {
+    "workflows": ["poc", "implementation", "pdlc"],
+    "stages": ["requirements-analysis", "data-integration-boundaries", "principle-applicability", "solution-design", "delivery-planning", "build-readiness", "implementation", "developer-verification", "release-readiness"]
+  },
+  "enforcement": {
+    "poc": "advisory",
+    "implementation": "risk-based",
+    "pdlc": "required"
+  },
+  "principles": [
+    {
+      "id": "sa-minimal-design",
+      "title": "Use the smallest design that tests the hypothesis",
+      "requirement": "Document material boundaries, dependencies, data flow, and trade-offs without creating design artifacts that do not support a decision.",
+      "standardDefault": {
+        "key": "architecture.minimum-design",
+        "topic": "qualityAttributes",
+        "policy": "default"
+      }
+    },
+    {
+      "id": "sa-reversible-poc",
+      "title": "Keep POC changes reversible",
+      "requirement": "Isolate experimental changes and avoid irreversible production dependencies.",
+      "standardDefault": {
+        "key": "architecture.reversible-poc",
+        "topic": "qualityAttributes",
+        "policy": "constraint"
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "implementation",
+  "name": "Implementation User Journey",
+  "description": "A journey for an already-defined requirement or work item, including development, QA, release, and operational validation.",
+  "status": "planned",
+  "stageSequence": [
+    { "stageId": "requirements-analysis", "inclusion": "required" },
+    { "stageId": "acceptance-criteria-definition", "inclusion": "required" },
+    { "stageId": "data-integration-boundaries", "inclusion": "required" },
+    { "stageId": "risk-classification", "inclusion": "required" },
+    { "stageId": "principle-applicability", "inclusion": "required" },
+    { "stageId": "work-item-planning", "inclusion": "required" },
+    { "stageId": "solution-design", "inclusion": "required" },
+    { "stageId": "ux-design", "inclusion": "conditional", "activationTags": ["technology:web-ui", "technology:mobile-ui"] },
+    { "stageId": "test-strategy", "inclusion": "required" },
+    { "stageId": "delivery-planning", "inclusion": "required" },
+    { "stageId": "build-readiness", "inclusion": "required" },
+    { "stageId": "implementation", "inclusion": "required" },
+    { "stageId": "developer-verification", "inclusion": "required" },
+    { "stageId": "security-verification", "inclusion": "conditional", "activationTags": ["risk:sensitive-data", "risk:external-access", "risk:credentials", "risk:regulated-data"] },
+    { "stageId": "test-case-preparation", "inclusion": "required" },
+    { "stageId": "test-execution", "inclusion": "required" },
+    { "stageId": "acceptance-verification", "inclusion": "required" },
+    { "stageId": "release-readiness", "inclusion": "required" },
+    { "stageId": "deployment", "inclusion": "required" },
+    { "stageId": "production-validation", "inclusion": "required" },
+    { "stageId": "outcome-review-and-disposition", "inclusion": "required" }
+  ]
+}

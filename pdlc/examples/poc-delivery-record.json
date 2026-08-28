@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "id": "POC-EXAMPLE",
+  "workflow": "poc",
+  "status": "DRAFT",
+  "title": "Validate a bounded product idea",
+  "revision": 0,
+  "createdAt": "2026-08-28T00:00:00.000Z",
+  "updatedAt": "2026-08-28T00:00:00.000Z",
+  "assignments": {
+    "product": "owner@example.com",
+    "developer": "owner@example.com",
+    "qa": "owner@example.com"
+  },
+  "idea": {
+    "problem": "Describe the user or business problem that needs evidence.",
+    "hypothesis": "State what is expected to be true after the experiment.",
+    "expectedOutcome": "Describe the decision this experiment will enable.",
+    "successCriteria": [
+      "Define at least one measurable observation that supports or rejects the hypothesis."
+    ],
+    "timebox": "1 working day"
+  },
+  "requirements": {
+    "documentRef": ".pdlc/requirements/POC-EXAMPLE.md",
+    "depth": "minimal",
+    "status": "draft",
+    "clarification": {
+      "questionsAnswered": 0,
+      "coverage": {
+        "productContext": "pending",
+        "functionalBehavior": "pending",
+        "userScenarios": "pending",
+        "uxInteraction": "pending",
+        "qualityAttributes": "pending",
+        "dataIntegrations": "pending",
+        "scopeSuccess": "pending"
+      },
+      "openQuestions": ["Complete requirements clarification before Build Readiness."],
+      "contradictions": []
+    },
+    "approvedBy": "",
+    "approvedAt": "",
+    "approvedContentHash": ""
+  },
+  "scope": {
+    "inScope": ["The smallest experiment needed to test the hypothesis"],
+    "outOfScope": ["Production deployment, JIRA, XRAY, and operational readiness"],
+    "productionUse": false
+  },
+  "risk": {
+    "level": "low",
+    "triggers": []
+  },
+  "principles": {
+    "applicable": ["solution-architecture@1.0.0"],
+    "exceptions": [],
+    "applications": []
+  },
+  "design": {
+    "summary": "",
+    "decisions": [],
+    "technologies": [],
+    "domains": []
+  },
+  "evidence": {
+    "tests": [],
+    "build": [],
+    "security": [],
+    "demo": []
+  },
+  "decision": {
+    "outcome": "",
+    "rationale": "",
+    "followUp": ""
+  }
+}

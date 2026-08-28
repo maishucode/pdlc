@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/audit-event.schema.json",
+  "title": "PDLC Audit Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "eventId", "recordId", "eventType", "actor", "timestamp", "recordHash"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "minLength": 1 },
+    "recordId": { "type": "string", "minLength": 1 },
+    "eventType": { "type": "string", "minLength": 1 },
+    "checkpoint": { "type": "string", "minLength": 1 },
+    "fromStatus": { "type": "string", "minLength": 1 },
+    "toStatus": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "riskLevel": { "enum": ["low", "medium", "high", "blocked"] },
+    "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "recordHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "decision": { "type": "string" },
+    "failureReason": { "type": "string" }
+  }
+}
+

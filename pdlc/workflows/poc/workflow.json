@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "poc",
+  "name": "Proof of Concept",
+  "description": "A bounded, non-production experiment that decides whether an idea should be killed, pivoted, or productized.",
+  "journeyId": "poc",
+  "initialStatus": "DRAFT",
+  "terminalStatuses": [
+    "CLOSED_KILLED",
+    "CLOSED_PIVOTED",
+    "CLOSED_PRODUCTIZED"
+  ],
+  "checkpoints": [
+    {
+      "id": "commit",
+      "from": ["DRAFT"],
+      "to": "COMMITTED",
+      "ownerRole": "product"
+    },
+    {
+      "id": "verify",
+      "from": ["COMMITTED"],
+      "to": "VERIFIED",
+      "ownerRole": "qa"
+    },
+    {
+      "id": "decide",
+      "from": ["VERIFIED"],
+      "toByOutcome": {
+        "kill": "CLOSED_KILLED",
+        "pivot": "CLOSED_PIVOTED",
+        "productize": "CLOSED_PRODUCTIZED"
+      },
+      "ownerRole": "product"
+    }
+  ],
+  "deliveryDefaults": {
+    "roleAssignmentMode": "approval-actor-all-roles",
+    "timebox": "1 working day",
+    "collectDuringRequirements": false
+  },
+  "constraints": {
+    "productionUse": false,
+    "externalIntegrations": [],
+    "allowSinglePersonAllRoles": true
+  }
+}

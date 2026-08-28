@@ -1,0 +1,15 @@
+{
+  "name": "lean-pdlc-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pdlc": "bun pdlc/cli.ts",
+    "test": "bun test pdlc/tests",
+    "validate": "bun pdlc/cli.ts validate"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
+
