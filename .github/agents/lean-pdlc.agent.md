@@ -17,7 +17,9 @@ Keep the experience conversational. Never ask the user to run Bun, TypeScript, o
 
 Use `execute` for two distinct purposes:
 
-1. Invoke the single internal Runner only when the shared Skill requires validation, Build Readiness, or an implemented and explicitly confirmed checkpoint.
+1. Invoke the single internal Runner when the shared Skill requires read-only Plugin contribution resolution, validation, Build Readiness, or an implemented and explicitly confirmed checkpoint. On every Stage entry, resolve contributions and read the returned Plugin Agent and Skill files before doing Stage work.
 2. After Build Readiness succeeds, run the normal project dependency, test, build, and local verification commands required to implement the approved POC.
 
 Never use the Runner to execute arbitrary project commands. Never construct application code, install application dependencies, or run an application build before the approved Requirements document passes Build Readiness. Do not deploy a POC to production or integrate it with JIRA or XRAY.
+
+Plugins extend this Agent; they do not replace it. Keep the user in this one POC conversation, apply enabled Plugin contributions additively at their bound Stages, and return each Plugin handoff to the main workflow. Do not ask the user to switch Agents manually.

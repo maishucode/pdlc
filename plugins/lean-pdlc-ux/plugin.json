@@ -1,6 +1,15 @@
 {
+  "schemaVersion": 1,
   "name": "lean-pdlc-ux",
-  "description": "Stage-aware UX design, React delivery, and verification guidance for Lean PDLC.",
-  "version": "0.2.0",
-  "kind": "lean-pdlc-plugin"
+  "version": "0.3.0",
+  "description": "Stage-aware UX design, React delivery, and verification contributions for Lean PDLC.",
+  "pdlc": {
+    "workflows": ["poc"],
+    "defaultEnabled": true,
+    "contributes": {
+      "stageBindings": "pdlc-stage-bindings.json",
+      "agents": "agents",
+      "skills": "skills"
+    }
+  }
 }

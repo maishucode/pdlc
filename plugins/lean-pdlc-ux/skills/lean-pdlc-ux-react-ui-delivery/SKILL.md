@@ -1,5 +1,5 @@
 ---
-name: react-ui-delivery
+name: lean-pdlc-ux-react-ui-delivery
 description: Implements approved React UX states and focused evidence in an existing codebase.
 ---
 

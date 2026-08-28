@@ -12,6 +12,8 @@ Use a short outcome-oriented request:
 
 The Agent opens a draft POC. It does not start coding yet.
 
+You do not select Plugin Agents separately. Whenever the POC enters a Stage, the main Agent resolves enabled Plugin contributions and reads their Agent and Skill instructions inside the same conversation. For example, the bundled UX Plugin enriches requirements questions and later participates in UX design, React implementation, and verification.
+
 ## Answer requirement questions by choosing options
 
 The Agent asks at most three unresolved product questions per message. Every question has 2–4 selectable, mutually exclusive answers plus `X) Other`; choose a letter and add detail only when needed.
@@ -78,4 +80,4 @@ Phase 1 can guide a POC through requirements, lightweight design, Build Readines
 
 ## Next
 
-Continue with [03. Build a Copilot Plugin](03-BUILD-A-COPILOT-PLUGIN.md) if your team wants a specialized Agent or Skills.
+Continue with [03. Build a Lean PDLC Plugin](03-BUILD-A-COPILOT-PLUGIN.md) if your team wants to package specialized Agents and Skills into the POC flow.

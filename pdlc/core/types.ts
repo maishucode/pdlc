@@ -203,16 +203,42 @@ export interface PluginStageBindingsDescriptor {
   bindings: PluginStageBinding[];
 }
 
-export interface PluginGuidanceResolution {
-  stage: StageDefinition;
-  guidance: {
-    plugin: string;
-    agent: string;
-    skills: string[];
-    mode: PluginGuidanceMode;
-    handoff: string;
-    approvalBoundary: string;
+export interface PluginManifest {
+  schemaVersion: 1;
+  name: string;
+  version: string;
+  description: string;
+  pdlc: {
+    workflows: ["poc"];
+    defaultEnabled: boolean;
+    contributes: {
+      stageBindings: string;
+      agents: string;
+      skills: string;
+    };
   };
+}
+
+export interface DiscoveredPlugin {
+  manifest: PluginManifest;
+  root: string;
+  bindings: PluginStageBinding[];
+}
+
+export interface PluginGuidanceContribution {
+  plugin: string;
+  version: string;
+  agent: { id: string; path: string };
+  skills: Array<{ name: string; path: string }>;
+  mode: PluginGuidanceMode;
+  handoff: string;
+  approvalBoundary: string;
+}
+
+export interface PluginGuidanceResolution {
+  workflow: "poc";
+  stage: StageDefinition;
+  contributions: PluginGuidanceContribution[];
 }
 
 export interface JourneyStageRef {

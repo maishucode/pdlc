@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { PdlcError } from "./core/errors.ts";
@@ -8,7 +8,7 @@ import { loadStandardProfiles, resolveStandardDefaultsForStages } from "./core/d
 import { JourneyRegistry } from "./core/journey-registry.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsPolicy } from "./core/requirements.ts";
-import { resolvePluginGuidance } from "./core/plugin-guidance.ts";
+import { agentPath, discoverPlugins, resolvePluginGuidance, skillPath } from "./core/plugin-guidance.ts";
 import { validatePocDeliveryRecord } from "./core/schema.ts";
 import { FileStateStore } from "./core/state.ts";
 import { StageRegistry } from "./core/stage-registry.ts";
@@ -24,7 +24,6 @@ interface CliOptions {
   root: string;
   record?: string;
   actor?: string;
-  plugin?: string;
 }
 
 interface ParsedArguments {
@@ -40,13 +39,12 @@ function parseArguments(args: string[], currentDirectory: string): ParsedArgumen
     const argument = args[index];
     if (argument === "--help") {
       positional.push("help");
-    } else if (argument === "--root" || argument === "--record" || argument === "--actor" || argument === "--plugin") {
+    } else if (argument === "--root" || argument === "--record" || argument === "--actor") {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Missing value for ${argument}`);
       if (argument === "--root") options.root = resolve(currentDirectory, value);
       else if (argument === "--record") options.record = value;
-      else if (argument === "--actor") options.actor = value;
-      else options.plugin = resolve(currentDirectory, value);
+      else options.actor = value;
       index += 1;
     } else if (argument.startsWith("--")) {
       throw new PdlcError("INVALID_ARGUMENT", `Unknown option: ${argument}`);
@@ -234,49 +232,52 @@ async function status(options: CliOptions): Promise<unknown> {
 }
 
 async function guidance(options: CliOptions, stageId?: string): Promise<unknown> {
-  if (!options.plugin) throw new PdlcError("PLUGIN_REQUIRED", "Guidance requires --plugin <path>");
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Guidance requires a canonical Stage id");
   const { stages } = await loadDeliveryModel();
-  const resolution = await resolvePluginGuidance(stages, options.plugin, stageId);
+  const resolution = await resolvePluginGuidance(stages, join(HARNESS_ROOT, "plugins"), stageId);
   return { ok: true, ...resolution };
 }
 
-async function installPlugin(options: CliOptions, pluginName?: string): Promise<unknown> {
-  if (!pluginName || !/^[a-z0-9][a-z0-9-]*$/.test(pluginName)) {
-    throw new PdlcError("INVALID_ARGUMENT", "Plugin install requires a kebab-case plugin name");
-  }
-  const pluginRoot = join(HARNESS_ROOT, "plugins", pluginName);
-  let manifest: { name?: unknown; kind?: unknown };
-  try {
-    manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8")) as { name?: unknown; kind?: unknown };
-  } catch {
-    throw new PdlcError("PLUGIN_NOT_FOUND", `Bundled plugin was not found: ${pluginName}`);
-  }
-  if (manifest.name !== pluginName || manifest.kind !== "lean-pdlc-plugin") {
-    throw new PdlcError("INVALID_PLUGIN", `Plugin manifest is not a Lean PDLC plugin: ${pluginName}`);
-  }
+async function pluginList(): Promise<unknown> {
+  const { stages } = await loadDeliveryModel();
+  const plugins = await discoverPlugins(stages, join(HARNESS_ROOT, "plugins"));
+  return {
+    ok: true,
+    workflow: "poc",
+    plugins: plugins.map(({ manifest, bindings }) => ({
+      name: manifest.name,
+      version: manifest.version,
+      enabled: manifest.pdlc.defaultEnabled,
+      stages: bindings.map((binding) => binding.stage),
+    })),
+  };
+}
 
-  const agentDirectory = join(pluginRoot, "agents");
-  const skillDirectory = join(pluginRoot, "skills");
-  const agents = (await readdir(agentDirectory, { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".agent.md"))
-    .map((entry) => join("agents", entry.name));
-  const skills = (await readdir(skillDirectory, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => join("skills", entry.name, "SKILL.md"));
-  const sources = [...agents, ...skills].sort();
-  if (sources.length === 0) throw new PdlcError("INVALID_PLUGIN", `Plugin has no installable Agent or Skills: ${pluginName}`);
-
+async function pluginSync(options: CliOptions): Promise<unknown> {
+  const { stages } = await loadDeliveryModel();
+  const plugins = (await discoverPlugins(stages, join(HARNESS_ROOT, "plugins")))
+    .filter(({ manifest }) => manifest.pdlc.defaultEnabled && manifest.pdlc.workflows.includes("poc"));
+  const sources = new Map<string, { plugin: string; source: string; destination: string }>();
+  for (const { manifest, root, bindings } of plugins) {
+    for (const binding of bindings) {
+      const agentDestination = join(".github", "agents", `${binding.agent}.agent.md`);
+      sources.set(agentDestination, { plugin: manifest.name, source: agentPath(root, manifest, binding.agent), destination: agentDestination });
+      for (const skill of binding.skills) {
+        const skillDestination = join(".github", "skills", skill, "SKILL.md");
+        sources.set(skillDestination, { plugin: manifest.name, source: skillPath(root, manifest, skill), destination: skillDestination });
+      }
+    }
+  }
   const installed: string[] = [];
   const unchanged: string[] = [];
-  for (const sourceRelativePath of sources) {
-    const source = join(pluginRoot, sourceRelativePath);
-    const destination = join(options.root, ".github", sourceRelativePath);
+  for (const item of [...sources.values()].sort((a, b) => a.destination.localeCompare(b.destination))) {
+    const destination = join(options.root, item.destination);
+    const source = item.source;
     const sourceContent = await readFile(source, "utf8");
     try {
       const destinationContent = await readFile(destination, "utf8");
       if (destinationContent !== sourceContent) {
-        throw new PdlcError("PLUGIN_FILE_CONFLICT", `Plugin will not overwrite an existing file: ${relative(options.root, destination)}`);
+        throw new PdlcError("PLUGIN_FILE_CONFLICT", `Plugin '${item.plugin}' will not overwrite an existing file: ${relative(options.root, destination)}`);
       }
       unchanged.push(relative(options.root, destination));
     } catch (error) {
@@ -286,7 +287,7 @@ async function installPlugin(options: CliOptions, pluginName?: string): Promise<
       installed.push(relative(options.root, destination));
     }
   }
-  return { ok: true, plugin: pluginName, target: options.root, installed, unchanged };
+  return { ok: true, workflow: "poc", plugins: plugins.map(({ manifest }) => manifest.name), target: options.root, installed, unchanged };
 }
 
 async function validate(options: CliOptions): Promise<unknown> {
@@ -320,6 +321,17 @@ async function validate(options: CliOptions): Promise<unknown> {
       id: journey.id,
       status: journey.status,
       stageCount: journey.stageSequence.length,
+    })),
+  };
+
+  const plugins = await discoverPlugins(stages, join(HARNESS_ROOT, "plugins"));
+  checks.plugins = {
+    ok: true,
+    workflow: "poc",
+    loaded: plugins.map(({ manifest, bindings }) => ({
+      name: `${manifest.name}@${manifest.version}`,
+      enabled: manifest.pdlc.defaultEnabled,
+      stages: bindings.map((binding) => binding.stage),
     })),
   };
 
@@ -409,8 +421,9 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
             "status [--root <path>] [--record <POC-ID>]",
             "validate [--root <path>] [--record <POC-ID|path.json>]",
             "readiness build [--root <path>] [--record <POC-ID>] [--actor <identity>]",
-            "guidance <stage> --plugin <path>",
-            "plugin <name> [--root <target-project>]",
+            "guidance <stage> [--root <project>]",
+            "plugin list",
+            "plugin sync [--root <target-project>]",
             "checkpoint <commit|verify|decide> (Phase 2)",
           ],
         },
@@ -420,7 +433,9 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "readiness") return { exitCode: 0, output: await readiness(parsed.options, parsed.subcommand) };
     if (parsed.command === "guidance") return { exitCode: 0, output: await guidance(parsed.options, parsed.subcommand) };
-    if (parsed.command === "plugin") return { exitCode: 0, output: await installPlugin(parsed.options, parsed.subcommand) };
+    if (parsed.command === "plugin" && parsed.subcommand === "list") return { exitCode: 0, output: await pluginList() };
+    if (parsed.command === "plugin" && parsed.subcommand === "sync") return { exitCode: 0, output: await pluginSync(parsed.options) };
+    if (parsed.command === "plugin") throw new PdlcError("INVALID_ARGUMENT", "Plugin command must be list or sync");
     if (parsed.command === "checkpoint") {
       throw new PdlcError("CHECKPOINT_NOT_IMPLEMENTED", `Checkpoint '${parsed.subcommand ?? ""}' is defined for Phase 2 and cannot change state yet`);
     }

@@ -30,10 +30,11 @@ After activation:
 3. If starting, ask for the idea or problem first. Create an incomplete DRAFT Record and Requirements document; leave unknown product fields empty rather than inventing success criteria or safety boundaries. Apply workflow-owned delivery defaults without asking product-requirement questions about role assignment or timebox.
 4. Determine whether requirements need minimal, standard, or comprehensive depth. For a user-facing greenfield POC, default to standard depth.
 5. Resolve conditional Journey Stages from `technology:`, `risk:`, and `domain:` context tags. Then resolve applicable enterprise, project, and Harness standard defaults across the active Stage set before asking questions. Clarify the product requirements in focused rounds until every topic required by the selected depth is complete. Defaults remove repetitive standards questions; they never replace confirmation of the user, problem, functional behavior, business rules, scenarios, scope, data decisions, or success measures. Every unresolved product question must offer 2–4 mutually exclusive, selectable options, plus `X) Other`. The user can answer by choosing an option letter and may add detail for `X) Other`; do not ask an open-ended question as the primary answer. Never exceed `questionRules.maxQuestionsPerRound` in chat. If document answers are enabled, offer the user the option to fill all outstanding product questions in the generated question document instead. Do not shortcut a user-facing POC from a generic product definition directly to technology or Build.
-6. Maintain both the Delivery Record and `.pdlc/requirements/<POC-ID>.md` behind the conversation; summarize material changes.
-7. Never create or modify application code, install application dependencies, or run an application build until the user explicitly approves the Requirements and Build Readiness summary.
-8. Never show Bun commands or ask the end user to execute the Runner. Invoke the internal Runner yourself only when validation, Build Readiness, or a checkpoint is required.
-9. Before any state-changing Runner call, present the proposed transition and request explicit confirmation.
+6. Before performing work for any canonical Stage, internally invoke `bun pdlc/cli.ts guidance <stage-id> --root <project-root>`. The Runner discovers every enabled POC Plugin from `plugins/` and returns additive Stage contributions. Read every returned Agent and Skill path before doing the Stage work, apply their instructions inside the current Lean PDLC conversation, and preserve the returned handoff and approval boundary. An empty contribution list means continue with core behavior. A Plugin resolution error blocks the Stage until the Plugin definition is fixed. Never ask the end user to select a Plugin Agent manually.
+7. Maintain both the Delivery Record and `.pdlc/requirements/<POC-ID>.md` behind the conversation; summarize material changes.
+8. Never create or modify application code, install application dependencies, or run an application build until the user explicitly approves the Requirements and Build Readiness summary.
+9. Never show Bun commands or ask the end user to execute the Runner. Invoke the internal Runner yourself only for Stage contribution resolution, validation, Build Readiness, or a checkpoint.
+10. Before any state-changing Runner call, present the proposed transition and request explicit confirmation. Stage contribution resolution is read-only and needs no confirmation.
 
 ## Select the workflow
 
@@ -83,6 +84,7 @@ Phase 1 implements only the POC skeleton. Do not simulate unavailable Implementa
 - Treat the Runner as an internal Harness API, not a user interface.
 - Never instruct an end user to copy or run a Bun command.
 - Internally use `bun pdlc/cli.ts status` only when the active record cannot be determined safely by reading it.
+- Internally use `bun pdlc/cli.ts guidance <stage-id> --root <project-root>` once whenever entering a canonical POC Stage, before doing its work.
 - Internally use `bun pdlc/cli.ts validate` for an explicit integrity check or before proposing a checkpoint.
 - Internally use `bun pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>` exactly once after Requirements approval and before application construction.
 - Internally use `bun pdlc/cli.ts checkpoint commit|verify|decide` only when implemented and after confirmation.

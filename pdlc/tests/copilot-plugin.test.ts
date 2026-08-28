@@ -8,45 +8,73 @@ import { runCli } from "../cli.ts";
 const projectRoot = resolve(import.meta.dirname, "../..");
 const pluginRoot = join(projectRoot, "plugins/lean-pdlc-ux");
 
-test("ships a Lean PDLC UX plugin with VS Code-native components", async () => {
-  const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8")) as Record<string, unknown>;
+test("keeps the complete POC Plugin definition inside plugins", async () => {
+  const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8"));
   assert.deepEqual(manifest, {
+    schemaVersion: 1,
     name: "lean-pdlc-ux",
-    description: "Stage-aware UX design, React delivery, and verification guidance for Lean PDLC.",
-    version: "0.2.0",
-    kind: "lean-pdlc-plugin",
+    version: "0.3.0",
+    description: "Stage-aware UX design, React delivery, and verification contributions for Lean PDLC.",
+    pdlc: {
+      workflows: ["poc"],
+      defaultEnabled: true,
+      contributes: {
+        stageBindings: "pdlc-stage-bindings.json",
+        agents: "agents",
+        skills: "skills",
+      },
+    },
   });
+  await readFile(join(pluginRoot, "pdlc-stage-bindings.json"), "utf8");
   await readFile(join(pluginRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
-  for (const skill of ["lean-pdlc-ux-spec", "lean-pdlc-react-ui-delivery", "lean-pdlc-ux-review"]) {
-    await readFile(join(pluginRoot, "skills", skill, "SKILL.md"), "utf8");
+  for (const skill of ["lean-pdlc-ux-spec", "lean-pdlc-ux-react-ui-delivery", "lean-pdlc-ux-review"]) {
+    const contents = await readFile(join(pluginRoot, "skills", skill, "SKILL.md"), "utf8");
+    assert.match(contents, new RegExp(`name: ${skill}`));
   }
 });
 
-test("installs plugin Agent and Skills into VS Code native directories", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-plugin-install-"));
+test("lists independently discovered Plugins for the POC workflow", async () => {
+  const result = await runCli(["plugin", "list"], projectRoot);
+  assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+  assert.deepEqual(result.output, {
+    ok: true,
+    workflow: "poc",
+    plugins: [{
+      name: "lean-pdlc-ux",
+      version: "0.3.0",
+      enabled: true,
+      stages: [
+        "requirements-clarification",
+        "ux-design",
+        "implementation",
+        "developer-verification",
+        "acceptance-verification",
+      ],
+    }],
+  });
+});
+
+test("requires the main POC entry point to compose Plugins at every Stage", async () => {
+  const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
+  const agent = await readFile(join(projectRoot, ".github/agents/lean-pdlc.agent.md"), "utf8");
+  assert.match(skill, /guidance <stage-id>/);
+  assert.match(skill, /Never ask the end user to select a Plugin Agent manually/);
+  assert.match(agent, /Plugins extend this Agent; they do not replace it/);
+});
+
+test("syncs enabled Plugin assets as a VS Code projection", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-plugin-sync-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
-  const installed = await runCli(["plugin", "lean-pdlc-ux", "--root", workspace], workspace);
-  assert.equal(installed.exitCode, 0, JSON.stringify(installed.output));
-  assert.deepEqual((installed.output as { installed: string[] }).installed, [
+  const first = await runCli(["plugin", "sync", "--root", workspace], projectRoot);
+  assert.equal(first.exitCode, 0, JSON.stringify(first.output));
+  assert.deepEqual((first.output as { installed: string[] }).installed, [
     ".github/agents/lean-pdlc-ux.agent.md",
-    ".github/skills/lean-pdlc-react-ui-delivery/SKILL.md",
+    ".github/skills/lean-pdlc-ux-react-ui-delivery/SKILL.md",
     ".github/skills/lean-pdlc-ux-review/SKILL.md",
     ".github/skills/lean-pdlc-ux-spec/SKILL.md",
   ]);
-  assert.match(await readFile(join(workspace, ".github/agents/lean-pdlc-ux.agent.md"), "utf8"), /name: Lean PDLC UX/);
-  const repeated = await runCli(["plugin", "lean-pdlc-ux", "--root", workspace], workspace);
+  const repeated = await runCli(["plugin", "sync", "--root", workspace], projectRoot);
   assert.equal(repeated.exitCode, 0, JSON.stringify(repeated.output));
   assert.deepEqual((repeated.output as { installed: string[] }).installed, []);
   assert.equal((repeated.output as { unchanged: string[] }).unchanged.length, 4);
-});
-
-test("keeps UX stage bindings narrow and installable", async () => {
-  const descriptor = JSON.parse(await readFile(join(pluginRoot, "pdlc-stage-bindings.json"), "utf8")) as { bindings: Array<{ stage: string; skills: string[] }> };
-  assert.deepEqual(descriptor.bindings.map(({ stage, skills }) => ({ stage, skills })), [
-    { stage: "requirements-clarification", skills: ["lean-pdlc-ux-spec"] },
-    { stage: "ux-design", skills: ["lean-pdlc-ux-spec"] },
-    { stage: "implementation", skills: ["lean-pdlc-react-ui-delivery"] },
-    { stage: "developer-verification", skills: ["lean-pdlc-react-ui-delivery"] },
-    { stage: "acceptance-verification", skills: ["lean-pdlc-ux-review"] },
-  ]);
 });

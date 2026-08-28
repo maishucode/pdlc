@@ -1,5 +1,5 @@
 ---
-name: ux-review
+name: lean-pdlc-ux-review
 description: Reviews a UX artifact or implementation against supplied requirements and evidence.
 ---
 

@@ -14,7 +14,7 @@ Use the repository prompt entry point when supported:
 /pdlc poc validate whether AI can categorize customer feedback
 ```
 
-Optional: install the [stage-aware GitHub Copilot UX plugin](plugins/lean-pdlc-ux/README.md). Maintainers can inspect a Stage instruction with `bun pdlc/cli.ts guidance <stage-id> --plugin <path>`; this resolves guidance but does not invoke Copilot or advance PDLC state.
+The POC flow automatically discovers enabled definitions under `plugins/`. When it enters a bound Stage, the main Lean PDLC Agent resolves and reads the Plugin-owned Agent and Skills inside the same conversation. The bundled [UX Plugin](plugins/lean-pdlc-ux/README.md) therefore participates in requirements clarification, UX design, React implementation, developer verification, and acceptance verification without asking the user to switch Agents.
 
 ### GitHub Copilot CLI or GitHub.com
 
@@ -115,7 +115,7 @@ Each checkpoint maps to one Runner process. Checkpoint transitions are reserved 
 
 ## Architecture
 
-The Harness has seven layers:
+The Harness has eight layers:
 
 1. Harness Adapters.
 2. Portable Guidance.
@@ -124,6 +124,7 @@ The Harness has seven layers:
 5. Principle Packs and Standard Defaults.
 6. TypeScript Runner and Core.
 7. Integration Adapters.
+8. Additive Plugin Contributions.
 
 The authoritative architecture and organizational ownership model is documented in:
 
@@ -152,6 +153,7 @@ pdlc/schemas/                    Shared machine contracts
 pdlc/harnesses/                  Platform adapter contracts and validation
 pdlc/integrations/               Enterprise integration contracts
 pdlc/tests/                      Harness regression tests
+plugins/                         Independent POC Plugin definitions
 .pdlc/                           Runtime delivery records and evidence
 docs/                            Architecture and roadmap
 ```
@@ -200,6 +202,7 @@ Project profiles may replace recommendations but cannot weaken locked enterprise
 - Atomic storage, revision checks, locks, hashes, and append-only audit foundation.
 - Single TypeScript Runner and Core portability validation.
 - Harness ownership documentation and future folder reservations.
+- Automatic POC Plugin discovery, Stage contribution resolution, and VS Code Agent/Skill projection.
 
 ### Not yet implemented
 

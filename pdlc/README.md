@@ -17,6 +17,8 @@ This directory is the platform-neutral source of truth for the Lean PDLC Harness
 | `integrations/` | External-system contracts and future adapters | Harness Engineering and integration teams |
 | `tests/` | Harness regression and conformance tests | Harness Engineering |
 
+Optional POC extensions live outside the core under `plugins/`. Each Plugin owns its manifest, Stage bindings, Agents, and Skills. The POC Runner discovers those definitions and composes matching contributions when the main workflow enters a Stage; Plugin content never edits this core directory.
+
 `cli.ts` is the only public Runner entry point. Internal modules are not standalone scripts.
 
 See `docs/HARNESS_ARCHITECTURE_AND_OWNERSHIP.md` for the complete architecture and ownership model.

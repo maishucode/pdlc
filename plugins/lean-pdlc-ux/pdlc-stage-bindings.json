@@ -21,7 +21,7 @@
     {
       "stage": "implementation",
       "agent": "lean-pdlc-ux",
-      "skills": ["lean-pdlc-react-ui-delivery"],
+      "skills": ["lean-pdlc-ux-react-ui-delivery"],
       "mode": "implement",
       "handoff": "Implement the approved UX state matrix in existing React conventions and report focused test evidence.",
       "approvalBoundary": "The plugin may edit scoped React UI code and tests but cannot approve requirements, gates, or PDLC state."
@@ -29,7 +29,7 @@
     {
       "stage": "developer-verification",
       "agent": "lean-pdlc-ux",
-      "skills": ["lean-pdlc-react-ui-delivery"],
+      "skills": ["lean-pdlc-ux-react-ui-delivery"],
       "mode": "verify",
       "handoff": "Run the smallest relevant existing test and report evidence for the approved React UI behavior.",
       "approvalBoundary": "The plugin reports verification evidence only; PDLC acceptance, gates, and state remain outside the plugin."

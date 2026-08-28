@@ -13,7 +13,8 @@ Your product repository
 ├── AGENTS.md                         Shared PDLC boundaries
 ├── .agents/skills/lean-pdlc/         Main workflow Skill
 ├── .github/                          Copilot adapter and prompt
-└── pdlc/                             Stages, workflow policy, templates, Runner
+├── pdlc/                             Stages, workflow policy, templates, Runner
+└── plugins/                          Optional Stage contributions
 ```
 
 ## Put Lean PDLC in a project
@@ -39,9 +40,18 @@ AGENTS.md
 .github/prompts/pdlc.prompt.md
 .github/workflows/copilot-setup-steps.yml
 pdlc/
+plugins/
 ```
 
-Then commit them with the product. This is deliberately similar to AI DLC's project-local framework model: the team sees the exact workflow version in Git and upgrades it explicitly. Unlike AI DLC v2, Lean PDLC does not need an installer plugin or generated framework tree.
+Then commit them with the product. This follows AI DLC v2's core composition idea in a smaller POC shape: Plugin definitions stay separate from core, and the selected Plugin set is composed when a Stage runs. Lean PDLC does not generate a separate workflow tree in Phase 1.
+
+Maintainers may project all enabled Plugin Agents and Skills into VS Code-native directories with:
+
+```sh
+bun pdlc/cli.ts plugin sync --root /absolute/path/to/product
+```
+
+This projection makes Plugin Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Plugin contributions automatically.
 
 ## Enable GitHub Copilot
 

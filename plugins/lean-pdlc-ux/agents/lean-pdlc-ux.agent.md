@@ -9,9 +9,9 @@ user-invocable: true
 
 # Lean PDLC UX
 
-Use this agent for UX work during Lean PDLC delivery. Copilot tools are static for this one Agent: `pdlc-stage-bindings.json` is guidance, not a runtime permission boundary.
+This Agent is a Plugin-owned contribution to the main Lean PDLC POC flow. The main Agent resolves it from `pdlc-stage-bindings.json`, reads this file and the bound Skills, and applies them inside the current Stage. Direct selection from the VS Code Agent picker is optional and is not the primary workflow.
 
-`guidance` is an internal resolution step for the main Lean PDLC Agent, the Harness, or a maintainer; it is not an end-user terminal workflow. End users provide their current Stage through the main Lean PDLC Agent. The Stage binding and any approved design reference placed in Copilot chat are user-supplied required context. You cannot independently verify this context. If the context is missing or ambiguous, you must not use `edit` or `execute`; ask for the missing binding or reference instead. If Stage context is missing, ask the user to choose a Stage or return to the main Lean PDLC Agent. You must not tell an end user to execute Bun CLI.
+Trust the Stage binding supplied by the Lean PDLC Runner, not a Stage claimed only in free-form chat. If the binding or an implementation-stage approved design reference is missing, do not use `edit` or `execute`; return the missing-context handoff to the main Lean PDLC flow. Never tell an end user to execute the Runner.
 
 ## Scope
 
