@@ -36,7 +36,6 @@ interface GuidanceOutput {
 }
 
 interface PluginFixtureOptions {
-  agent?: boolean;
   bindings?: unknown[];
   descriptorBindings?: unknown;
   descriptor?: boolean;
@@ -96,14 +95,6 @@ async function createPluginFixture(workspace: string, options: PluginFixtureOpti
     await writeFile(
       join(pluginRoot, "pdlc-stage-bindings.json"),
       JSON.stringify(descriptor, null, 2),
-    );
-  }
-  if (options.agent !== false) {
-    const agentRoot = join(pluginRoot, "com.github.copilot", "agents");
-    await mkdir(agentRoot, { recursive: true });
-    await writeFile(
-      join(agentRoot, "lean-pdlc-ux.agent.md"),
-      "---\nname: Lean PDLC UX\ndescription: Test fixture agent.\ntarget: vscode\n---\n",
     );
   }
   await Promise.all(skillNames.map(async (skill) => {
@@ -194,6 +185,18 @@ test("guidance resolves canonical UX design and React implementation bindings", 
 
   assert.equal(await pathExists(join(workspace, ".pdlc")), false, "guidance must not create PDLC state");
   assert.equal(await pathExists(join(workspace, ".pdlc", "audit.jsonl")), false, "guidance must not append audit state");
+});
+
+test("guidance resolves a generic kebab-case Agent id", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-plugin-guidance-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const pluginRoot = await createPluginFixture(workspace, {
+    bindings: [{ ...defaultBindings[0]!, agent: "project-ux-agent" }],
+  });
+
+  const result = await runCli(["guidance", "ux-design", "--plugin", pluginRoot], workspace);
+  assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+  assert.equal((result.output as GuidanceOutput).guidance.agent, "project-ux-agent");
 });
 
 test("guidance rejects invalid plugin-stage contracts with stable error codes", async (context) => {
@@ -304,22 +307,24 @@ test("guidance rejects invalid plugin-stage contracts with stable error codes", 
     "descriptor bindings is not an array",
   );
 
-  const missingAgent = await createPluginFixture(join(workspace, "missing-agent"), { agent: false });
-  await assertGuidanceError(
-    workspace,
-    ["guidance", "ux-design", "--plugin", missingAgent],
-    "PLUGIN_AGENT_NOT_FOUND",
-    "fixed plugin agent file missing",
-  );
-
   const invalidAgent = await createPluginFixture(join(workspace, "invalid-agent"), {
-    bindings: [{ ...defaultBindings[0]!, agent: "other-agent" }],
+    bindings: [{ ...defaultBindings[0]!, agent: "project_ux_agent" }],
   });
   await assertGuidanceError(
     workspace,
     ["guidance", "ux-design", "--plugin", invalidAgent],
     "INVALID_PLUGIN_AGENT",
     "invalid plugin agent id",
+  );
+
+  const emptyAgent = await createPluginFixture(join(workspace, "empty-agent"), {
+    bindings: [{ ...defaultBindings[0]!, agent: "" }],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", emptyAgent],
+    "INVALID_PLUGIN_AGENT",
+    "empty plugin agent id",
   );
 
   const missingSkill = await createPluginFixture(join(workspace, "missing-skill"), {

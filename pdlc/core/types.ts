@@ -190,7 +190,7 @@ export type PluginGuidanceMode = (typeof PLUGIN_GUIDANCE_MODES)[number];
 
 export interface PluginStageBinding {
   stage: string;
-  agent: "lean-pdlc-ux";
+  agent: string;
   skills: string[];
   mode: PluginGuidanceMode;
   handoff: string;
@@ -207,7 +207,7 @@ export interface PluginGuidanceResolution {
   stage: StageDefinition;
   guidance: {
     plugin: string;
-    agent: "lean-pdlc-ux";
+    agent: string;
     skills: string[];
     mode: PluginGuidanceMode;
     handoff: string;

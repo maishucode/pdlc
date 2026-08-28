@@ -9,8 +9,6 @@ import {
   type PluginStageBindingsDescriptor,
 } from "./types.ts";
 
-const AGENT_ID = "lean-pdlc-ux" as const;
-const AGENT_PATH = join("com.git" + "hub.cop" + "ilot", "agents", `${AGENT_ID}.agent.md`);
 const SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 type JsonObject = Record<string, unknown>;
@@ -27,12 +25,9 @@ export async function resolvePluginGuidance(
   const descriptor = await readDescriptor(pluginRoot, pluginName);
   const bindings = validateBindings(descriptor.bindings, stages);
 
-  if (bindings.length > 0) {
-    await requireAsset(join(pluginRoot, AGENT_PATH), "PLUGIN_AGENT_NOT_FOUND", "plugin agent");
-    for (const binding of bindings) {
-      for (const skill of binding.skills) {
-        await requireAsset(join(pluginRoot, "skills", skill, "SKILL.md"), "PLUGIN_SKILL_NOT_FOUND", `plugin skill '${skill}'`);
-      }
+  for (const binding of bindings) {
+    for (const skill of binding.skills) {
+      await requireAsset(join(pluginRoot, "skills", skill, "SKILL.md"), "PLUGIN_SKILL_NOT_FOUND", `plugin skill '${skill}'`);
     }
   }
 
@@ -105,8 +100,8 @@ function validateBindings(bindings: PluginStageBinding[], stages: StageRegistry)
       throw new PdlcError("DUPLICATE_PLUGIN_STAGE_BINDING", `Plugin defines more than one binding for Stage: ${binding.stage}`);
     }
     seenStages.add(binding.stage);
-    if (binding.agent !== AGENT_ID) {
-      throw new PdlcError("INVALID_PLUGIN_AGENT", `Plugin Stage binding must use agent '${AGENT_ID}'`);
+    if (!isAgentId(binding.agent)) {
+      throw new PdlcError("INVALID_PLUGIN_AGENT", "Plugin Stage binding requires a kebab-case agent id");
     }
     if (!Array.isArray(binding.skills) || binding.skills.length === 0 || !binding.skills.every(isSkillName) || new Set(binding.skills).size !== binding.skills.length) {
       throw new PdlcError("INVALID_PLUGIN_BINDING", "Plugin Stage binding requires unique, non-empty skill names");
@@ -119,7 +114,7 @@ function validateBindings(bindings: PluginStageBinding[], stages: StageRegistry)
     }
     validated.push({
       stage: binding.stage,
-      agent: AGENT_ID,
+      agent: binding.agent,
       skills: binding.skills,
       mode: binding.mode as PluginStageBinding["mode"],
       handoff: binding.handoff,
@@ -144,7 +139,7 @@ async function readJson(path: string, missingCode: "PLUGIN_MANIFEST_NOT_FOUND" |
   }
 }
 
-async function requireAsset(path: string, code: "PLUGIN_AGENT_NOT_FOUND" | "PLUGIN_SKILL_NOT_FOUND", label: string): Promise<void> {
+async function requireAsset(path: string, code: "PLUGIN_SKILL_NOT_FOUND", label: string): Promise<void> {
   try {
     if (!(await stat(path)).isFile()) {
       throw new PdlcError(code, `${label} not found: ${path}`);
@@ -199,5 +194,9 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isSkillName(value: unknown): value is string {
+  return isNonEmptyString(value) && SKILL_NAME_PATTERN.test(value);
+}
+
+function isAgentId(value: unknown): value is string {
   return isNonEmptyString(value) && SKILL_NAME_PATTERN.test(value);
 }
