@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { copyFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { PdlcError } from "./core/errors.ts";
 import { AuditLog } from "./core/audit.ts";
@@ -241,6 +241,54 @@ async function guidance(options: CliOptions, stageId?: string): Promise<unknown>
   return { ok: true, ...resolution };
 }
 
+async function installPlugin(options: CliOptions, pluginName?: string): Promise<unknown> {
+  if (!pluginName || !/^[a-z0-9][a-z0-9-]*$/.test(pluginName)) {
+    throw new PdlcError("INVALID_ARGUMENT", "Plugin install requires a kebab-case plugin name");
+  }
+  const pluginRoot = join(HARNESS_ROOT, "plugins", pluginName);
+  let manifest: { name?: unknown; kind?: unknown };
+  try {
+    manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8")) as { name?: unknown; kind?: unknown };
+  } catch {
+    throw new PdlcError("PLUGIN_NOT_FOUND", `Bundled plugin was not found: ${pluginName}`);
+  }
+  if (manifest.name !== pluginName || manifest.kind !== "lean-pdlc-plugin") {
+    throw new PdlcError("INVALID_PLUGIN", `Plugin manifest is not a Lean PDLC plugin: ${pluginName}`);
+  }
+
+  const agentDirectory = join(pluginRoot, "agents");
+  const skillDirectory = join(pluginRoot, "skills");
+  const agents = (await readdir(agentDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".agent.md"))
+    .map((entry) => join("agents", entry.name));
+  const skills = (await readdir(skillDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join("skills", entry.name, "SKILL.md"));
+  const sources = [...agents, ...skills].sort();
+  if (sources.length === 0) throw new PdlcError("INVALID_PLUGIN", `Plugin has no installable Agent or Skills: ${pluginName}`);
+
+  const installed: string[] = [];
+  const unchanged: string[] = [];
+  for (const sourceRelativePath of sources) {
+    const source = join(pluginRoot, sourceRelativePath);
+    const destination = join(options.root, ".github", sourceRelativePath);
+    const sourceContent = await readFile(source, "utf8");
+    try {
+      const destinationContent = await readFile(destination, "utf8");
+      if (destinationContent !== sourceContent) {
+        throw new PdlcError("PLUGIN_FILE_CONFLICT", `Plugin will not overwrite an existing file: ${relative(options.root, destination)}`);
+      }
+      unchanged.push(relative(options.root, destination));
+    } catch (error) {
+      if (error instanceof PdlcError) throw error;
+      await mkdir(dirname(destination), { recursive: true });
+      await copyFile(source, destination);
+      installed.push(relative(options.root, destination));
+    }
+  }
+  return { ok: true, plugin: pluginName, target: options.root, installed, unchanged };
+}
+
 async function validate(options: CliOptions): Promise<unknown> {
   const checks: Record<string, unknown> = {};
 
@@ -362,6 +410,7 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
             "validate [--root <path>] [--record <POC-ID|path.json>]",
             "readiness build [--root <path>] [--record <POC-ID>] [--actor <identity>]",
             "guidance <stage> --plugin <path>",
+            "plugin <name> [--root <target-project>]",
             "checkpoint <commit|verify|decide> (Phase 2)",
           ],
         },
@@ -371,6 +420,7 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "readiness") return { exitCode: 0, output: await readiness(parsed.options, parsed.subcommand) };
     if (parsed.command === "guidance") return { exitCode: 0, output: await guidance(parsed.options, parsed.subcommand) };
+    if (parsed.command === "plugin") return { exitCode: 0, output: await installPlugin(parsed.options, parsed.subcommand) };
     if (parsed.command === "checkpoint") {
       throw new PdlcError("CHECKPOINT_NOT_IMPLEMENTED", `Checkpoint '${parsed.subcommand ?? ""}' is defined for Phase 2 and cannot change state yet`);
     }

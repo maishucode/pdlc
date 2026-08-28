@@ -1,166 +1,72 @@
-# 03. Build a Copilot Plugin
+# 03 — Build a Lean PDLC Plugin
 
-This guide shows how to add one focused GitHub Copilot plugin to Lean PDLC. A plugin contributes domain capability; Lean PDLC remains the owner of Stages, requirements approval, Build Readiness, formal outputs, gates, and state.
+Lean PDLC Plugins are repository capability bundles. They are not GitHub Copilot Marketplace packages: no `dist`, marketplace, global VS Code setting, or client-side plugin lifecycle is required.
 
-The included `lean-pdlc-ux` example is the reference implementation. It has one Agent and three Skills and participates in five advisory Stages.
-
-## 1. Copy the example
-
-Copy the production Plugin directory and rename it for the capability you are adding:
-
-```sh
-cp -R plugins/lean-pdlc-ux plugins/acme-domain
-```
-
-Keep the package small. Start with one Agent, only the Skills it actually needs, and no hooks, MCP servers, commands, scripts, credentials, or installers.
+## 1. Plugin layout
 
 ```text
 plugins/acme-domain/
 ├── plugin.json
 ├── pdlc-stage-bindings.json
-├── com.github.copilot/agents/
+├── agents/
 │   └── acme-domain.agent.md
 └── skills/
-    ├── domain-spec/SKILL.md
-    └── domain-review/SKILL.md
+    └── acme-domain-spec/
+        └── SKILL.md
 ```
 
-## 2. Define the plugin manifest
-
-`plugin.json` is the Copilot plugin identity. Use the Agent Plugins 1.0 schema and make the name match the binding descriptor:
+Use a minimal manifest:
 
 ```json
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "acme-domain",
-  "description": "Domain guidance for Lean PDLC in VS Code.",
+  "description": "Domain guidance for Lean PDLC.",
   "version": "0.1.0",
-  "author": { "name": "Acme" },
-  "license": "MIT"
+  "kind": "lean-pdlc-plugin"
 }
 ```
 
-Do not put PDLC Stage definitions, approval logic, or Runner code in the manifest.
+Name every Skill with the Plugin prefix, such as `acme-domain-spec`. This prevents two Plugins from overwriting each other's VS Code Skills.
 
-## 3. Add Skills and one Agent
+## 2. Bind a concrete Stage contribution
 
-Every Skill lives at `skills/<skill-name>/SKILL.md`. The YAML `name` must equal its directory name.
-
-```markdown
----
-name: domain-spec
-description: Draft a small domain specification for an approved Lean PDLC Stage.
----
-
-# Domain Spec
-
-Use the supplied PDLC Stage binding. Draft only the requested domain artifact.
-Never approve requirements, gates, or PDLC state.
-```
-
-The Copilot Agent lives at `com.github.copilot/agents/acme-domain.agent.md`. This is the Open Plugin Spec platform-specific location; portable Skills remain under `skills/`. The Agent should require the current Stage binding as input and refuse to claim an approval or state transition. Give it only the tools its real work needs; tool permissions are static for one Copilot Agent, so Stage-specific limitations must be written in the Agent instructions.
-
-For a requirement-stage Skill, require selectable questions exactly as the core workflow does: 2–4 mutually exclusive choices plus `X) Other`, never an open-ended primary question.
-
-## 4. Bind the capability to canonical Stages
-
-Create `pdlc-stage-bindings.json`. It maps a canonical Stage to the plugin Agent and Skill; it does not change the Stage's meaning or create formal workflow outputs.
+`pdlc-stage-bindings.json` is the contract between the main Lean PDLC flow and the Plugin. Bind only a Stage where the Plugin has reviewable work, and keep approvals and state in the core flow.
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": "1.0.0",
   "plugin": "acme-domain",
   "bindings": [
     {
       "stage": "requirements-clarification",
       "agent": "acme-domain",
-      "skills": ["domain-spec"],
+      "skills": ["acme-domain-spec"],
       "mode": "draft",
-      "handoff": "Draft selectable domain questions for product clarification.",
-      "approvalBoundary": "The plugin drafts guidance only; requirements approval and PDLC state remain outside the plugin."
+      "handoff": "Draft selectable questions for missing domain decisions.",
+      "approvalBoundary": "The Plugin drafts guidance only; approval and PDLC state remain outside the Plugin."
     }
   ]
 }
 ```
 
-Valid modes are `draft`, `implement`, and `verify`. Use a Stage ID from `pdlc/stages/catalog.json`. One plugin may bind several Stages, but each Stage is listed once. Bind only Stages where the capability has a concrete, reviewable contribution.
+Requirement questions must be selectable: 2–4 mutually exclusive choices plus `X) Other`.
 
-## 5. Publish through a marketplace
+## 3. Write the Agent for VS Code
 
-Add the Plugin to `.github/plugin/marketplace.json` at the repository root:
+The Agent source is a normal `.agent.md` file. It is installed into `.github/agents/`, which VS Code discovers natively. Give it only the tools its work needs and state that it must not approve gates or alter PDLC state.
 
-```json
-{
-  "name": "acme-copilot",
-  "owner": { "name": "Acme" },
-  "plugins": [
-    {
-      "name": "acme-domain",
-      "description": "Domain guidance for Lean PDLC.",
-      "version": "0.1.0",
-      "source": "./plugins/acme-domain"
-    }
-  ]
-}
-```
+## 4. Install into a target project
 
-Users register the repository marketplace and install the Plugin:
+Run from the Lean PDLC repository:
 
 ```sh
-copilot plugin marketplace add OWNER/REPO
-copilot plugin install acme-domain@acme-copilot
+bun pdlc/cli.ts plugin acme-domain --root /absolute/path/to/target-project
 ```
 
-Select the plugin Agent in Copilot only after the main Lean PDLC Agent has supplied the current Stage binding in the conversation. There is no automatic background invocation. For VS Code team-wide automatic installation, an administrator configures the marketplace and Plugin through Copilot managed settings.
+The installer copies `agents/*.agent.md` to `.github/agents/` and each `skills/<name>/SKILL.md` to `.github/skills/<name>/SKILL.md`. It never overwrites different content; resolve a `PLUGIN_FILE_CONFLICT` explicitly.
 
-For an individual developer testing a cloned Plugin in VS Code, configure its absolute directory in VS Code **User Settings**:
+Open the target project in VS Code, then choose the Agent from the Agent picker. No release or build output is needed.
 
-```json
-{
-  "chat.plugins.enabled": true,
-  "chat.pluginLocations": {
-    "/absolute/path/to/repository/plugins/acme-domain": true
-  }
-}
-```
+## 5. Keep it lean
 
-Reload VS Code, then select the Plugin Agent from the Agent picker. `chat.pluginLocations` is an experimental User/Machine setting; do not commit it in workspace settings.
-
-## 6. Use the plugin during a PDLC task
-
-The conversation handoff should name the Stage and expected work:
-
-```text
-Current Lean PDLC Stage: requirements-clarification.
-Use the acme-domain binding to draft selectable questions for the missing data-retention decision.
-```
-
-For an implementation plugin, also supply an approved design reference. The plugin may edit only its approved scoped work and must report test evidence; it cannot approve requirements, bypass Build Readiness, or modify formal PDLC state.
-
-## 7. Verify and distribute
-
-Maintainers verify the repository first:
-
-```sh
-bun test pdlc/tests
-bun pdlc/cli.ts validate
-```
-
-For a local Copilot CLI smoke check, install an absolute plugin path into an isolated home:
-
-```sh
-COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin install /absolute/path/to/product/plugins/acme-domain
-COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin list
-COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin uninstall acme-domain
-```
-
-You do **not** need to build a `dist/` directory. For local development, install the Plugin from its local directory. For team distribution, commit it under `plugins/`, list it in `.github/plugin/marketplace.json`, then install it from the marketplace:
-
-```sh
-copilot plugin marketplace add OWNER/REPO
-copilot plugin install acme-domain@acme-copilot
-```
-
-## Reference
-
-Read the complete working Plugin at [Lean PDLC UX Copilot Plugin](../../plugins/lean-pdlc-ux/README.md).
+Start with one Agent and only the Skills it needs. Do not add hooks, MCP servers, or background orchestration unless the Plugin has a concrete external integration that cannot be expressed with Agent instructions and Skills.

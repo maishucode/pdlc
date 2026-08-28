@@ -199,7 +199,7 @@ test("guidance resolves the real UX plugin's design and implementation instructi
   assert.deepEqual((design.output as GuidanceOutput).guidance, {
     plugin: "lean-pdlc-ux",
     agent: "lean-pdlc-ux",
-    skills: ["ux-spec"],
+      skills: ["lean-pdlc-ux-spec"],
     mode: "draft",
     handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",
     approvalBoundary: "The plugin drafts guidance only; product approval and PDLC state remain outside the plugin.",
@@ -210,7 +210,7 @@ test("guidance resolves the real UX plugin's design and implementation instructi
   assert.deepEqual((implementation.output as GuidanceOutput).guidance, {
     plugin: "lean-pdlc-ux",
     agent: "lean-pdlc-ux",
-    skills: ["react-ui-delivery"],
+      skills: ["lean-pdlc-react-ui-delivery"],
     mode: "implement",
     handoff: "Implement the approved UX state matrix in existing React conventions and report focused test evidence.",
     approvalBoundary: "The plugin may edit scoped React UI code and tests but cannot approve requirements, gates, or PDLC state.",

@@ -91,7 +91,7 @@ test("provides a fillable POC requirements questionnaire", async () => {
 test("keeps requirements clarification questions selectable", async () => {
   const sources = await Promise.all([
     readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8"),
-    readFile(join(projectRoot, "plugins/lean-pdlc-ux/skills/ux-spec/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, "plugins/lean-pdlc-ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
   ]);
 
   for (const source of sources) {
