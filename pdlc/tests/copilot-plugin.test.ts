@@ -4,7 +4,8 @@ import { join, relative, resolve } from "node:path";
 import test from "node:test";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
-const pluginRoot = join(projectRoot, "examples/copilot-plugins/lean-pdlc-ux");
+const pluginRoot = join(projectRoot, "plugins/lean-pdlc-ux");
+const marketplacePath = join(projectRoot, ".github/plugin/marketplace.json");
 
 async function listFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -40,10 +41,10 @@ function assertSingleNonEmptyFrontmatterValue(frontmatter: string, field: string
   assert.notEqual(values[0].trim(), "", `${field} must not be empty`);
 }
 
-test("ships one minimal Agent Plugins 1.0 UX Copilot plugin", async () => {
+test("ships one official-layout UX Copilot plugin", async () => {
   const expectedFiles = [
     "README.md",
-    "com.github.copilot/agents/lean-pdlc-ux.agent.md",
+    "agents/lean-pdlc-ux.agent.md",
     "pdlc-stage-bindings.json",
     "plugin.json",
     "skills/react-ui-delivery/SKILL.md",
@@ -64,16 +65,18 @@ test("ships one minimal Agent Plugins 1.0 UX Copilot plugin", async () => {
   );
 });
 
-test("declares a portable Agent Plugins 1.0 manifest without runtime components", async () => {
+test("declares standard Copilot component paths in its plugin manifest", async () => {
   const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8")) as Record<string, unknown>;
 
   assert.deepEqual(Object.keys(manifest).sort(), [
     "$schema",
+    "agents",
     "author",
     "description",
     "keywords",
     "license",
     "name",
+    "skills",
     "version",
   ]);
   assert.equal(manifest.$schema, "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
@@ -86,7 +89,9 @@ test("declares a portable Agent Plugins 1.0 manifest without runtime components"
   assert.equal(typeof manifest.author, "object", "author must be an object");
   assert.notEqual((manifest.author as { name?: unknown }).name, "", "author.name must not be empty");
   assert.equal(typeof (manifest.author as { name?: unknown }).name, "string", "author.name must be a string");
-  for (const runtimeComponent of ["agents", "skills", "hooks", "commands", "mcpServers"]) {
+  assert.equal(manifest.agents, "agents/");
+  assert.equal(manifest.skills, "skills/");
+  for (const runtimeComponent of ["hooks", "commands", "mcpServers"]) {
     assert.equal(
       Object.hasOwn(manifest, runtimeComponent),
       false,
@@ -97,7 +102,7 @@ test("declares a portable Agent Plugins 1.0 manifest without runtime components"
 });
 
 test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries", async () => {
-  const source = await readFile(join(pluginRoot, "com.github.copilot/agents/lean-pdlc-ux.agent.md"), "utf8");
+  const source = await readFile(join(pluginRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
   const { frontmatter, body } = splitFrontmatter(source);
 
   assertSingleFrontmatterValue(frontmatter, "name", "Lean PDLC UX");
@@ -239,23 +244,35 @@ test("binds the one UX plugin to five advisory PDLC stages", async () => {
   }
 });
 
-test("documents local VS Code and CLI use without runtime integrations", async () => {
+test("publishes the plugin through the repository marketplace", async () => {
+  const marketplace = JSON.parse(await readFile(marketplacePath, "utf8")) as Record<string, unknown>;
+  assert.equal(marketplace.name, "lean-pdlc");
+  assert.deepEqual(marketplace.owner, { name: "Lean PDLC Contributors" });
+  assert(Array.isArray(marketplace.plugins), "marketplace plugins must be an array");
+  assert.deepEqual(marketplace.plugins, [{
+    name: "lean-pdlc-ux",
+    description: "Stage-aware UX design, React delivery, and verification guidance for Lean PDLC.",
+    version: "0.2.0",
+    source: "./plugins/lean-pdlc-ux",
+  }]);
+});
+
+test("documents marketplace and local CLI use without runtime integrations", async () => {
   const readme = await readFile(join(pluginRoot, "README.md"), "utf8");
   const rootReadme = await readFile(join(projectRoot, "README.md"), "utf8");
 
-  assert.match(readme, /chat\.pluginLocations/);
-  assert.match(readme, /chat\.plugins\.enabled/);
   assert.match(readme, /COPILOT_HOME=\/private\/tmp\/lean-pdlc-copilot-home/);
-  assert.match(readme, /copilot plugin install \/absolute\/path\/to\/atlas-pdlc\/examples\/copilot-plugins\/lean-pdlc-ux/i);
+  assert.match(readme, /copilot plugin install \/absolute\/path\/to\/atlas-pdlc\/plugins\/lean-pdlc-ux/i);
   assert.match(readme, /copilot plugin list/);
   assert.match(readme, /copilot plugin uninstall lean-pdlc-ux/);
-  assert.match(readme, /copilot plugin install OWNER\/REPO:examples\/copilot-plugins\/lean-pdlc-ux/i);
+  assert.match(readme, /copilot plugin marketplace add OWNER\/REPO/i);
+  assert.match(readme, /copilot plugin install lean-pdlc-ux@lean-pdlc/i);
   assert.match(readme, /replace .*OWNER\/REPO/i);
   assert.match(readme, /copilot plugin install --help/i);
   assert.match(readme, /CLI (?:version )?(?:is )?(?:older|out of date|outdated)|older CLI|upgrade (?:the )?CLI/i);
-  assert.match(readme, /VS Code (?:local )?(?:loader|loading)|chat\.pluginLocations/i);
+  assert.match(readme, /VS Code.*managed settings/i);
   assert.doesNotMatch(readme, /--config-dir/);
-  assert.match(readme, /not published as a Copilot plugin source/i);
+  assert.doesNotMatch(readme, /not published as a Copilot plugin source/i);
   assert.match(readme, /no hooks/i);
   assert.match(readme, /no MCP/i);
   assert.match(readme, /guidance.*resolves.*instruction only/i);
@@ -279,6 +296,6 @@ test("documents local VS Code and CLI use without runtime integrations", async (
   assert.match(readme, /must not tell (?:an )?end user to execute Bun CLI/i);
   assert.match(readme, /maintainer manual inspection.*not an end-user delivery workflow/i);
   assert.doesNotMatch(readme, /user must first use `guidance`/i);
-  assert.match(rootReadme, /examples\/copilot-plugins\/lean-pdlc-ux\/README\.md/);
+  assert.match(rootReadme, /plugins\/lean-pdlc-ux\/README\.md/);
   assert.match(rootReadme, /guidance <stage-id> --plugin <path>/);
 });

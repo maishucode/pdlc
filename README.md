@@ -14,7 +14,7 @@ Use the repository prompt entry point when supported:
 /pdlc poc validate whether AI can categorize customer feedback
 ```
 
-Optional: see the [stage-aware VS Code Copilot UX plugin example](examples/copilot-plugins/lean-pdlc-ux/README.md). Maintainers can inspect a Stage instruction with `bun pdlc/cli.ts guidance <stage-id> --plugin <path>`; this resolves guidance but does not invoke Copilot or advance PDLC state.
+Optional: install the [stage-aware GitHub Copilot UX plugin](plugins/lean-pdlc-ux/README.md). Maintainers can inspect a Stage instruction with `bun pdlc/cli.ts guidance <stage-id> --plugin <path>`; this resolves guidance but does not invoke Copilot or advance PDLC state.
 
 ### GitHub Copilot CLI or GitHub.com
 

@@ -69,7 +69,7 @@ const defaultBindings: StageBinding[] = [
 ];
 
 const projectRoot = resolve(import.meta.dirname, "../..");
-const examplePluginRoot = join(projectRoot, "examples", "copilot-plugins", "lean-pdlc-ux");
+const examplePluginRoot = join(projectRoot, "plugins", "lean-pdlc-ux");
 
 function referencedSkillNames(bindings: unknown[]): string[] {
   return [...new Set(bindings.flatMap((binding) => {

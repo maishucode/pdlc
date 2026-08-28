@@ -6,19 +6,19 @@ The included `lean-pdlc-ux` example is the reference implementation. It has one 
 
 ## 1. Copy the example
 
-Copy the example directory and rename it for the capability you are adding:
+Copy the production Plugin directory and rename it for the capability you are adding:
 
 ```sh
-cp -R examples/copilot-plugins/lean-pdlc-ux examples/copilot-plugins/acme-domain
+cp -R plugins/lean-pdlc-ux plugins/acme-domain
 ```
 
 Keep the package small. Start with one Agent, only the Skills it actually needs, and no hooks, MCP servers, commands, scripts, credentials, or installers.
 
 ```text
-examples/copilot-plugins/acme-domain/
+plugins/acme-domain/
 ├── plugin.json
 ├── pdlc-stage-bindings.json
-├── com.github.copilot/agents/
+├── agents/
 │   └── acme-domain.agent.md
 └── skills/
     ├── domain-spec/SKILL.md
@@ -58,7 +58,7 @@ Use the supplied PDLC Stage binding. Draft only the requested domain artifact.
 Never approve requirements, gates, or PDLC state.
 ```
 
-The VS Code Agent lives at `com.github.copilot/agents/acme-domain.agent.md`. It should require the current Stage binding as input and refuse to claim an approval or state transition. Give it only the tools its real work needs; tool permissions are static for one Copilot Agent, so Stage-specific limitations must be written in the Agent instructions.
+The Copilot Agent lives at `agents/acme-domain.agent.md`. It should require the current Stage binding as input and refuse to claim an approval or state transition. Give it only the tools its real work needs; tool permissions are static for one Copilot Agent, so Stage-specific limitations must be written in the Agent instructions.
 
 For a requirement-stage Skill, require selectable questions exactly as the core workflow does: 2–4 mutually exclusive choices plus `X) Other`, never an open-ended primary question.
 
@@ -85,20 +85,33 @@ Create `pdlc-stage-bindings.json`. It maps a canonical Stage to the plugin Agent
 
 Valid modes are `draft`, `implement`, and `verify`. Use a Stage ID from `pdlc/stages/catalog.json`. One plugin may bind several Stages, but each Stage is listed once. Bind only Stages where the capability has a concrete, reviewable contribution.
 
-## 5. Load the plugin in VS Code
+## 5. Publish through a marketplace
 
-Add its absolute directory to VS Code `settings.json`, then reload the window:
+Add the Plugin to `.github/plugin/marketplace.json` at the repository root:
 
 ```json
 {
-  "chat.plugins.enabled": true,
-  "chat.pluginLocations": {
-    "/absolute/path/to/product/examples/copilot-plugins/acme-domain": true
-  }
+  "name": "acme-copilot",
+  "owner": { "name": "Acme" },
+  "plugins": [
+    {
+      "name": "acme-domain",
+      "description": "Domain guidance for Lean PDLC.",
+      "version": "0.1.0",
+      "source": "./plugins/acme-domain"
+    }
+  ]
 }
 ```
 
-Select the plugin Agent in Copilot only after the main Lean PDLC Agent has supplied the current Stage binding in the conversation. There is no automatic background invocation.
+Users register the repository marketplace and install the Plugin:
+
+```sh
+copilot plugin marketplace add OWNER/REPO
+copilot plugin install acme-domain@acme-copilot
+```
+
+Select the plugin Agent in Copilot only after the main Lean PDLC Agent has supplied the current Stage binding in the conversation. There is no automatic background invocation. For VS Code team-wide automatic installation, an administrator configures the marketplace and Plugin through Copilot managed settings.
 
 ## 6. Use the plugin during a PDLC task
 
@@ -123,17 +136,18 @@ bun pdlc/cli.ts validate
 For a local Copilot CLI smoke check, install an absolute plugin path into an isolated home:
 
 ```sh
-COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin install /absolute/path/to/product/examples/copilot-plugins/acme-domain
+COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin install /absolute/path/to/product/plugins/acme-domain
 COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin list
 COPILOT_HOME=/private/tmp/copilot-plugin-check copilot plugin uninstall acme-domain
 ```
 
-You do **not** need to build a `dist/` directory to use a local plugin. For development, copy or point VS Code directly to the plugin folder. For team distribution, commit the folder to the product repository or publish the repository/subpath as a Copilot plugin source, then install it by repository path:
+You do **not** need to build a `dist/` directory. For local development, install the Plugin from its local directory. For team distribution, commit it under `plugins/`, list it in `.github/plugin/marketplace.json`, then install it from the marketplace:
 
 ```sh
-copilot plugin install OWNER/REPO:examples/copilot-plugins/acme-domain
+copilot plugin marketplace add OWNER/REPO
+copilot plugin install acme-domain@acme-copilot
 ```
 
 ## Reference
 
-Read the complete working example at [Lean PDLC UX Copilot Plugin](../../examples/copilot-plugins/lean-pdlc-ux/README.md).
+Read the complete working Plugin at [Lean PDLC UX Copilot Plugin](../../plugins/lean-pdlc-ux/README.md).

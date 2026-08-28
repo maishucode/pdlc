@@ -3,6 +3,8 @@
   "name": "lean-pdlc-ux",
   "description": "Stage-aware UX design, React delivery, and verification guidance for Lean PDLC in VS Code.",
   "version": "0.2.0",
+  "agents": "agents/",
+  "skills": "skills/",
   "author": {
     "name": "Lean PDLC Contributors"
   },

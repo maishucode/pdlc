@@ -1,6 +1,6 @@
 # Lean PDLC UX Copilot Plugin
 
-This is a deliberately small GitHub Copilot plugin example for Lean PDLC. It contributes one VS Code UX agent and three portable skills: `ux-spec`, `react-ui-delivery`, and `ux-review`.
+This is the GitHub Copilot UX Plugin for Lean PDLC. It contributes one UX Agent and three Skills: `ux-spec`, `react-ui-delivery`, and `ux-review`.
 
 ## How it joins the Lean PDLC flow
 
@@ -28,7 +28,7 @@ Copilot tools are static for this one Agent. The Stage binding and any approved 
 
 With user-supplied `implementation` context and an approved design reference, the Agent may write scoped React UI code and tests. With user-supplied `implementation` or `developer-verification` context, it may execute the smallest existing test command. It cannot install dependencies, cannot approve requirements, cannot alter PDLC formal state, and cannot bypass Build Readiness or PDLC gates.
 
-This one-Plugin lean example cannot enforce stage-scoped permissions technically. Strong technical enforcement needs a future host adapter or split agents; neither is added here.
+This one-Plugin lean implementation cannot enforce stage-scoped permissions technically. Strong technical enforcement needs a future host adapter or split agents; neither is added here.
 
 ## Maintainer local validation
 
@@ -40,45 +40,35 @@ bun test pdlc/tests
 bun pdlc/cli.ts validate
 ```
 
-## Use in VS Code
+## Install from the Lean PDLC marketplace
 
-Add the absolute plugin path to VS Code `settings.json`, then reload the window:
+The repository publishes this Plugin through `.github/plugin/marketplace.json`. Register the marketplace and install the Plugin:
 
-```json
-{
-  "chat.plugins.enabled": true,
-  "chat.pluginLocations": {
-    "/absolute/path/to/atlas-pdlc/examples/copilot-plugins/lean-pdlc-ux": true
-  }
-}
+```sh
+copilot plugin marketplace add OWNER/REPO
+copilot plugin install lean-pdlc-ux@lean-pdlc
 ```
 
-After reload, select **Lean PDLC UX** from the Copilot agent picker. Copilot discovers the three skills from `skills/`; use the current Stage binding as the instruction for the selected task.
+Replace `OWNER/REPO` with the repository that publishes the Lean PDLC marketplace.
 
-Remove the `chat.pluginLocations` entry and reload to stop loading this local plugin.
+After installation, start a new Copilot session and select **Lean PDLC UX** from the Agent picker. Copilot discovers its Agent from `agents/` and the three Skills from `skills/`.
+
+For VS Code team-wide automatic installation, administrators configure the `lean-pdlc` marketplace and `lean-pdlc-ux@lean-pdlc` in Copilot managed settings. The project does not depend on an undocumented local VS Code plugin-path setting.
 
 ## Maintainer Copilot CLI smoke test
 
 For maintainer manual verification, install this absolute local path into an isolated Copilot home, list it, then remove it. This is not an end-user delivery workflow:
 
 ```sh
-COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin install /absolute/path/to/atlas-pdlc/examples/copilot-plugins/lean-pdlc-ux
+COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin install /absolute/path/to/atlas-pdlc/plugins/lean-pdlc-ux
 COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin list
 COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin uninstall lean-pdlc-ux
 ```
 
-If `copilot plugin install --help` does not show a local path as a supported input, your CLI version is older than this local-path installation behavior. Use the VS Code local loader via `chat.pluginLocations` while developing, or upgrade the CLI; this does not mean that local directories are unsupported in general.
-
-After this plugin is published in an accessible GitHub repository or Git URL, install its repository subpath with the same isolated home. Replace `OWNER/REPO` with the published repository:
-
-```sh
-COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin install OWNER/REPO:examples/copilot-plugins/lean-pdlc-ux
-```
-
-This branch is not published as a Copilot plugin source.
+If `copilot plugin install --help` does not show a local path as a supported input, your CLI version is older than this local-path installation behavior. Upgrade the CLI before continuing.
 
 ## Deliberate boundary
 
-This example has no hooks, no MCP servers, no commands, and no scripts. The Plugin supplies bounded guidance; the main Lean PDLC flow remains responsible for Stage selection, requirements approval, Build Readiness, formal outputs, gates, and state.
+This Plugin has no hooks, no MCP servers, no commands, and no scripts. The Plugin supplies bounded guidance; the main Lean PDLC flow remains responsible for Stage selection, requirements approval, Build Readiness, formal outputs, gates, and state.
 
-A future portable PDLC Guidance plugin can package broader cross-harness guidance. This example stays VS Code-focused so its integration contract remains easy to inspect and remove.
+A future portable PDLC Guidance plugin can package broader cross-harness guidance. This Plugin stays focused so its integration contract remains easy to inspect and remove.
