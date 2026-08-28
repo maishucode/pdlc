@@ -117,7 +117,7 @@ test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries
     "tools",
     "user-invocable",
   ]);
-  assert.match(body, /guidance.*resolve a Stage binding/i);
+  assert.match(body, /pdlc-stage-bindings\.json.*guidance/i);
   assert.match(body, /ux-design.*draft.*UX specification.*textual mockup/i);
   assert.match(body, /implementation.*approved design reference/i);
   assert.match(body, /implementation.*React UI.*tests/i);
@@ -129,6 +129,11 @@ test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries
   assert.match(body, /Stage binding.*approved design reference.*user-supplied required context/i);
   assert.match(body, /cannot independently verify (?:this )?context/i);
   assert.match(body, /(?:context is missing or ambiguous|missing or ambiguous context).*must not use `?edit`? or `?execute`?/i);
+  assert.match(body, /guidance.*internal resolution.*main Lean PDLC Agent.*Harness.*maintainer/i);
+  assert.match(body, /End users.*current Stage.*main Lean PDLC Agent/i);
+  assert.match(body, /Stage context is missing.*choose a Stage or return to the main Lean PDLC Agent/i);
+  assert.match(body, /must not tell (?:an )?end user to execute Bun CLI/i);
+  assert.doesNotMatch(body, /user must use `guidance`/i);
 });
 
 test("keeps UX skills portable, conventionally named, and focused on usable output", async () => {
@@ -268,6 +273,12 @@ test("documents local VS Code and CLI use without runtime integrations", async (
   assert.match(readme, /(?:context is missing or ambiguous|missing or ambiguous context).*must not use `?edit`? or `?execute`?/i);
   assert.match(readme, /cannot enforce stage-scoped permissions/i);
   assert.match(readme, /future host adapter or split agents/i);
+  assert.match(readme, /guidance.*internal resolution.*main Lean PDLC Agent.*Harness.*maintainer/i);
+  assert.match(readme, /End users.*current Stage.*main Lean PDLC Agent/i);
+  assert.match(readme, /Stage context is missing.*choose a Stage or return to the main Lean PDLC Agent/i);
+  assert.match(readme, /must not tell (?:an )?end user to execute Bun CLI/i);
+  assert.match(readme, /maintainer manual inspection.*not an end-user delivery workflow/i);
+  assert.doesNotMatch(readme, /user must first use `guidance`/i);
   assert.match(rootReadme, /examples\/copilot-plugins\/lean-pdlc-ux\/README\.md/);
   assert.match(rootReadme, /guidance <stage-id> --plugin <path>/);
 });

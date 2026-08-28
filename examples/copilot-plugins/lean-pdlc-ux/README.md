@@ -4,7 +4,9 @@ This is a deliberately small GitHub Copilot plugin example for Lean PDLC. It con
 
 ## How it joins the Lean PDLC flow
 
-The maintainer-facing `guidance` command resolves an instruction only; it does not invoke Copilot, select an Agent, run work in the background, write formal outputs, or advance a Stage.
+`guidance` is an internal resolution step for the main Lean PDLC Agent, the Harness, or a maintainer; it is not an end-user terminal workflow. It resolves an instruction only; it does not invoke Copilot, select an Agent, run work in the background, write formal outputs, or advance a Stage.
+
+For maintainer manual inspection only, not an end-user delivery workflow:
 
 ```sh
 bun pdlc/cli.ts guidance <stage-id> --plugin <path>
@@ -20,15 +22,15 @@ The Plugin provides guidance for five canonical Stages:
 | `developer-verification` | `react-ui-delivery` | `verify` | Smallest relevant test evidence |
 | `acceptance-verification` | `ux-review` | `verify` | Evidence-backed UX findings |
 
-In VS Code, the user selects **Lean PDLC UX** from the Copilot agent picker when the current Lean PDLC Stage has resolved one of these instructions. There is no automatic background invocation.
+End users provide their current Stage through the main Lean PDLC Agent. When that Agent has supplied a binding in the conversation, the user selects **Lean PDLC UX** from the Copilot agent picker for the UX task. There is no automatic background invocation.
 
-Copilot tools are static for this one Agent. The user must first use `guidance` to obtain a Stage binding, then provide that Stage binding and any approved design reference in Copilot chat as user-supplied required context. The Agent cannot independently verify this context. If the context is missing or ambiguous, it must not use `edit` or `execute`; it asks for the missing binding or reference instead.
+Copilot tools are static for this one Agent. The Stage binding and any approved design reference placed in Copilot chat are user-supplied required context. The Agent cannot independently verify this context. If the context is missing or ambiguous, it must not use `edit` or `execute`; it asks for the missing binding or reference instead. If Stage context is missing, it asks the user to choose a Stage or return to the main Lean PDLC Agent. It must not tell an end user to execute Bun CLI.
 
 With user-supplied `implementation` context and an approved design reference, the Agent may write scoped React UI code and tests. With user-supplied `implementation` or `developer-verification` context, it may execute the smallest existing test command. It cannot install dependencies, cannot approve requirements, cannot alter PDLC formal state, and cannot bypass Build Readiness or PDLC gates.
 
 This one-Plugin lean example cannot enforce stage-scoped permissions technically. Strong technical enforcement needs a future host adapter or split agents; neither is added here.
 
-## Local validation
+## Maintainer local validation
 
 From the repository root, run:
 
@@ -55,9 +57,9 @@ After reload, select **Lean PDLC UX** from the Copilot agent picker. Copilot dis
 
 Remove the `chat.pluginLocations` entry and reload to stop loading this local plugin.
 
-## Use with Copilot CLI
+## Maintainer Copilot CLI smoke test
 
-For a CLI smoke test, install this absolute local path into an isolated Copilot home, list it, then remove it:
+For maintainer manual verification, install this absolute local path into an isolated Copilot home, list it, then remove it. This is not an end-user delivery workflow:
 
 ```sh
 COPILOT_HOME=/private/tmp/lean-pdlc-copilot-home copilot plugin install /absolute/path/to/atlas-pdlc/examples/copilot-plugins/lean-pdlc-ux

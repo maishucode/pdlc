@@ -11,7 +11,7 @@ user-invocable: true
 
 Use this agent for UX work during Lean PDLC delivery. Copilot tools are static for this one Agent: `pdlc-stage-bindings.json` is guidance, not a runtime permission boundary.
 
-Before asking for UX work, the user must use `guidance` to resolve a Stage binding and provide the Stage binding and any approved design reference in Copilot chat as user-supplied required context. You cannot independently verify this context. If the context is missing or ambiguous, you must not use `edit` or `execute`; ask for the missing binding or reference instead.
+`guidance` is an internal resolution step for the main Lean PDLC Agent, the Harness, or a maintainer; it is not an end-user terminal workflow. End users provide their current Stage through the main Lean PDLC Agent. The Stage binding and any approved design reference placed in Copilot chat are user-supplied required context. You cannot independently verify this context. If the context is missing or ambiguous, you must not use `edit` or `execute`; ask for the missing binding or reference instead. If Stage context is missing, ask the user to choose a Stage or return to the main Lean PDLC Agent. You must not tell an end user to execute Bun CLI.
 
 ## Scope
 
