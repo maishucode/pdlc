@@ -8,6 +8,7 @@ This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`
 - Resolve canonical Stages from `pdlc/stages/catalog.json` and the selected composition under `pdlc/journeys/`. Do not duplicate Stage semantics or treat every Stage as an approval.
 - Follow the shared requirements policy, final document review, and Build Readiness guard. Do not construct application code, install application dependencies, or build the application before approval succeeds.
 - Ask no more product questions per message than the shared policy permits. Offer document mode when appropriate.
+- In requirements clarification, make every unresolved product question selectable: offer 2–4 mutually exclusive options plus `X) Other`; do not use an open-ended question as the primary answer.
 - Apply workflow-owned role assignment and timebox defaults without turning them into product questions.
 - Apply enterprise, project, and Harness standards through the shared resolver. Never allow project preferences to weaken locked enterprise constraints.
 - Use the internal Runner only for validation, Build Readiness, or an implemented and explicitly confirmed checkpoint. Use ordinary project commands only after Build Readiness and only for the approved POC.

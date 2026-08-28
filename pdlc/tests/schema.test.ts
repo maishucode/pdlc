@@ -88,6 +88,19 @@ test("provides a fillable POC requirements questionnaire", async () => {
   assert(template.includes("[Answer]:"));
 });
 
+test("keeps requirements clarification questions selectable", async () => {
+  const sources = await Promise.all([
+    readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, "examples/copilot-plugins/lean-pdlc-ux/skills/ux-spec/SKILL.md"), "utf8"),
+  ]);
+
+  for (const source of sources) {
+    assert.match(source, /2[–-]4 mutually exclusive, selectable options/i);
+    assert.match(source, /X\) Other/i);
+    assert.match(source, /(?:must not|do not) ask an open-ended question as the primary answer/i);
+  }
+});
+
 test("rejects requirements policies that exceed the chat batch limit", async () => {
   const value = await json(join(projectRoot, "pdlc/workflows/poc/requirements-policy.json")) as Record<string, unknown>;
   const questionRules = value.questionRules as Record<string, unknown>;

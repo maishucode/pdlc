@@ -46,6 +46,8 @@ The Agent clarifies product requirements in focused rounds of no more than three
 - Data and integration boundaries.
 - Scope, success criteria, and failure signals.
 
+Every unresolved requirement question is presented as 2–4 mutually exclusive choices plus `X) Other`; users select an option instead of having to compose a free-text answer.
+
 Enterprise, project, and Harness defaults are applied automatically. Users are not repeatedly asked to choose a corporate palette, accessibility baseline, security boundary, or reversible architecture rule. Automatic standards never replace confirmation of the user, problem, product behavior, data decisions, scope, or success criteria.
 
 Users who prefer one document can choose document mode. The Agent creates a fillable requirements question file under `.pdlc/questions/`, waits for completion, and then converts resolved answers into traceable `RQ-xxx` decisions. The final Requirements document still requires explicit review.

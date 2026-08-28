@@ -15,6 +15,10 @@ Use this skill to turn a requested UX change into a small, testable artifact. As
 - A textual mockup or prototype proposal when the current Stage is `ux-design`.
 - A concise handoff that an implementation owner can verify.
 
+## Requirement clarification questions
+
+At `requirements-clarification`, every unresolved UX question must offer 2–4 mutually exclusive, selectable options, plus `X) Other`. The user can answer with an option letter and add detail for `X) Other`; do not ask an open-ended question as the primary answer.
+
 ## State coverage
 
 - **normal:** The primary successful state and its next action.
