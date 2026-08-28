@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -36,11 +36,14 @@ interface GuidanceOutput {
 }
 
 interface PluginFixtureOptions {
-  manifestName?: string;
-  descriptorName?: string;
-  bindings?: StageBinding[];
-  skillNames?: string[];
+  agent?: boolean;
+  bindings?: unknown[];
   descriptor?: boolean;
+  manifestName?: string;
+  manifest?: boolean;
+  descriptorName?: string;
+  schemaVersion?: number;
+  skillNames?: string[];
 }
 
 const defaultBindings: StageBinding[] = [
@@ -62,19 +65,37 @@ const defaultBindings: StageBinding[] = [
   },
 ];
 
+function referencedSkillNames(bindings: unknown[]): string[] {
+  return [...new Set(bindings.flatMap((binding) => {
+    if (typeof binding !== "object" || binding === null || !("skills" in binding)) return [];
+    const skills = (binding as { skills?: unknown }).skills;
+    return Array.isArray(skills) ? skills.filter((skill): skill is string => typeof skill === "string") : [];
+  }))];
+}
+
 async function createPluginFixture(workspace: string, options: PluginFixtureOptions = {}): Promise<string> {
   const pluginRoot = join(workspace, "lean-pdlc-ux");
   const bindings = options.bindings ?? defaultBindings;
-  const skillNames = options.skillNames ?? [...new Set(bindings.flatMap((binding) => binding.skills))];
+  const skillNames = options.skillNames ?? referencedSkillNames(bindings);
   const manifestName = options.manifestName ?? "lean-pdlc-ux";
   const descriptorName = options.descriptorName ?? "lean-pdlc-ux";
 
   await mkdir(pluginRoot, { recursive: true });
-  await writeFile(join(pluginRoot, "plugin.json"), JSON.stringify({ name: manifestName }, null, 2));
+  if (options.manifest !== false) {
+    await writeFile(join(pluginRoot, "plugin.json"), JSON.stringify({ name: manifestName }, null, 2));
+  }
   if (options.descriptor !== false) {
     await writeFile(
       join(pluginRoot, "pdlc-stage-bindings.json"),
-      JSON.stringify({ schemaVersion: 1, plugin: descriptorName, bindings }, null, 2),
+      JSON.stringify({ schemaVersion: options.schemaVersion ?? 1, plugin: descriptorName, bindings }, null, 2),
+    );
+  }
+  if (options.agent !== false) {
+    const agentRoot = join(pluginRoot, "com.github.copilot", "agents");
+    await mkdir(agentRoot, { recursive: true });
+    await writeFile(
+      join(agentRoot, "lean-pdlc-ux.agent.md"),
+      "---\nname: Lean PDLC UX\ndescription: Test fixture agent.\ntarget: vscode\n---\n",
     );
   }
   await Promise.all(skillNames.map(async (skill) => {
@@ -89,10 +110,33 @@ function errorCode(result: { output: unknown }): string {
   return (result.output as { error: { code: string } }).error.code;
 }
 
+async function assertGuidanceError(
+  workspace: string,
+  args: string[],
+  expectedCode: string,
+  scenario: string,
+): Promise<void> {
+  const result = await runCli(args, workspace);
+  assert.equal(result.exitCode, 2, `${scenario}: ${JSON.stringify(result.output)}`);
+  assert.equal(errorCode(result), expectedCode, scenario);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 test("guidance resolves canonical UX design and React implementation bindings", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-plugin-guidance-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const pluginRoot = await createPluginFixture(workspace);
+
+  assert.equal(await pathExists(join(workspace, ".pdlc")), false, "fixture must start without PDLC state");
+  assert.equal(await pathExists(join(workspace, ".pdlc", "audit.jsonl")), false, "fixture must start without audit state");
 
   const design = await runCli(["guidance", "ux-design", "--plugin", pluginRoot], workspace);
   assert.equal(design.exitCode, 0, JSON.stringify(design.output));
@@ -117,7 +161,7 @@ test("guidance resolves canonical UX design and React implementation bindings", 
     },
   } satisfies GuidanceOutput);
 
-  const implementation = await runCli(["guidance", "implementation", "--plugin", pluginRoot], workspace);
+  const implementation = await runCli(["guidance", "implementation", "--plugin", "lean-pdlc-ux"], workspace);
   assert.equal(implementation.exitCode, 0, JSON.stringify(implementation.output));
   assert.deepEqual(implementation.output, {
     ok: true,
@@ -139,6 +183,9 @@ test("guidance resolves canonical UX design and React implementation bindings", 
       approvalBoundary: "The plugin may edit approved React UI work but cannot approve scope, gates, or PDLC state.",
     },
   } satisfies GuidanceOutput);
+
+  assert.equal(await pathExists(join(workspace, ".pdlc")), false, "guidance must not create PDLC state");
+  assert.equal(await pathExists(join(workspace, ".pdlc", "audit.jsonl")), false, "guidance must not append audit state");
 });
 
 test("guidance rejects invalid plugin-stage contracts with stable error codes", async (context) => {
@@ -165,40 +212,146 @@ test("guidance rejects invalid plugin-stage contracts with stable error codes", 
   ];
 
   for (const scenario of cases) {
-    const result = await runCli(scenario.args, workspace);
-    assert.equal(result.exitCode, 2, `${scenario.name}: ${JSON.stringify(result.output)}`);
-    assert.equal(errorCode(result), scenario.expectedCode, scenario.name);
+    await assertGuidanceError(workspace, scenario.args, scenario.expectedCode, scenario.name);
   }
 
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", join(workspace, "plugin-root-does-not-exist")],
+    "PLUGIN_ROOT_NOT_FOUND",
+    "plugin root not found",
+  );
+
+  const missingManifest = await createPluginFixture(join(workspace, "missing-manifest"), { manifest: false });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingManifest],
+    "PLUGIN_MANIFEST_NOT_FOUND",
+    "plugin manifest missing",
+  );
+
   const missingDescriptor = await createPluginFixture(join(workspace, "missing-descriptor"), { descriptor: false });
-  const missingDescriptorResult = await runCli(["guidance", "ux-design", "--plugin", missingDescriptor], workspace);
-  assert.equal(missingDescriptorResult.exitCode, 2, JSON.stringify(missingDescriptorResult.output));
-  assert.equal(errorCode(missingDescriptorResult), "PLUGIN_DESCRIPTOR_NOT_FOUND");
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingDescriptor],
+    "PLUGIN_DESCRIPTOR_NOT_FOUND",
+    "plugin descriptor missing",
+  );
 
   const mismatchedNames = await createPluginFixture(join(workspace, "mismatched-names"), { descriptorName: "other-plugin" });
-  const mismatchResult = await runCli(["guidance", "ux-design", "--plugin", mismatchedNames], workspace);
-  assert.equal(mismatchResult.exitCode, 2, JSON.stringify(mismatchResult.output));
-  assert.equal(errorCode(mismatchResult), "PLUGIN_NAME_MISMATCH");
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", mismatchedNames],
+    "PLUGIN_NAME_MISMATCH",
+    "plugin manifest and descriptor names differ",
+  );
+
+  const missingAgent = await createPluginFixture(join(workspace, "missing-agent"), { agent: false });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingAgent],
+    "PLUGIN_AGENT_NOT_FOUND",
+    "fixed plugin agent file missing",
+  );
 
   const invalidAgent = await createPluginFixture(join(workspace, "invalid-agent"), {
-    bindings: [{ ...defaultBindings[0], agent: "other-agent" }],
+    bindings: [{ ...defaultBindings[0]!, agent: "other-agent" }],
   });
-  const invalidAgentResult = await runCli(["guidance", "ux-design", "--plugin", invalidAgent], workspace);
-  assert.equal(invalidAgentResult.exitCode, 2, JSON.stringify(invalidAgentResult.output));
-  assert.equal(errorCode(invalidAgentResult), "INVALID_PLUGIN_AGENT");
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", invalidAgent],
+    "INVALID_PLUGIN_AGENT",
+    "invalid plugin agent id",
+  );
 
   const missingSkill = await createPluginFixture(join(workspace, "missing-skill"), {
-    bindings: [defaultBindings[0]],
+    bindings: [defaultBindings[0]!],
     skillNames: [],
   });
-  const missingSkillResult = await runCli(["guidance", "ux-design", "--plugin", missingSkill], workspace);
-  assert.equal(missingSkillResult.exitCode, 2, JSON.stringify(missingSkillResult.output));
-  assert.equal(errorCode(missingSkillResult), "PLUGIN_SKILL_NOT_FOUND");
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingSkill],
+    "PLUGIN_SKILL_NOT_FOUND",
+    "referenced plugin skill missing",
+  );
 
   const duplicateStage = await createPluginFixture(join(workspace, "duplicate-stage"), {
-    bindings: [defaultBindings[0], { ...defaultBindings[0], handoff: "A duplicate binding must be rejected." }],
+    bindings: [defaultBindings[0]!, { ...defaultBindings[0]!, handoff: "A duplicate binding must be rejected." }],
   });
-  const duplicateStageResult = await runCli(["guidance", "ux-design", "--plugin", duplicateStage], workspace);
-  assert.equal(duplicateStageResult.exitCode, 2, JSON.stringify(duplicateStageResult.output));
-  assert.equal(errorCode(duplicateStageResult), "DUPLICATE_PLUGIN_STAGE_BINDING");
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", duplicateStage],
+    "DUPLICATE_PLUGIN_STAGE_BINDING",
+    "duplicate plugin stage binding",
+  );
+
+  const unsupportedSchema = await createPluginFixture(join(workspace, "unsupported-schema"), { schemaVersion: 2 });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", unsupportedSchema],
+    "UNSUPPORTED_PLUGIN_BINDINGS_SCHEMA",
+    "unsupported descriptor schema version",
+  );
+
+  const invalidMode = await createPluginFixture(join(workspace, "invalid-mode"), {
+    bindings: [{ ...defaultBindings[0]!, mode: "automatic" }],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", invalidMode],
+    "INVALID_PLUGIN_BINDING",
+    "invalid plugin binding mode",
+  );
+
+  const { handoff: _handoff, ...bindingWithoutHandoff } = defaultBindings[0]!;
+  const missingHandoff = await createPluginFixture(join(workspace, "missing-handoff"), {
+    bindings: [bindingWithoutHandoff],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingHandoff],
+    "INVALID_PLUGIN_BINDING",
+    "plugin binding handoff missing",
+  );
+
+  const emptyHandoff = await createPluginFixture(join(workspace, "empty-handoff"), {
+    bindings: [{ ...defaultBindings[0]!, handoff: "" }],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", emptyHandoff],
+    "INVALID_PLUGIN_BINDING",
+    "plugin binding handoff empty",
+  );
+
+  const { approvalBoundary: _approvalBoundary, ...bindingWithoutApprovalBoundary } = defaultBindings[0]!;
+  const missingApprovalBoundary = await createPluginFixture(join(workspace, "missing-approval-boundary"), {
+    bindings: [bindingWithoutApprovalBoundary],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingApprovalBoundary],
+    "INVALID_PLUGIN_BINDING",
+    "plugin binding approval boundary missing",
+  );
+
+  const emptyApprovalBoundary = await createPluginFixture(join(workspace, "empty-approval-boundary"), {
+    bindings: [{ ...defaultBindings[0]!, approvalBoundary: "" }],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", emptyApprovalBoundary],
+    "INVALID_PLUGIN_BINDING",
+    "plugin binding approval boundary empty",
+  );
+
+  const emptySkills = await createPluginFixture(join(workspace, "empty-skills"), {
+    bindings: [{ ...defaultBindings[0]!, skills: [] }],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", emptySkills],
+    "INVALID_PLUGIN_BINDING",
+    "plugin binding skills empty",
+  );
 });
