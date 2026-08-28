@@ -3,7 +3,9 @@
   "name": "lean-pdlc-ux",
   "description": "Read-only UX specification and review guidance for Lean PDLC in VS Code.",
   "version": "0.1.0",
-  "author": "Lean PDLC Contributors",
+  "author": {
+    "name": "Lean PDLC Contributors"
+  },
   "license": "MIT",
   "keywords": [
     "pdlc",

@@ -31,15 +31,17 @@ Remove the `chat.pluginLocations` entry and reload to stop loading this local pl
 
 ## Use with Copilot CLI
 
-Install from a local path, confirm it is present, and remove it when finished:
+The current Copilot CLI does not install a plugin from a local directory. Use the VS Code `chat.pluginLocations` configuration above for local development and validation.
+
+After this plugin is published in an accessible GitHub repository or Git URL, install its repository subpath, confirm it is present, and remove it when finished:
 
 ```sh
-copilot plugin install /absolute/path/to/atlas-pdlc/examples/copilot-plugins/lean-pdlc-ux
-copilot plugin list
-copilot plugin uninstall lean-pdlc-ux
+copilot plugin install OWNER/REPO:examples/copilot-plugins/lean-pdlc-ux --config-dir /tmp/lean-pdlc-copilot-config
+copilot plugin list --config-dir /tmp/lean-pdlc-copilot-config
+copilot plugin uninstall lean-pdlc-ux --config-dir /tmp/lean-pdlc-copilot-config
 ```
 
-Your installed Copilot CLI version may present a scope option; use its `copilot plugin install --help` output if it requires one.
+This branch is not published as a Copilot plugin source. Your installed Copilot CLI version may present a scope option; use its `copilot plugin install --help` output if it requires one.
 
 ## Deliberate boundary
 

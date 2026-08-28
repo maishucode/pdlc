@@ -62,25 +62,36 @@ test("ships one minimal Agent Plugins 1.0 UX Copilot plugin", async () => {
   );
 });
 
-test("declares a portable Agent Plugins 1.0 manifest without legacy components", async () => {
+test("declares a portable Agent Plugins 1.0 manifest without runtime components", async () => {
   const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8")) as Record<string, unknown>;
 
+  assert.deepEqual(Object.keys(manifest).sort(), [
+    "$schema",
+    "author",
+    "description",
+    "keywords",
+    "license",
+    "name",
+    "version",
+  ]);
   assert.equal(manifest.$schema, "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
   assert.equal(manifest.name, "lean-pdlc-ux");
+  assert.equal(manifest.description, "Read-only UX specification and review guidance for Lean PDLC in VS Code.");
   assert.equal(manifest.version, "0.1.0");
-  for (const metadata of ["description", "author", "license"]) {
-    assert.equal(typeof manifest[metadata], "string", `${metadata} must be a string`);
-    assert.notEqual(manifest[metadata], "", `${metadata} must not be empty`);
-  }
-  assert.equal(Array.isArray(manifest.keywords), true, "keywords must be an array");
-  assert.equal((manifest.keywords as unknown[]).length > 0, true, "keywords must not be empty");
-  for (const legacyComponent of ["agents", "skills", "hooks", "commands", "extensions", "mcpServers"]) {
+  assert.equal(manifest.license, "MIT");
+  assert.deepEqual(manifest.keywords, ["pdlc", "ux", "github-copilot", "vscode"]);
+  assert.deepEqual(manifest.author, { name: "Lean PDLC Contributors" });
+  assert.equal(typeof manifest.author, "object", "author must be an object");
+  assert.notEqual((manifest.author as { name?: unknown }).name, "", "author.name must not be empty");
+  assert.equal(typeof (manifest.author as { name?: unknown }).name, "string", "author.name must be a string");
+  for (const runtimeComponent of ["agents", "skills", "hooks", "commands", "mcpServers"]) {
     assert.equal(
-      Object.hasOwn(manifest, legacyComponent),
+      Object.hasOwn(manifest, runtimeComponent),
       false,
-      `manifest must not use the legacy ${legacyComponent} component field`,
+      `manifest must not use the ${runtimeComponent} runtime component field`,
     );
   }
+  assert.equal(Object.hasOwn(manifest, "extensions"), false, "the example does not add optional extensions");
 });
 
 test("keeps the VS Code UX agent read-only and outside PDLC control boundaries", async () => {
@@ -157,12 +168,17 @@ test("keeps UX skills portable, conventionally named, and focused on usable outp
 
 test("documents local VS Code and CLI use without runtime integrations", async () => {
   const readme = await readFile(join(pluginRoot, "README.md"), "utf8");
+  const rootReadme = await readFile(join(projectRoot, "README.md"), "utf8");
 
   assert.match(readme, /chat\.pluginLocations/);
   assert.match(readme, /chat\.plugins\.enabled/);
-  assert.match(readme, /copilot plugin install/i);
-  assert.match(readme, /copilot plugin list/i);
-  assert.match(readme, /copilot plugin (?:uninstall|remove)/i);
+  assert.match(readme, /does not install a plugin from a local directory/i);
+  assert.doesNotMatch(readme, /copilot plugin install \/absolute\/path/i);
+  assert.match(readme, /copilot plugin install OWNER\/REPO:examples\/copilot-plugins\/lean-pdlc-ux --config-dir \/tmp\/lean-pdlc-copilot-config/i);
+  assert.match(readme, /copilot plugin list --config-dir \/tmp\/lean-pdlc-copilot-config/i);
+  assert.match(readme, /copilot plugin uninstall lean-pdlc-ux --config-dir \/tmp\/lean-pdlc-copilot-config/i);
+  assert.match(readme, /not published as a Copilot plugin source/i);
   assert.match(readme, /no hooks/i);
   assert.match(readme, /no MCP/i);
+  assert.match(rootReadme, /examples\/copilot-plugins\/lean-pdlc-ux\/README\.md/);
 });

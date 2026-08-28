@@ -14,6 +14,8 @@ Use the repository prompt entry point when supported:
 /pdlc poc validate whether AI can categorize customer feedback
 ```
 
+Optional: see the [read-only VS Code Copilot UX plugin example](examples/copilot-plugins/lean-pdlc-ux/README.md).
+
 ### GitHub Copilot CLI or GitHub.com
 
 Select the **Lean PDLC** custom Agent when available, or use natural language:
