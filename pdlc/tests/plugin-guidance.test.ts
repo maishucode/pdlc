@@ -38,10 +38,14 @@ interface GuidanceOutput {
 interface PluginFixtureOptions {
   agent?: boolean;
   bindings?: unknown[];
+  descriptorBindings?: unknown;
   descriptor?: boolean;
+  descriptorPlugin?: unknown;
   manifestName?: string;
   manifest?: boolean;
   descriptorName?: string;
+  omitDescriptorBindings?: boolean;
+  omitDescriptorPlugin?: boolean;
   schemaVersion?: number;
   skillNames?: string[];
 }
@@ -76,7 +80,8 @@ function referencedSkillNames(bindings: unknown[]): string[] {
 async function createPluginFixture(workspace: string, options: PluginFixtureOptions = {}): Promise<string> {
   const pluginRoot = join(workspace, "lean-pdlc-ux");
   const bindings = options.bindings ?? defaultBindings;
-  const skillNames = options.skillNames ?? referencedSkillNames(bindings);
+  const descriptorBindings = options.descriptorBindings ?? bindings;
+  const skillNames = options.skillNames ?? referencedSkillNames(Array.isArray(descriptorBindings) ? descriptorBindings : []);
   const manifestName = options.manifestName ?? "lean-pdlc-ux";
   const descriptorName = options.descriptorName ?? "lean-pdlc-ux";
 
@@ -85,9 +90,12 @@ async function createPluginFixture(workspace: string, options: PluginFixtureOpti
     await writeFile(join(pluginRoot, "plugin.json"), JSON.stringify({ name: manifestName }, null, 2));
   }
   if (options.descriptor !== false) {
+    const descriptor: Record<string, unknown> = { schemaVersion: options.schemaVersion ?? 1 };
+    if (!options.omitDescriptorPlugin) descriptor.plugin = options.descriptorPlugin ?? descriptorName;
+    if (!options.omitDescriptorBindings) descriptor.bindings = descriptorBindings;
     await writeFile(
       join(pluginRoot, "pdlc-stage-bindings.json"),
-      JSON.stringify({ schemaVersion: options.schemaVersion ?? 1, plugin: descriptorName, bindings }, null, 2),
+      JSON.stringify(descriptor, null, 2),
     );
   }
   if (options.agent !== false) {
@@ -215,6 +223,16 @@ test("guidance rejects invalid plugin-stage contracts with stable error codes", 
     await assertGuidanceError(workspace, scenario.args, scenario.expectedCode, scenario.name);
   }
 
+  const unknownBindingStage = await createPluginFixture(join(workspace, "unknown-binding-stage"), {
+    bindings: [...defaultBindings, { ...defaultBindings[0]!, stage: "not-a-canonical-stage" }],
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", unknownBindingStage],
+    "STAGE_NOT_FOUND",
+    "unknown stage binding rejects a request for an otherwise valid stage",
+  );
+
   await assertGuidanceError(
     workspace,
     ["guidance", "ux-design", "--plugin", join(workspace, "plugin-root-does-not-exist")],
@@ -244,6 +262,46 @@ test("guidance rejects invalid plugin-stage contracts with stable error codes", 
     ["guidance", "ux-design", "--plugin", mismatchedNames],
     "PLUGIN_NAME_MISMATCH",
     "plugin manifest and descriptor names differ",
+  );
+
+  const missingDescriptorPlugin = await createPluginFixture(join(workspace, "missing-descriptor-plugin"), {
+    omitDescriptorPlugin: true,
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingDescriptorPlugin],
+    "INVALID_PLUGIN_BINDINGS_DESCRIPTOR",
+    "descriptor plugin missing",
+  );
+
+  const nonStringDescriptorPlugin = await createPluginFixture(join(workspace, "non-string-descriptor-plugin"), {
+    descriptorPlugin: 42,
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", nonStringDescriptorPlugin],
+    "INVALID_PLUGIN_BINDINGS_DESCRIPTOR",
+    "descriptor plugin is not a string",
+  );
+
+  const missingBindings = await createPluginFixture(join(workspace, "missing-bindings"), {
+    omitDescriptorBindings: true,
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", missingBindings],
+    "INVALID_PLUGIN_BINDINGS_DESCRIPTOR",
+    "descriptor bindings missing",
+  );
+
+  const nonArrayBindings = await createPluginFixture(join(workspace, "non-array-bindings"), {
+    descriptorBindings: { stage: "ux-design" },
+  });
+  await assertGuidanceError(
+    workspace,
+    ["guidance", "ux-design", "--plugin", nonArrayBindings],
+    "INVALID_PLUGIN_BINDINGS_DESCRIPTOR",
+    "descriptor bindings is not an array",
   );
 
   const missingAgent = await createPluginFixture(join(workspace, "missing-agent"), { agent: false });
