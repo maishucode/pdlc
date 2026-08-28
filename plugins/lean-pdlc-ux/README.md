@@ -51,9 +51,24 @@ copilot plugin install lean-pdlc-ux@lean-pdlc
 
 Replace `OWNER/REPO` with the repository that publishes the Lean PDLC marketplace.
 
-After installation, start a new Copilot session and select **Lean PDLC UX** from the Agent picker. Copilot discovers its Agent from `agents/` and the three Skills from `skills/`.
+After installation, start a new Copilot session and select **Lean PDLC UX** from the Agent picker. The portable Skills are under `skills/`; the Copilot-specific Agent is under `com.github.copilot/agents/`.
 
-For VS Code team-wide automatic installation, administrators configure the `lean-pdlc` marketplace and `lean-pdlc-ux@lean-pdlc` in Copilot managed settings. The project does not depend on an undocumented local VS Code plugin-path setting.
+## Use a local checkout in VS Code
+
+VS Code can load a cloned Plugin directory from its User Settings. Add the following entries, replacing the path with your checkout's absolute path:
+
+```json
+{
+  "chat.plugins.enabled": true,
+  "chat.pluginLocations": {
+    "/absolute/path/to/atlas-pdlc/plugins/lean-pdlc-ux": true
+  }
+}
+```
+
+Reload the VS Code window, start a new chat, and select **Lean PDLC UX** from the Agent picker. `chat.pluginLocations` is an experimental User/Machine setting, so keep it in VS Code User Settings rather than committing it to the repository.
+
+For VS Code team-wide automatic installation, administrators configure the `lean-pdlc` marketplace and `lean-pdlc-ux@lean-pdlc` in Copilot managed settings.
 
 ## Maintainer Copilot CLI smoke test
 

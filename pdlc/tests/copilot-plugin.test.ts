@@ -41,10 +41,10 @@ function assertSingleNonEmptyFrontmatterValue(frontmatter: string, field: string
   assert.notEqual(values[0].trim(), "", `${field} must not be empty`);
 }
 
-test("ships one official-layout UX Copilot plugin", async () => {
+test("ships one Open Plugin Spec UX Copilot plugin", async () => {
   const expectedFiles = [
     "README.md",
-    "agents/lean-pdlc-ux.agent.md",
+    "com.github.copilot/agents/lean-pdlc-ux.agent.md",
     "pdlc-stage-bindings.json",
     "plugin.json",
     "skills/react-ui-delivery/SKILL.md",
@@ -65,18 +65,16 @@ test("ships one official-layout UX Copilot plugin", async () => {
   );
 });
 
-test("declares standard Copilot component paths in its plugin manifest", async () => {
+test("declares a portable Agent Plugins 1.0 manifest without runtime components", async () => {
   const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8")) as Record<string, unknown>;
 
   assert.deepEqual(Object.keys(manifest).sort(), [
     "$schema",
-    "agents",
     "author",
     "description",
     "keywords",
     "license",
     "name",
-    "skills",
     "version",
   ]);
   assert.equal(manifest.$schema, "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
@@ -86,23 +84,21 @@ test("declares standard Copilot component paths in its plugin manifest", async (
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.keywords, ["pdlc", "ux", "github-copilot", "vscode"]);
   assert.deepEqual(manifest.author, { name: "Lean PDLC Contributors" });
+  assert.equal(Object.hasOwn(manifest, "extensions"), false, "the example does not add optional extensions");
   assert.equal(typeof manifest.author, "object", "author must be an object");
   assert.notEqual((manifest.author as { name?: unknown }).name, "", "author.name must not be empty");
   assert.equal(typeof (manifest.author as { name?: unknown }).name, "string", "author.name must be a string");
-  assert.equal(manifest.agents, "agents/");
-  assert.equal(manifest.skills, "skills/");
-  for (const runtimeComponent of ["hooks", "commands", "mcpServers"]) {
+  for (const runtimeComponent of ["agents", "skills", "hooks", "commands", "mcpServers"]) {
     assert.equal(
       Object.hasOwn(manifest, runtimeComponent),
       false,
       `manifest must not use the ${runtimeComponent} runtime component field`,
     );
   }
-  assert.equal(Object.hasOwn(manifest, "extensions"), false, "the example does not add optional extensions");
 });
 
 test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries", async () => {
-  const source = await readFile(join(pluginRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
+  const source = await readFile(join(pluginRoot, "com.github.copilot/agents/lean-pdlc-ux.agent.md"), "utf8");
   const { frontmatter, body } = splitFrontmatter(source);
 
   assertSingleFrontmatterValue(frontmatter, "name", "Lean PDLC UX");
@@ -257,7 +253,7 @@ test("publishes the plugin through the repository marketplace", async () => {
   }]);
 });
 
-test("documents marketplace and local CLI use without runtime integrations", async () => {
+test("documents marketplace, local VS Code, and CLI use without runtime integrations", async () => {
   const readme = await readFile(join(pluginRoot, "README.md"), "utf8");
   const rootReadme = await readFile(join(projectRoot, "README.md"), "utf8");
 
@@ -271,6 +267,10 @@ test("documents marketplace and local CLI use without runtime integrations", asy
   assert.match(readme, /copilot plugin install --help/i);
   assert.match(readme, /CLI (?:version )?(?:is )?(?:older|out of date|outdated)|older CLI|upgrade (?:the )?CLI/i);
   assert.match(readme, /VS Code.*managed settings/i);
+  assert.match(readme, /"chat\.plugins\.enabled": true/);
+  assert.match(readme, /"chat\.pluginLocations"/);
+  assert.match(readme, /experimental User\/Machine setting/i);
+  assert.match(readme, /User Settings/i);
   assert.doesNotMatch(readme, /--config-dir/);
   assert.doesNotMatch(readme, /not published as a Copilot plugin source/i);
   assert.match(readme, /no hooks/i);

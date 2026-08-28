@@ -18,7 +18,7 @@ Keep the package small. Start with one Agent, only the Skills it actually needs,
 plugins/acme-domain/
 ├── plugin.json
 ├── pdlc-stage-bindings.json
-├── agents/
+├── com.github.copilot/agents/
 │   └── acme-domain.agent.md
 └── skills/
     ├── domain-spec/SKILL.md
@@ -58,7 +58,7 @@ Use the supplied PDLC Stage binding. Draft only the requested domain artifact.
 Never approve requirements, gates, or PDLC state.
 ```
 
-The Copilot Agent lives at `agents/acme-domain.agent.md`. It should require the current Stage binding as input and refuse to claim an approval or state transition. Give it only the tools its real work needs; tool permissions are static for one Copilot Agent, so Stage-specific limitations must be written in the Agent instructions.
+The Copilot Agent lives at `com.github.copilot/agents/acme-domain.agent.md`. This is the Open Plugin Spec platform-specific location; portable Skills remain under `skills/`. The Agent should require the current Stage binding as input and refuse to claim an approval or state transition. Give it only the tools its real work needs; tool permissions are static for one Copilot Agent, so Stage-specific limitations must be written in the Agent instructions.
 
 For a requirement-stage Skill, require selectable questions exactly as the core workflow does: 2–4 mutually exclusive choices plus `X) Other`, never an open-ended primary question.
 
@@ -112,6 +112,19 @@ copilot plugin install acme-domain@acme-copilot
 ```
 
 Select the plugin Agent in Copilot only after the main Lean PDLC Agent has supplied the current Stage binding in the conversation. There is no automatic background invocation. For VS Code team-wide automatic installation, an administrator configures the marketplace and Plugin through Copilot managed settings.
+
+For an individual developer testing a cloned Plugin in VS Code, configure its absolute directory in VS Code **User Settings**:
+
+```json
+{
+  "chat.plugins.enabled": true,
+  "chat.pluginLocations": {
+    "/absolute/path/to/repository/plugins/acme-domain": true
+  }
+}
+```
+
+Reload VS Code, then select the Plugin Agent from the Agent picker. `chat.pluginLocations` is an experimental User/Machine setting; do not commit it in workspace settings.
 
 ## 6. Use the plugin during a PDLC task
 
