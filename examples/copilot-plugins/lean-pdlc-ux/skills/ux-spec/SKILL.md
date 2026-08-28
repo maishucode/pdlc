@@ -12,6 +12,7 @@ Use this skill to turn a requested UX change into a small, testable artifact. As
 - User, outcome, trigger, and success signal.
 - Main flow with the user action, system response, and completion condition.
 - Explicit assumptions, open questions, and acceptance criteria.
+- A textual mockup or prototype proposal when the current Stage is `ux-design`.
 - A concise handoff that an implementation owner can verify.
 
 ## State coverage

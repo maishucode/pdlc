@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.ts";
 
@@ -67,6 +67,9 @@ const defaultBindings: StageBinding[] = [
     approvalBoundary: "The plugin may edit approved React UI work but cannot approve scope, gates, or PDLC state.",
   },
 ];
+
+const projectRoot = resolve(import.meta.dirname, "../..");
+const examplePluginRoot = join(projectRoot, "examples", "copilot-plugins", "lean-pdlc-ux");
 
 function referencedSkillNames(bindings: unknown[]): string[] {
   return [...new Set(bindings.flatMap((binding) => {
@@ -185,6 +188,35 @@ test("guidance resolves canonical UX design and React implementation bindings", 
 
   assert.equal(await pathExists(join(workspace, ".pdlc")), false, "guidance must not create PDLC state");
   assert.equal(await pathExists(join(workspace, ".pdlc", "audit.jsonl")), false, "guidance must not append audit state");
+});
+
+test("guidance resolves the real UX plugin's design and implementation instructions", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-real-plugin-guidance-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+
+  const design = await runCli(["guidance", "ux-design", "--plugin", examplePluginRoot], workspace);
+  assert.equal(design.exitCode, 0, JSON.stringify(design.output));
+  assert.deepEqual((design.output as GuidanceOutput).guidance, {
+    plugin: "lean-pdlc-ux",
+    agent: "lean-pdlc-ux",
+    skills: ["ux-spec"],
+    mode: "draft",
+    handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",
+    approvalBoundary: "The plugin drafts guidance only; product approval and PDLC state remain outside the plugin.",
+  });
+
+  const implementation = await runCli(["guidance", "implementation", "--plugin", examplePluginRoot], workspace);
+  assert.equal(implementation.exitCode, 0, JSON.stringify(implementation.output));
+  assert.deepEqual((implementation.output as GuidanceOutput).guidance, {
+    plugin: "lean-pdlc-ux",
+    agent: "lean-pdlc-ux",
+    skills: ["react-ui-delivery"],
+    mode: "implement",
+    handoff: "Implement the approved UX state matrix in existing React conventions and report focused test evidence.",
+    approvalBoundary: "The plugin may edit scoped React UI code and tests but cannot approve requirements, gates, or PDLC state.",
+  });
+
+  assert.equal(await pathExists(join(workspace, ".pdlc")), false, "guidance must not create PDLC state");
 });
 
 test("guidance resolves a generic kebab-case Agent id", async (context) => {

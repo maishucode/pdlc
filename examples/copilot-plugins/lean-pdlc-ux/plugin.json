@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "lean-pdlc-ux",
-  "description": "Read-only UX specification and review guidance for Lean PDLC in VS Code.",
-  "version": "0.1.0",
+  "description": "Stage-aware UX design, React delivery, and verification guidance for Lean PDLC in VS Code.",
+  "version": "0.2.0",
   "author": {
     "name": "Lean PDLC Contributors"
   },

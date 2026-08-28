@@ -44,7 +44,9 @@ test("ships one minimal Agent Plugins 1.0 UX Copilot plugin", async () => {
   const expectedFiles = [
     "README.md",
     "com.github.copilot/agents/lean-pdlc-ux.agent.md",
+    "pdlc-stage-bindings.json",
     "plugin.json",
+    "skills/react-ui-delivery/SKILL.md",
     "skills/ux-review/SKILL.md",
     "skills/ux-spec/SKILL.md",
   ];
@@ -54,7 +56,7 @@ test("ships one minimal Agent Plugins 1.0 UX Copilot plugin", async () => {
 
   assert.deepEqual(files, expectedFiles);
   assert.equal(files.filter((path) => path.endsWith(".agent.md")).length, 1);
-  assert.equal(files.filter((path) => path.endsWith("/SKILL.md")).length, 2);
+  assert.equal(files.filter((path) => path.endsWith("/SKILL.md")).length, 3);
   assert.equal(
     files.some((path) => /(?:^|\/)(?:hooks?|mcp|scripts?)(?:\/|\.|$)/i.test(path)),
     false,
@@ -76,8 +78,8 @@ test("declares a portable Agent Plugins 1.0 manifest without runtime components"
   ]);
   assert.equal(manifest.$schema, "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
   assert.equal(manifest.name, "lean-pdlc-ux");
-  assert.equal(manifest.description, "Read-only UX specification and review guidance for Lean PDLC in VS Code.");
-  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.description, "Stage-aware UX design, React delivery, and verification guidance for Lean PDLC in VS Code.");
+  assert.equal(manifest.version, "0.2.0");
   assert.equal(manifest.license, "MIT");
   assert.deepEqual(manifest.keywords, ["pdlc", "ux", "github-copilot", "vscode"]);
   assert.deepEqual(manifest.author, { name: "Lean PDLC Contributors" });
@@ -94,7 +96,7 @@ test("declares a portable Agent Plugins 1.0 manifest without runtime components"
   assert.equal(Object.hasOwn(manifest, "extensions"), false, "the example does not add optional extensions");
 });
 
-test("keeps the VS Code UX agent read-only and outside PDLC control boundaries", async () => {
+test("keeps the VS Code UX agent stage-aware and outside PDLC control boundaries", async () => {
   const source = await readFile(join(pluginRoot, "com.github.copilot/agents/lean-pdlc-ux.agent.md"), "utf8");
   const { frontmatter, body } = splitFrontmatter(source);
 
@@ -103,17 +105,30 @@ test("keeps the VS Code UX agent read-only and outside PDLC control boundaries",
   assertSingleFrontmatterValue(frontmatter, "target", "vscode");
   assertSingleFrontmatterValue(frontmatter, "user-invocable", "true");
   assertSingleFrontmatterValue(frontmatter, "disable-model-invocation", "true");
-  assertSingleFrontmatterValue(frontmatter, "tools", "[read, search]");
-  assert.doesNotMatch(frontmatter, /\bedit\b/i);
+  assertSingleFrontmatterValue(frontmatter, "tools", "[read, search, edit, execute]");
+  const frontmatterFields = frontmatter
+    .split("\n")
+    .flatMap((line) => line.match(/^([a-z-]+):/)?.[1] ?? []);
+  assert.deepEqual(frontmatterFields.sort(), [
+    "description",
+    "disable-model-invocation",
+    "name",
+    "target",
+    "tools",
+    "user-invocable",
+  ]);
+  assert.match(body, /only act against a supplied Stage binding/i);
+  assert.match(body, /ux-design.*draft.*UX specification.*textual mockup/i);
+  assert.match(body, /implementation.*approved design reference/i);
+  assert.match(body, /implementation.*React UI.*tests/i);
+  assert.match(body, /verification.*evidence/i);
   assert.match(body, /(?:must not|do not|cannot) approve requirements/i);
-  assert.match(body, /(?:must not|do not|cannot) bypass Build Readiness/i);
-  assert.match(body, /(?:must not|do not|cannot) alter (?:the )?workflow/i);
-  assert.match(body, /(?:must not|do not|cannot) alter (?:the )?state/i);
-  assert.match(body, /(?:must not|do not|cannot) (?:write|modify) workspace files/i);
+  assert.match(body, /(?:must not|do not|cannot) bypass (?:Build Readiness|PDLC gates)/i);
+  assert.match(body, /(?:must not|do not|cannot) alter (?:the )?PDLC (?:formal )?state/i);
 });
 
 test("keeps UX skills portable, conventionally named, and focused on usable output", async () => {
-  const skillSources = await Promise.all(["ux-spec", "ux-review"].map(async (skill) => {
+  const skillSources = await Promise.all(["ux-spec", "react-ui-delivery", "ux-review"].map(async (skill) => {
     const source = await readFile(join(pluginRoot, "skills", skill, "SKILL.md"), "utf8");
     return { skill, ...splitFrontmatter(source), source };
   }));
@@ -164,6 +179,55 @@ test("keeps UX skills portable, conventionally named, and focused on usable outp
   }
   assert.match(uxReview, /^## Constraints$/mi);
   assert.match(uxReview, /every conclusion.*evidence/i, "ux-review conclusions must be evidence-backed");
+
+  const reactUiDelivery = skillSources.find(({ skill }) => skill === "react-ui-delivery")?.source ?? "";
+  assert.match(reactUiDelivery, /approved UX state matrix/i);
+  assert.match(reactUiDelivery, /existing React conventions/i);
+  assert.match(reactUiDelivery, /focused component.*interaction tests/i);
+  assert.match(reactUiDelivery, /smallest relevant existing test command/i);
+  assert.match(reactUiDelivery, /(?:must not|do not|cannot) install dependencies/i);
+  assert.match(reactUiDelivery, /(?:must not|do not|cannot) change scope/i);
+  assert.match(reactUiDelivery, /(?:must not|do not|cannot) approve PDLC decisions/i);
+});
+
+test("binds the one UX plugin to five advisory PDLC stages", async () => {
+  const descriptor = JSON.parse(await readFile(join(pluginRoot, "pdlc-stage-bindings.json"), "utf8")) as Record<string, unknown>;
+
+  assert.deepEqual(Object.keys(descriptor).sort(), ["bindings", "plugin", "schemaVersion"]);
+  assert.equal(descriptor.schemaVersion, 1);
+  assert.equal(descriptor.plugin, "lean-pdlc-ux");
+  assert(Array.isArray(descriptor.bindings), "bindings must be an array");
+  const bindings = descriptor.bindings as Array<Record<string, unknown>>;
+  assert.equal(bindings.length, 5);
+  assert.deepEqual(bindings.map((binding) => binding.stage), [
+    "requirements-clarification",
+    "ux-design",
+    "implementation",
+    "developer-verification",
+    "acceptance-verification",
+  ]);
+  assert.equal(new Set(bindings.map((binding) => binding.stage)).size, 5, "Stage bindings must be unique");
+  assert.deepEqual(bindings.map((binding) => ({
+    stage: binding.stage,
+    skills: binding.skills,
+    mode: binding.mode,
+  })), [
+    { stage: "requirements-clarification", skills: ["ux-spec"], mode: "draft" },
+    { stage: "ux-design", skills: ["ux-spec"], mode: "draft" },
+    { stage: "implementation", skills: ["react-ui-delivery"], mode: "implement" },
+    { stage: "developer-verification", skills: ["react-ui-delivery"], mode: "verify" },
+    { stage: "acceptance-verification", skills: ["ux-review"], mode: "verify" },
+  ]);
+
+  for (const binding of bindings) {
+    assert.deepEqual(Object.keys(binding).sort(), ["agent", "approvalBoundary", "handoff", "mode", "skills", "stage"]);
+    assert.equal(binding.agent, "lean-pdlc-ux");
+    assert.equal(typeof binding.handoff, "string");
+    assert.notEqual((binding.handoff as string).trim(), "");
+    assert.equal(typeof binding.approvalBoundary, "string");
+    assert.notEqual((binding.approvalBoundary as string).trim(), "");
+    assert.equal(Object.hasOwn(binding, "outputs"), false, "Plugin bindings do not define formal PDLC outputs");
+  }
 });
 
 test("documents local VS Code and CLI use without runtime integrations", async () => {
@@ -185,5 +249,15 @@ test("documents local VS Code and CLI use without runtime integrations", async (
   assert.match(readme, /not published as a Copilot plugin source/i);
   assert.match(readme, /no hooks/i);
   assert.match(readme, /no MCP/i);
+  assert.match(readme, /guidance.*resolves.*instruction only/i);
+  assert.match(readme, /select .*Lean PDLC UX/i);
+  assert.match(readme, /no automatic background invocation/i);
+  assert.match(readme, /may write React UI code and tests only.*implementation.*approved design reference/i);
+  assert.match(readme, /smallest existing test.*implementation.*developer-verification/i);
+  assert.match(readme, /cannot install dependencies/i);
+  assert.match(readme, /cannot approve requirements/i);
+  assert.match(readme, /cannot alter PDLC formal state/i);
+  assert.match(readme, /cannot bypass (?:Build Readiness|PDLC gates)/i);
   assert.match(rootReadme, /examples\/copilot-plugins\/lean-pdlc-ux\/README\.md/);
+  assert.match(rootReadme, /guidance <stage-id> --plugin <path>/);
 });

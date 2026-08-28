@@ -1,6 +1,28 @@
 # Lean PDLC UX Copilot Plugin
 
-This is a deliberately small GitHub Copilot plugin example for Lean PDLC. It contributes one read-only VS Code UX agent and two portable skills: `ux-spec` and `ux-review`.
+This is a deliberately small GitHub Copilot plugin example for Lean PDLC. It contributes one VS Code UX agent and three portable skills: `ux-spec`, `react-ui-delivery`, and `ux-review`.
+
+## How it joins the Lean PDLC flow
+
+The maintainer-facing `guidance` command resolves an instruction only; it does not invoke Copilot, select an Agent, run work in the background, write formal outputs, or advance a Stage.
+
+```sh
+bun pdlc/cli.ts guidance <stage-id> --plugin <path>
+```
+
+The Plugin provides guidance for five canonical Stages:
+
+| Stage | Skill | Mode | What it returns |
+| --- | --- | --- | --- |
+| `requirements-clarification` | `ux-spec` | `draft` | UX questions and state inventory |
+| `ux-design` | `ux-spec` | `draft` | UX spec and textual mockup proposal |
+| `implementation` | `react-ui-delivery` | `implement` | Scoped React UI and focused test evidence |
+| `developer-verification` | `react-ui-delivery` | `verify` | Smallest relevant test evidence |
+| `acceptance-verification` | `ux-review` | `verify` | Evidence-backed UX findings |
+
+In VS Code, the user selects **Lean PDLC UX** from the Copilot agent picker when the current Lean PDLC Stage has resolved one of these instructions. There is no automatic background invocation.
+
+The Agent may write React UI code and tests only during `implementation`, after a supplied approved design reference. It may execute the smallest existing test command only during `implementation` or `developer-verification`. It cannot install dependencies, cannot approve requirements, cannot alter PDLC formal state, and cannot bypass Build Readiness or PDLC gates.
 
 ## Local validation
 
@@ -25,7 +47,7 @@ Add the absolute plugin path to VS Code `settings.json`, then reload the window:
 }
 ```
 
-After reload, select **Lean PDLC UX** from the Copilot agent picker. Copilot discovers the two skills from `skills/`; they can be selected or invoked when their UX task fits. The agent has only `read` and `search`, so it provides chat guidance without changing the workspace.
+After reload, select **Lean PDLC UX** from the Copilot agent picker. Copilot discovers the three skills from `skills/`; use the current Stage binding as the instruction for the selected task.
 
 Remove the `chat.pluginLocations` entry and reload to stop loading this local plugin.
 
@@ -51,6 +73,6 @@ This branch is not published as a Copilot plugin source.
 
 ## Deliberate boundary
 
-This example has no hooks, no MCP servers, no commands, and no scripts. It is guidance only: the main Lean PDLC flow remains responsible for requirements approval, Build Readiness, artifact writes, and state.
+This example has no hooks, no MCP servers, no commands, and no scripts. The Plugin supplies bounded guidance; the main Lean PDLC flow remains responsible for Stage selection, requirements approval, Build Readiness, formal outputs, gates, and state.
 
 A future portable PDLC Guidance plugin can package broader cross-harness guidance. This example stays VS Code-focused so its integration contract remains easy to inspect and remove.
