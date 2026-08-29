@@ -121,6 +121,21 @@ export interface ContextIntegrationReceipt extends ContextAssetReceipt {
   skills: string[];
 }
 
+export interface LegacyContextDomainContributionReceipt extends ContextAssetReceipt {
+  agent: string;
+  skills: string[];
+}
+
+export interface LegacyStageContextReceipt {
+  schemaVersion: 1;
+  stage: string;
+  contextHash: string;
+  policies: ContextPolicyReceipt[];
+  knowledge: ContextAssetReceipt[];
+  domainContributions: LegacyContextDomainContributionReceipt[];
+  integrations: ContextIntegrationReceipt[];
+}
+
 export interface StageContextReceipt {
   schemaVersion: 2;
   stage: string;
@@ -131,10 +146,10 @@ export interface StageContextReceipt {
   integrations: ContextIntegrationReceipt[];
 }
 
-export interface StageContextApplication extends StageContextReceipt {
+export type StageContextApplication = (StageContextReceipt | LegacyStageContextReceipt) & {
   actor: string;
   appliedAt: string;
-}
+};
 
 export interface PocDeliveryRecord {
   schemaVersion: 2;

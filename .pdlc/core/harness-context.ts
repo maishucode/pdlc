@@ -113,6 +113,7 @@ export class HarnessContext {
     return uniqueStages.flatMap((stage, index) => {
       const application = applications.get(stage);
       if (!application) return [{ code: "STAGE_CONTEXT_APPLICATION_MISSING", path: "$.resolution.contextApplications", message: `Stage context has not been applied: ${stage}` }];
+      if (application.schemaVersion === 1) return [{ code: "LEGACY_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.schemaVersion`, message: `Stage context must be re-executed with an Agent capability receipt: ${stage}` }];
       return validateReceiptAgainstSnapshot(application, materials[index]!.snapshot).map((issue) => issue.code === "STALE_CONTEXT_RECEIPT"
         ? { code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets or activation inputs changed after the Stage context was applied: ${stage}` }
         : { ...issue, path: `$.resolution.contextApplications.${stage}${issue.path.slice(1)}` });

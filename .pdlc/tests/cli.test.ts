@@ -675,6 +675,47 @@ test("status and validate reject tampered stored Agent execution identity", asyn
   assert(details.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"), JSON.stringify(validation.output));
 });
 
+test("loads legacy Stage applications and requires capability re-execution", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-legacy-agent-receipt-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+  const contextResult = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
+  assert.equal(contextResult.exitCode, 0, JSON.stringify(contextResult.output));
+  const output = contextResult.output as ContextOutput;
+  const stored = await new FileStateStore(workspace).readRecord(record.id) as PocDeliveryRecord & { resolution: { contextApplications: unknown[] } };
+  stored.resolution.contextApplications.push({
+    schemaVersion: 1,
+    stage: "requirements-clarification",
+    contextHash: output.contextHash,
+    policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref}.` })),
+    knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs: ["pdlc/requirements/POC-EXAMPLE.md"] })),
+    domainContributions: output.domainContributions.map(({ domain, version, agent, skills }) => ({
+      ref: `${domain}@${version}:${agent.id}`,
+      agent: agent.id,
+      skills: skills.map(({ name }) => name),
+      disposition: "used",
+      notes: "Legacy prompt-composed contribution.",
+      evidenceRefs: ["pdlc/requirements/POC-EXAMPLE.md"],
+    })),
+    integrations: [],
+    actor: "legacy-agent",
+    appliedAt: new Date().toISOString(),
+  });
+  await writeFile(join(workspace, ".pdlc/runtime/records", `${record.id}.json`), JSON.stringify(stored));
+
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  const blockers = (status.output as { blockers: Array<{ code: string }> }).blockers;
+  assert(blockers.some(({ code }) => code === "LEGACY_STAGE_CONTEXT_APPLICATION"), JSON.stringify(status.output));
+
+  const validation = await runCli(["validate", "--root", workspace], workspace);
+  assert.equal(validation.exitCode, 2);
+  const details = (validation.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(details.some(({ code }) => code === "LEGACY_STAGE_CONTEXT_APPLICATION"), JSON.stringify(validation.output));
+});
+
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-context-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));

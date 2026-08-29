@@ -152,9 +152,10 @@ function validateEvidenceList(value: unknown, path: string, issues: ValidationIs
 function validateStageContextReceiptFields(value: unknown, path: string, issues: ValidationIssue[], stored: boolean): void {
   const receipt = object(value, path, issues);
   if (!receipt) return;
+  const legacy = stored && receipt.schemaVersion === 1;
   const allowed = ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "domainContributions", "integrations", ...(stored ? ["actor", "appliedAt"] : [])];
   exact(receipt, allowed, path, issues);
-  if (receipt.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 2");
+  if (receipt.schemaVersion !== 2 && !legacy) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 2");
   id(receipt.stage, `${path}.stage`, issues);
   if (typeof receipt.contextHash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.contextHash)) issue(issues, "INVALID_CONTEXT_HASH", `${path}.contextHash`, "Expected a SHA-256 digest");
   if (stored) {
@@ -177,11 +178,11 @@ function validateStageContextReceiptFields(value: unknown, path: string, issues:
   }
 
   validateContextAssets(receipt.knowledge, `${path}.knowledge`, issues, false);
-  validateContextAssets(receipt.domainContributions, `${path}.domainContributions`, issues, true);
+  validateContextAssets(receipt.domainContributions, `${path}.domainContributions`, issues, true, false, legacy);
   validateContextAssets(receipt.integrations, `${path}.integrations`, issues, true, true);
 }
 
-function validateContextAssets(value: unknown, path: string, issues: ValidationIssue[], hasSkills: boolean, integration = false): void {
+function validateContextAssets(value: unknown, path: string, issues: ValidationIssue[], hasSkills: boolean, integration = false, legacyDomainContribution = false): void {
   if (!Array.isArray(value)) {
     issue(issues, "EXPECTED_ARRAY", path, "Expected context asset array");
     return;
@@ -192,7 +193,7 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
     const item = object(entry, itemPath, issues);
     if (!item) return;
     const domainContribution = !integration && hasSkills;
-    const allowed = ["ref", "disposition", "notes", "evidenceRefs", ...(hasSkills ? ["skills"] : []), ...(domainContribution ? ["capability", "agent", "execution"] : [])];
+    const allowed = ["ref", "disposition", "notes", "evidenceRefs", ...(hasSkills ? ["skills"] : []), ...(domainContribution ? ["agent", ...(legacyDomainContribution ? [] : ["capability", "execution"])] : [])];
     exact(item, allowed, itemPath, issues);
     if (string(item.ref, `${itemPath}.ref`, issues)) refs.push(item.ref);
     if (!CONTEXT_USE_DISPOSITIONS.includes(item.disposition as never)) issue(issues, "INVALID_CONTEXT_DISPOSITION", `${itemPath}.disposition`, "Expected used or not-used");
@@ -201,8 +202,9 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
     stringArray(item.evidenceRefs, `${itemPath}.evidenceRefs`, issues, minimumEvidence);
     if (hasSkills) stringArray(item.skills, `${itemPath}.skills`, issues);
     if (domainContribution) {
-      id(item.capability, `${itemPath}.capability`, issues);
       string(item.agent, `${itemPath}.agent`, issues);
+      if (legacyDomainContribution) return;
+      id(item.capability, `${itemPath}.capability`, issues);
       if (item.disposition !== "used") issue(issues, "REQUIRED_AGENT_CAPABILITY_SKIPPED", `${itemPath}.disposition`, "A required Agent capability must be executed");
       const execution = object(item.execution, `${itemPath}.execution`, issues);
       if (execution) {
