@@ -33,16 +33,17 @@ interface ContextOutput {
   }>;
 }
 
-async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent", evidenceRefs = ["requirements.md"]): Promise<void> {
+async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent", evidenceRefs?: string[]): Promise<void> {
   const context = await runCli(["context", stage, "--root", workspace], workspace);
   assert.equal(context.exitCode, 0, JSON.stringify(context.output));
   const output = context.output as ContextOutput;
+  const resolvedEvidenceRefs = evidenceRefs ?? [(await new FileStateStore(workspace).readCurrentRecord()).requirements.documentRef];
   const receipt = {
     schemaVersion: 2,
     stage,
     contextHash: output.contextHash,
     policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref} while performing ${stage}.` })),
-    knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs })),
+    knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs: resolvedEvidenceRefs })),
     domainContributions: output.domainContributions.map(({ domain, version, capability, agent, skills }) => ({
       ref: `${domain}@${version}:${agent.id}`,
       capability,
@@ -50,7 +51,7 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
       skills: skills.map(({ name }) => name),
       disposition: "used",
       notes: `Executed ${agent.id} guidance for ${stage}.`,
-      evidenceRefs,
+      evidenceRefs: resolvedEvidenceRefs,
       execution: {
         invocationId: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.invocationId,
         platform: "github-copilot",
@@ -59,7 +60,7 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
         permissions: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.permissions,
       },
     })),
-    integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs })),
+    integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs: resolvedEvidenceRefs })),
   };
   const receiptPath = `receipt-${stage}.json`;
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
@@ -854,4 +855,11 @@ test("rejects completed Agent capability receipts with mismatched execution iden
   assert.equal(executionRefMismatch.exitCode, 2);
   const executionRefDetails = (executionRefMismatch.output as { error: { details: Array<{ code: string }> } }).error.details;
   assert(executionRefDetails.some(({ code }) => code === "INVALID_PLATFORM_EXECUTION_REF"), JSON.stringify(executionRefMismatch.output));
+
+  receipt.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:${invocation.agent.id}:${invocation.invocationId}:call-123`;
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const missingEvidence = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(missingEvidence.exitCode, 2);
+  const evidenceDetails = (missingEvidence.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(evidenceDetails.some(({ code }) => code === "EVIDENCE_UNREADABLE"), JSON.stringify(missingEvidence.output));
 });
