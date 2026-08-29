@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { AuditLog } from "../core/audit.ts";
+import { buildPocAuditSummary } from "../core/audit-summary.ts";
 import { DeliveryFlowRegistry } from "../core/delivery-flow-registry.ts";
 import { DomainRegistry } from "../core/domain-registry.ts";
 import { resolveDomainContext } from "../core/domain-resolver.ts";
@@ -45,6 +46,28 @@ test("loads registered Roles and derives Delivery Flow accountability dynamicall
   const { roles, flows } = await model();
   assert.deepEqual(roles.list().map(({ id }) => id), ["developer", "product", "qa"]);
   assert.deepEqual(flows.requiredRoles("poc", ["technology:web-ui"]), ["developer", "product", "qa"]);
+});
+
+test("builds a readable audit summary for only the selected record", async () => {
+  const record = await exampleRecord();
+  const audit = new AuditLog(projectRoot);
+  const selected = audit.create(record, {
+    recordId: record.id,
+    eventType: "DELIVERY_FLOW_CREATED",
+    actor: "product-owner",
+    riskLevel: record.risk.level,
+  });
+  const unrelated = audit.create(record, {
+    recordId: "POC-OTHER",
+    eventType: "DELIVERY_FLOW_CREATED",
+    actor: "other-owner",
+    riskLevel: record.risk.level,
+  });
+  const summary = buildPocAuditSummary(record, [unrelated, selected]);
+  assert.equal(summary.audit.eventCount, 1);
+  assert.equal(summary.timeline[0]?.summary, "Delivery Flow record created");
+  assert.equal(summary.timeline[0]?.actor, "product-owner");
+  assert.deepEqual(summary.audit.warnings, []);
 });
 
 test("adds a new Role through catalogs without changing Core code", async (context) => {

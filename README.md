@@ -117,6 +117,7 @@ Internal Runner operations include:
 ```text
 bun .pdlc/cli.ts validate
 bun .pdlc/cli.ts status --root <project>
+bun .pdlc/cli.ts audit summary --root <project> [--record <id>]
 bun .pdlc/cli.ts context <stage-id> --root <project>
 bun .pdlc/cli.ts context-apply <stage-id> --root <project> --receipt <receipt.json> --actor <identity>
 bun .pdlc/cli.ts readiness build --root <project> --record <id> --actor <identity>
@@ -126,6 +127,8 @@ bun .pdlc/cli.ts integration list
 ```
 
 `context` is the normal Stage-resolution API. It returns the current Stage's registered Roles, Controls, Baselines, Defaults, Knowledge, Domain contributions, Integrations, and a deterministic `contextHash`. It remains read-only and resolves only the requested Stage. After the Stage work, `context-apply` records an evidence-backed receipt for what was applied or intentionally not used. Build Readiness rejects missing or stale receipts for the requirements and readiness Stages. `guidance` is the narrower Domain-contribution view.
+
+`audit summary` is a read-only projection over the selected Delivery Record and append-only Audit Log. It reports the current conclusion, Build Readiness, Verify and Decide milestones, a concise timeline, evidence references, satisfied, excepted, and pending Controls, and warnings when record state has no matching audit event. It never replaces or modifies the underlying Audit Events.
 
 This assurance does not add startup questions, network calls, or a full-Harness scan. The Runner hashes only the already-resolved local files for the current Stage, and receipt persistence happens after Stage work rather than before the first clarification round.
 

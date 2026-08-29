@@ -298,6 +298,7 @@ The v2 implementation currently provides:
 - Productization Package validation, required source/evidence/Control references, reuse dispositions, canonical location, and content-hash binding;
 - hashed Stage Context Receipts covering Role definitions, Policies, Knowledge, Agents, Skills, and Integrations;
 - Delivery Record and audit infrastructure;
+- a read-only audit summary with lifecycle milestones, per-record event filtering, evidence and Control indexes, and missing-event warnings;
 - Domain Hook and Integration permission metadata.
 
 The POC path now executes `commit`, `verify`, and `decide`. Implementation and end-to-end PDLC Flows, arbitrary automatic-rule evaluator registration, and production/release integration remain planned. Their absence must not be represented as a passed control.

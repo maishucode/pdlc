@@ -2,6 +2,7 @@ import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AuditLog } from "./core/audit.ts";
+import { buildPocAuditSummary } from "./core/audit-summary.ts";
 import { createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./core/context-receipt.ts";
 import { DeliveryFlowRegistry } from "./core/delivery-flow-registry.ts";
 import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "./core/domain-guidance.ts";
@@ -383,6 +384,21 @@ async function status(options: CliOptions): Promise<unknown> {
   }
 }
 
+async function auditSummary(options: CliOptions, subcommand?: string): Promise<unknown> {
+  if (subcommand !== "summary") throw new PdlcError("INVALID_ARGUMENT", "Audit command must be summary");
+  let record: PocDeliveryRecord;
+  try {
+    record = await readRecord(options);
+  } catch (error) {
+    if (!options.record && error instanceof PdlcError && error.code === "CURRENT_RECORD_NOT_SET") {
+      return { ok: true, initialized: false, message: "No active Delivery Record is selected" };
+    }
+    throw error;
+  }
+  const events = await new AuditLog(options.root).readAll();
+  return { ok: true, initialized: true, ...buildPocAuditSummary(record, events) };
+}
+
 async function stageContext(options: CliOptions, stageId?: string): Promise<unknown> {
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Context requires a canonical Stage id");
   let record: PocDeliveryRecord | undefined;
@@ -586,8 +602,9 @@ async function validate(options: CliOptions): Promise<unknown> {
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "audit summary", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
+    if (parsed.command === "audit") return { exitCode: 0, output: await auditSummary(parsed.options, parsed.subcommand) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "context") return { exitCode: 0, output: await stageContext(parsed.options, parsed.subcommand) };
     if (parsed.command === "context-apply") return { exitCode: 0, output: await applyStageContext(parsed.options, parsed.subcommand) };

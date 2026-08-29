@@ -79,11 +79,27 @@ Use conversational intents:
 
 ```text
 /pdlc status
+/pdlc audit
+/pdlc audit <POC-ID>
 /pdlc resume <POC-ID>
 /pdlc help
 ```
 
 The Agent reports the active Stage, what changed, blocking questions, and the next action. Do not run the PDLC Runner manually; that is internal Agent/maintainer machinery.
+
+The audit view is intentionally concise. It reports:
+
+```text
+Current conclusion
+  Requirements approved and Build Readiness passed
+  Verification approved
+  POC parked / Productization recommended
+
+Timeline
+  timestamp — action — actor — evidence
+```
+
+It also lists applicable Controls, satisfied Controls, exceptions, evidence references, and any mismatch where the Delivery Record indicates completion but the corresponding append-only Audit Event is missing. The summary is only a readable view; the original Audit Log remains the source of truth.
 
 ## What the current v2 POC does and does not do
 

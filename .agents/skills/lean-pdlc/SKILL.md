@@ -21,7 +21,7 @@ When a message beginning with `/pdlc` reaches the agent as text, interpret it as
 /pdlc <delivery-flow> [optional context]
 ```
 
-The currently executable Delivery Flow is `poc`. `implementation` and `pdlc` are registered but planned. Also recognize `/pdlc resume [POC-ID]`, `/pdlc status`, and `/pdlc help` as conversation intents, not Runner commands.
+The currently executable Delivery Flow is `poc`. `implementation` and `pdlc` are registered but planned. Also recognize `/pdlc resume [POC-ID]`, `/pdlc status`, `/pdlc audit [POC-ID]`, and `/pdlc help` as conversation intents, not Runner commands.
 
 After activation:
 
@@ -111,6 +111,7 @@ v2 currently executes only the POC path, including Commit through Build Readines
 - Treat the Runner as an internal Harness API, not a user interface.
 - Never instruct an end user to copy or run a Bun command.
 - Internally use `bun .pdlc/cli.ts status` only when the active record cannot be determined safely by reading it.
+- When the user asks for an audit history or control-review summary, internally use the read-only `audit summary` operation and present its headline, milestones, warnings, and concise timeline. Do not treat the summary as a replacement for the append-only Audit Log.
 - Internally use `bun .pdlc/cli.ts context <stage-id> --root <project-root>` once whenever entering a canonical POC Stage, before doing its work.
 - Use `context-apply` after a Stage only when its provenance is required by Build Readiness or Verify, or when a material Domain contribution, Integration, or Policy enforcement was executed. Build Readiness requires receipts for `requirements-clarification` and `build-readiness`; Verify revalidates those receipts and also requires `implementation`, `developer-verification`, `acceptance-verification`, and the active conditional `security-verification` Stage. A local receipt must never delay the first clarification round.
 - On fresh activation with an idea, normally make only the one `context requirements-clarification` Runner call before the first question. Do not make anticipatory Context or compatibility Guidance calls.

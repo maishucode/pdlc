@@ -109,6 +109,18 @@ test("status is safe when no record is active", async (context) => {
   });
 });
 
+test("audit summary is safe when no record is active", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-audit-empty-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const result = await runCli(["audit", "summary", "--root", workspace], workspace);
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(result.output, {
+    ok: true,
+    initialized: false,
+    message: "No active Delivery Record is selected",
+  });
+});
+
 test("validate checks all v2 Harness assets", async () => {
   const result = await runCli(["validate"]);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
@@ -285,6 +297,34 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.match(recommended.decision.productizationPackage.contentHash, /^[a-f0-9]{64}$/);
   const completedEvents = await new AuditLog(workspace).readAll();
   assert.deepEqual(completedEvents.filter(({ eventType }) => eventType === "CHECKPOINT_APPROVED").map(({ checkpoint }) => checkpoint), ["commit", "verify", "decide"]);
+
+  const auditResult = await runCli(["audit", "summary", "--root", workspace], workspace);
+  assert.equal(auditResult.exitCode, 0, JSON.stringify(auditResult.output));
+  const auditSummary = auditResult.output as {
+    initialized: boolean;
+    record: { status: string };
+    headline: string;
+    milestones: Array<{ id: string; state: string; label: string }>;
+    timeline: Array<{ summary: string }>;
+    evidence: { refs: string[] };
+    controls: { pending: string[] };
+    audit: { eventCount: number; warnings: string[] };
+  };
+  assert.equal(auditSummary.initialized, true);
+  assert.equal(auditSummary.record.status, "PRODUCTIZATION_RECOMMENDED");
+  assert.match(auditSummary.headline, /recommended for productization/i);
+  assert.deepEqual(auditSummary.milestones.map(({ id, state }) => ({ id, state })), [
+    { id: "build-readiness", state: "completed" },
+    { id: "verification", state: "completed" },
+    { id: "disposition", state: "completed" },
+  ]);
+  assert(auditSummary.timeline.some(({ summary }) => summary === "Requirements approved and Build Readiness passed"));
+  assert(auditSummary.timeline.some(({ summary }) => summary === "Verification approved"));
+  assert(auditSummary.timeline.some(({ summary }) => summary === "Productization recommended"));
+  assert(auditSummary.evidence.refs.includes(packageRef));
+  assert.deepEqual(auditSummary.controls.pending, []);
+  assert.equal(auditSummary.audit.eventCount, completedEvents.length);
+  assert.deepEqual(auditSummary.audit.warnings, []);
 });
 
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
