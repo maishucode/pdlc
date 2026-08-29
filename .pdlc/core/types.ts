@@ -112,6 +112,8 @@ export interface ContextDomainContributionReceipt extends ContextAssetReceipt {
   execution: {
     invocationId: string;
     platform: "github-copilot";
+    executor: "generic-subagent";
+    agentType: "general-purpose";
     status: "completed";
     platformExecutionRef: string;
     permissions: DomainStageHooksDescriptor["permissions"];

@@ -90,8 +90,10 @@ test("requires completed platform execution metadata for Agent capability receip
       execution: {
         invocationId: "b".repeat(64),
         platform: "github-copilot",
+        executor: "generic-subagent",
+        agentType: "general-purpose",
         status: "completed",
-        platformExecutionRef: `github-copilot:agent:lean-pdlc-ux:${"b".repeat(64)}:call-123`,
+        platformExecutionRef: "github-copilot:subagent:call-123",
         permissions: { filesystem: "write", network: false, externalWrites: false },
       },
     }],
@@ -112,8 +114,20 @@ test("requires completed platform execution metadata for Agent capability receip
   assert.equal(missing.ok, false);
   if (!missing.ok) assert(missing.issues.some(({ path }) => path.endsWith(".execution")));
 
+  const customAgentExecutor = structuredClone(completed);
+  customAgentExecutor.domainContributions[0]!.execution.executor = "custom-agent";
+  const wrongExecutor = validateStageContextReceipt(customAgentExecutor);
+  assert.equal(wrongExecutor.ok, false);
+  if (!wrongExecutor.ok) assert(wrongExecutor.issues.some(({ code }) => code === "INVALID_AGENT_EXECUTOR"));
+
+  const customAgentType = structuredClone(completed);
+  customAgentType.domainContributions[0]!.execution.agentType = "lean-pdlc-ux";
+  const wrongAgentType = validateStageContextReceipt(customAgentType);
+  assert.equal(wrongAgentType.ok, false);
+  if (!wrongAgentType.ok) assert(wrongAgentType.issues.some(({ code }) => code === "INVALID_SUBAGENT_TYPE"));
+
   const malformedTrace = structuredClone(completed);
-  malformedTrace.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:lean-pdlc-ux:${"b".repeat(64)}:bad trace/`;
+  malformedTrace.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:agent:lean-pdlc-ux:call-123";
   const malformed = validateStageContextReceipt(malformedTrace);
   assert.equal(malformed.ok, false);
   if (!malformed.ok) assert(malformed.issues.some(({ code }) => code === "INVALID_PLATFORM_EXECUTION_REF"));

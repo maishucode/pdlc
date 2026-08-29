@@ -23,7 +23,9 @@ interface ContextOutput {
     capability: string;
     invocation: "required";
     platform: "github-copilot";
-    tool: "agent";
+    tool: "task";
+    executor: "generic-subagent";
+    agentType: "general-purpose";
     permissions: { filesystem: "read" | "write"; network: boolean; externalWrites: boolean };
     agent: { id: string; path: string };
     skills: Array<{ name: string; path: string }>;
@@ -55,8 +57,10 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
       execution: {
         invocationId: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.invocationId,
         platform: "github-copilot",
+        executor: "generic-subagent",
+        agentType: "general-purpose",
         status: "completed",
-        platformExecutionRef: `github-copilot:agent:${agent.id}:${output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.invocationId}:call-test-${stage}-${capability}`,
+        platformExecutionRef: `github-copilot:subagent:call-test-${stage}-${capability}`,
         permissions: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.permissions,
       },
     })),
@@ -664,7 +668,7 @@ test("status and validate reject tampered stored Agent execution identity", asyn
   const contribution = application.domainContributions[0]!;
   contribution.capability = "tampered-capability";
   contribution.execution.invocationId = "f".repeat(64);
-  contribution.execution.platformExecutionRef = `github-copilot:agent:${contribution.agent}:${contribution.execution.invocationId}:call-tampered`;
+  contribution.execution.platformExecutionRef = "github-copilot:subagent:call-tampered";
   await store.writeRecord({ ...current, revision: current.revision + 1, updatedAt: new Date().toISOString() }, current.revision);
 
   const status = await runCli(["status", "--root", workspace], workspace);
@@ -783,7 +787,9 @@ test("emits deterministic context-bound GitHub Copilot Agent invocation contract
     capability: "ux-design-spec",
     invocation: "required",
     platform: "github-copilot",
-    tool: "agent",
+    tool: "task",
+    executor: "generic-subagent",
+    agentType: "general-purpose",
     permissions: {
       filesystem: "write",
       network: false,
@@ -841,8 +847,10 @@ test("rejects completed Agent capability receipts with mismatched execution iden
       execution: {
         invocationId: mismatchedInvocationId,
         platform: "github-copilot",
+        executor: "generic-subagent",
+        agentType: "general-purpose",
         status: "completed",
-        platformExecutionRef: `github-copilot:agent:${invocation.agent.id}:${mismatchedInvocationId}:call-123`,
+        platformExecutionRef: "github-copilot:subagent:call-123",
         permissions: invocation.permissions,
       },
     }],
@@ -857,7 +865,6 @@ test("rejects completed Agent capability receipts with mismatched execution iden
   assert(details.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"), JSON.stringify(applied.output));
 
   receipt.domainContributions[0]!.execution.invocationId = invocation.invocationId;
-  receipt.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:${invocation.agent.id}:${invocation.invocationId}:call-123`;
   receipt.domainContributions[0]!.capability = "ux-wrong-capability";
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const capabilityMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
@@ -874,14 +881,14 @@ test("rejects completed Agent capability receipts with mismatched execution iden
   assert(permissionDetails.some(({ code }) => code === "CONTEXT_PERMISSION_MISMATCH"), JSON.stringify(permissionMismatch.output));
 
   receipt.domainContributions[0]!.execution.permissions.network = false;
-  receipt.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:wrong-agent:${invocation.invocationId}:call-123`;
+  receipt.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:agent:lean-pdlc-ux:call-123";
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const executionRefMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(executionRefMismatch.exitCode, 2);
   const executionRefDetails = (executionRefMismatch.output as { error: { details: Array<{ code: string }> } }).error.details;
   assert(executionRefDetails.some(({ code }) => code === "INVALID_PLATFORM_EXECUTION_REF"), JSON.stringify(executionRefMismatch.output));
 
-  receipt.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:${invocation.agent.id}:${invocation.invocationId}:call-123`;
+  receipt.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:subagent:call-123";
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const missingEvidence = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(missingEvidence.exitCode, 2);

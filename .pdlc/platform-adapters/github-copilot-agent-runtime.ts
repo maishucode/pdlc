@@ -6,7 +6,9 @@ export interface RequiredAgentInvocationContract {
   capability: string;
   invocation: "required";
   platform: "github-copilot";
-  tool: "agent";
+  tool: "task";
+  executor: "generic-subagent";
+  agentType: "general-purpose";
   permissions: DomainGuidanceContribution["permissions"];
   agent: DomainGuidanceContribution["agent"];
   skills: DomainGuidanceContribution["skills"];
@@ -31,7 +33,9 @@ export function buildRequiredAgentInvocations(
       capability: contribution.capability,
       invocation: contribution.invocation,
       platform: "github-copilot",
-      tool: "agent",
+      tool: "task",
+      executor: "generic-subagent",
+      agentType: "general-purpose",
       permissions: contribution.permissions,
       agent: contribution.agent,
       skills: contribution.skills,

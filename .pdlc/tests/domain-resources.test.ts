@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -45,44 +45,53 @@ test("requires the main POC entry point to compose Domain resources at every Sta
   assert.match(agent, /Domain contributions extend this Agent; they do not replace it/);
   const fastStart = skill.match(/## Fast start and just-in-time loading[\s\S]*?## Select the Delivery Flow/)?.[0] ?? "";
   assert.match(fastStart, /requiredAgentInvocations/);
-  assert.match(fastStart, /native `agent` tool/);
+  assert.match(fastStart, /task\(agent_type=contract\.agentType/);
   assert.match(fastStart, /agent-capability-result/);
 });
 
-test("wires required Domain capabilities to the native Copilot agent tool", async () => {
+test("wires required Domain capabilities to a generic native Copilot subagent", async () => {
   const mainAgent = await readFile(join(projectRoot, ".github/agents/lean-pdlc.agent.md"), "utf8");
   const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
   const canonicalUxAgent = await readFile(join(uxRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
-  const projectedUxAgent = await readFile(join(projectRoot, ".github/agents/lean-pdlc-ux.agent.md"), "utf8");
 
   assert.match(mainAgent, /tools: \["read", "edit", "search", "execute", "agent"\]/);
   assert.match(mainAgent, /requiredAgentInvocations/);
   assert.match(mainAgent, /must not emulate/i);
-  assert.match(skill, /native `agent` tool/);
+  assert.match(mainAgent, /task\(agent_type=contract\.agentType/);
+  assert.match(mainAgent, /contract\.agent\.path/);
+  assert.match(mainAgent, /github-copilot:subagent:/);
+  assert.match(skill, /task\(agent_type=contract\.agentType/);
   assert.match(skill, /agent-capability-result/);
-  assert.equal(projectedUxAgent, canonicalUxAgent);
-  assert.match(canonicalUxAgent, /disable-model-invocation: false/);
-  assert.match(canonicalUxAgent, /user-invocable: false/);
+  await assert.rejects(access(join(projectRoot, ".github/agents/lean-pdlc-ux.agent.md")));
+  assert.match(canonicalUxAgent, /generic GitHub Copilot subagent/i);
+  assert.match(canonicalUxAgent, /role profile/i);
   for (const field of ["invocationId", "capability", "permissions", "platformExecutionRef", "evidenceRefs"]) {
     assert.match(canonicalUxAgent, new RegExp(field));
   }
 });
 
-test("syncs enabled Domain assets as a VS Code projection", async (context) => {
+test("syncs Skills without requiring a Domain custom-agent projection", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-domain-sync-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
+  await cp(join(projectRoot, ".pdlc"), join(workspace, ".pdlc"), { recursive: true });
+  await assert.rejects(access(join(workspace, ".github/agents/lean-pdlc-ux.agent.md")));
   const first = await runCli(["domain", "sync", "--root", workspace], projectRoot);
   assert.equal(first.exitCode, 0, JSON.stringify(first.output));
   assert.deepEqual((first.output as { installed: string[] }).installed, [
-    ".github/agents/lean-pdlc-ux.agent.md",
     ".github/skills/lean-pdlc-ux-react-ui-delivery/SKILL.md",
     ".github/skills/lean-pdlc-ux-review/SKILL.md",
     ".github/skills/lean-pdlc-ux-spec/SKILL.md",
   ]);
+  await assert.rejects(access(join(workspace, ".github/agents/lean-pdlc-ux.agent.md")));
+  const resolved = await runCli(["context", "requirements-clarification", "--root", workspace], projectRoot);
+  assert.equal(resolved.exitCode, 0, JSON.stringify(resolved.output));
+  const invocation = (resolved.output as { requiredAgentInvocations: Array<{ agent: { path: string }; skills: Array<{ path: string }> }> }).requiredAgentInvocations[0]!;
+  await access(join(workspace, invocation.agent.path));
+  await Promise.all(invocation.skills.map(({ path }) => access(join(workspace, path))));
   const repeated = await runCli(["domain", "sync", "--root", workspace], projectRoot);
   assert.equal(repeated.exitCode, 0, JSON.stringify(repeated.output));
   assert.deepEqual((repeated.output as { installed: string[] }).installed, []);
-  assert.equal((repeated.output as { unchanged: string[] }).unchanged.length, 4);
+  assert.equal((repeated.output as { unchanged: string[] }).unchanged.length, 3);
 });
 
 test("lists top-level Integrations and their bundled Skills", async () => {

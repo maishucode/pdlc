@@ -30,7 +30,8 @@ Before each Stage
   -> resolve eligible top-level Integrations and bundled Skills
 
 Stage execution
-  -> delegates required contributions through the native GitHub Copilot agent tool
+  -> starts a native GitHub Copilot general-purpose subagent for each required contribution
+  -> the subagent reads the exact Domain role profile and bound Skills from the contract
   -> reads and produces Domain-owned Artifacts
   -> applies a hashed Stage Context Receipt with completed invocation metadata
   -> updates the Delivery Record and evidence
@@ -106,7 +107,7 @@ Bundled Domains demonstrate the model:
 - Product Management owns Requirements, Story, and Productization Package Artifact Definitions, requirements quality Policies, and authoring guidance.
 - UX owns experience Policies, design guidance, web-POC Defaults, Skills, an Agent, and Stage Hooks.
 
-The current platform path is GitHub Copilot. Every active UX Hook binding has a globally unique capability id and required invocation policy. The Runner binds each invocation id to the resolved Stage context; `context-apply` rejects skipped, incomplete, stale, or mismatched Agent capability receipts. Additional Java, Python, or other expert categories use the same Domain Hook contract and do not require a new runtime abstraction.
+The current platform path is GitHub Copilot. Every active UX Hook binding has a globally unique capability id and required invocation policy. The main Agent delegates each contract to the built-in `general-purpose` subagent, which reads the Domain Agent file as a role profile plus the exact bound Skills; Domain custom-agent discovery is not required. The Runner binds each invocation id to the resolved Stage context, and `context-apply` rejects skipped, incomplete, stale, or mismatched capability receipts. Additional Java, Python, or other expert categories use the same Domain Hook contract and do not require a new runtime abstraction.
 - Solution Architecture owns reversible-delivery Controls and minimum-design guidance/defaults.
 - Security owns credential and sensitive-data Controls.
 - Data Platform owns the Databricks connectivity KB example; the external connection is registered separately under `.pdlc/integrations/databricks/`.

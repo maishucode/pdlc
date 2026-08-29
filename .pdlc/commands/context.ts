@@ -2,7 +2,7 @@ import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { contextReceiptEvidenceEntries, validateReceiptAgainstSnapshot } from "../core/context-receipt.ts";
 import { persistRecordAndAudit } from "../core/controlled-mutation.ts";
-import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "../core/domain-guidance.ts";
+import { discoverDomainHooks, domainSkillPath, resolveDomainGuidance } from "../core/domain-guidance.ts";
 import { projectKnowledgeRefs } from "../core/domain-resolver.ts";
 import { PdlcError } from "../core/errors.ts";
 import { assessEvidenceIntegrity } from "../core/evidence.ts";
@@ -124,8 +124,6 @@ export async function domainSync(harnessRoot: string, options: RunnerOptions): P
   const hooks = (await discoverDomainHooks(stages, domains)).filter(({ descriptor }) => descriptor.enabled && descriptor.deliveryFlows.includes("poc"));
   const sources = new Map<string, { domain: string; source: string; destination: string }>();
   for (const { domain, root, bindings } of hooks) for (const binding of bindings) {
-    const agentDestination = join(".github", "agents", `${binding.agent}.agent.md`);
-    sources.set(agentDestination, { domain, source: domainAgentPath(root, binding.agent), destination: agentDestination });
     for (const skill of binding.skills) {
       const skillDestination = join(".github", "skills", skill, "SKILL.md");
       sources.set(skillDestination, { domain, source: domainSkillPath(root, skill), destination: skillDestination });

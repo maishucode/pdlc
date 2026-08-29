@@ -168,8 +168,14 @@ export function validateReceiptAgainstSnapshot(receipt: StageContextReceipt, sna
     }
     const expectedInvocationId = agentInvocationId(snapshot.contextHash, expected);
     if (entry.execution.invocationId !== expectedInvocationId) issues.push({ code: "CONTEXT_INVOCATION_MISMATCH", path: `$.domainContributions[${index}].execution.invocationId`, message: "Agent invocation does not belong to the current Stage context" });
-    if (!entry.execution.platformExecutionRef.startsWith(`github-copilot:agent:${expected.agent}:${expectedInvocationId}:`)) {
-      issues.push({ code: "CONTEXT_EXECUTION_REF_MISMATCH", path: `$.domainContributions[${index}].execution.platformExecutionRef`, message: "Platform execution reference does not match the resolved Agent invocation" });
+    if (entry.execution.executor !== "generic-subagent") {
+      issues.push({ code: "CONTEXT_EXECUTOR_MISMATCH", path: `$.domainContributions[${index}].execution.executor`, message: "Domain capability must run in a generic native subagent" });
+    }
+    if (entry.execution.agentType !== "general-purpose") {
+      issues.push({ code: "CONTEXT_SUBAGENT_TYPE_MISMATCH", path: `$.domainContributions[${index}].execution.agentType`, message: "Domain capability must use the general-purpose subagent type" });
+    }
+    if (!/^github-copilot:subagent:\S+$/.test(entry.execution.platformExecutionRef)) {
+      issues.push({ code: "CONTEXT_EXECUTION_REF_MISMATCH", path: `$.domainContributions[${index}].execution.platformExecutionRef`, message: "Platform execution reference must identify a native subagent trace" });
     }
   });
   const integrationMap = new Map(snapshot.integrations.map((entry) => [entry.ref, entry]));

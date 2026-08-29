@@ -208,16 +208,18 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
       if (item.disposition !== "used") issue(issues, "REQUIRED_AGENT_CAPABILITY_SKIPPED", `${itemPath}.disposition`, "A required Agent capability must be executed");
       const execution = object(item.execution, `${itemPath}.execution`, issues);
       if (execution) {
-        exact(execution, ["invocationId", "platform", "status", "platformExecutionRef", "permissions"], `${itemPath}.execution`, issues);
+        exact(execution, ["invocationId", "platform", "executor", "agentType", "status", "platformExecutionRef", "permissions"], `${itemPath}.execution`, issues);
         if (typeof execution.invocationId !== "string" || !/^[a-f0-9]{64}$/.test(execution.invocationId)) issue(issues, "INVALID_INVOCATION_ID", `${itemPath}.execution.invocationId`, "Expected a context-bound SHA-256 invocation id");
         if (execution.platform !== "github-copilot") issue(issues, "INVALID_AGENT_PLATFORM", `${itemPath}.execution.platform`, "Expected github-copilot");
+        if (execution.executor !== "generic-subagent") issue(issues, "INVALID_AGENT_EXECUTOR", `${itemPath}.execution.executor`, "Expected generic-subagent");
+        if (execution.agentType !== "general-purpose") issue(issues, "INVALID_SUBAGENT_TYPE", `${itemPath}.execution.agentType`, "Expected general-purpose");
         if (execution.status !== "completed") issue(issues, "AGENT_CAPABILITY_INCOMPLETE", `${itemPath}.execution.status`, "Expected completed");
-        if (string(execution.platformExecutionRef, `${itemPath}.execution.platformExecutionRef`, issues) && typeof item.agent === "string" && typeof execution.invocationId === "string") {
+        if (string(execution.platformExecutionRef, `${itemPath}.execution.platformExecutionRef`, issues)) {
           const platformExecutionRef = execution.platformExecutionRef;
-          const prefix = `github-copilot:agent:${item.agent}:${execution.invocationId}:`;
+          const prefix = "github-copilot:subagent:";
           const traceId = platformExecutionRef.startsWith(prefix) ? platformExecutionRef.slice(prefix.length) : "";
-          if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(traceId)) {
-            issue(issues, "INVALID_PLATFORM_EXECUTION_REF", `${itemPath}.execution.platformExecutionRef`, "Expected a platform Agent execution reference bound to the Agent and invocation id");
+          if (!/^\S+$/.test(traceId)) {
+            issue(issues, "INVALID_PLATFORM_EXECUTION_REF", `${itemPath}.execution.platformExecutionRef`, "Expected an opaque platform-generated subagent execution reference");
           }
         }
         const permissions = object(execution.permissions, `${itemPath}.execution.permissions`, issues);
