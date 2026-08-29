@@ -336,7 +336,89 @@ Project-specific configuration and persistent delivery state use a separate name
 
 The Runner creates the transient `.pdlc/locks/` directory and the `.pdlc/current` active-record pointer only when required. They are not part of the empty repository skeleton.
 
-## 7. Governance Model
+## 7. Configure a Project
+
+Project-specific configuration belongs under `.pdlc/config/` in the product repository. It supplements shared assets under `pdlc/domains/`; it does not copy or replace them.
+
+### 7.1 Choose the owning Domain
+
+Put each decision under the existing shared Domain that owns the subject. For example:
+
+```text
+.pdlc/config/domains/solution-architecture/
+  baseline.json
+  controls/
+    repository-boundaries.policy.json
+  defaults/
+    web-stack.json
+  knowledge/
+    system-context.md
+```
+
+The folder name must match a Domain registered under `pdlc/domains/`. The Runner rejects unknown Domain names. If a project needs a genuinely new professional Domain, add it to the shared Harness through the normal governance process instead of inventing a project-only Domain.
+
+### 7.2 Choose the configuration type
+
+| Project need | Location | Runtime meaning |
+|---|---|---|
+| Record an approved fact or decision that later Stages should not ask again | `baseline.json` | Authoritative project context |
+| Add a mandatory project rule | `controls/*.policy.json` | Cumulative blocking Control |
+| Preselect a recommended project choice | `defaults/*.json` | Automatically applied, normally overrideable Default |
+| Supply project-local explanation, reference, or technical context | `knowledge/` | Advisory Knowledge |
+
+Use one `baseline.json` per configured Domain. Add only the other subfolders the project actually needs.
+
+Examples:
+
+- An already-approved modular-monolith architecture belongs in the Solution Architecture baseline.
+- A mandatory repository boundary belongs in a Solution Architecture project Control.
+- The project's standard TypeScript web stack belongs in a Project Default.
+- A system landscape diagram or connection guide belongs in project Knowledge.
+
+Plugins and Integration Adapters are not project configuration. They remain under the owning shared Domain's `capabilities/` directory so their permissions, dependencies, and approval boundaries receive expert-team review.
+
+### 7.3 Precedence and governance rules
+
+- Enterprise and project Controls are cumulative. A project Control may add obligations but cannot weaken or replace an enterprise Control.
+- A locked Control decision has higher precedence than every Default.
+- A Project Default has higher precedence than a Domain Default when no locked Control prevents the override.
+- Project Knowledge is advisory unless an applicable Control explicitly requires it.
+- Baselines and Controls must carry the approval metadata required by their schemas and project governance.
+- Keep project configuration in version control with the product so changes are reviewable and auditable.
+
+Effective Default precedence is:
+
+```text
+locked Control decision
+  > Project Default
+  > Domain Default
+```
+
+### 7.4 Configuration workflow
+
+1. Identify the Domain that owns the decision.
+2. Select `baseline`, `controls`, `defaults`, or `knowledge` based on the semantics above.
+3. Start from the [Project Configuration example](../pdlc/examples/project-overlay/README.md) when a structured file is needed.
+4. Add the smallest configuration necessary and obtain the appropriate project or Domain-owner review.
+5. Ask the Harness Agent to validate the repository. The Agent runs the internal validation and reports unknown Domains, invalid schemas, owner mismatches, and locked-Control conflicts.
+6. Commit the configuration with the product repository. On each Stage entry, the Runner resolves it automatically; users should not be asked to reconfirm an approved baseline or an applied Default.
+
+### 7.5 Keep configuration separate from delivery state
+
+Only `.pdlc/config/` is authored as project configuration. The other `.pdlc/` paths serve the running Delivery Flow:
+
+| Path | Ownership |
+|---|---|
+| `.pdlc/records/` | Runner-managed Delivery Records |
+| `.pdlc/requirements/` | Product Requirements Artifacts maintained through clarification and approval |
+| `.pdlc/evidence/` | Build, test, review, and approval evidence |
+| `.pdlc/audit/` | Runner-managed append-only audit events |
+| `.pdlc/current` | Runner-managed active-record pointer, created only when needed |
+| `.pdlc/locks/` | Transient Runner locks; never project configuration |
+
+Do not place configuration in a runtime folder, and do not manually edit controlled state or audit fields to simulate a successful transition.
+
+## 8. Governance Model
 
 Domain, Owner/Approver/Maintainer, and Contribution Mode are metadata and repository governance, not another runtime layer.
 
@@ -348,13 +430,13 @@ Domain, Owner/Approver/Maintainer, and Contribution Mode are metadata and reposi
 
 This gives clear accountability without creating a separate governance folder hierarchy.
 
-## 8. Safety properties
+## 9. Safety properties
 
 - Only explicitly cataloged Delivery Flows are loadable.
 - A Flow references canonical Stage ids and cannot redefine Stage semantics.
 - Stage Artifact references must resolve to one Domain-owned definition.
 - An asset's `ownerDomain` must match its folder.
-- A Project Overlay may reference only known Domains.
+- A Project Configuration Overlay may reference only known Domains.
 - Locked Control defaults cannot be overridden by project or Domain Defaults.
 - Plugin contributions retain permission and approval boundaries.
 - Requirements approval is content-hash bound.
