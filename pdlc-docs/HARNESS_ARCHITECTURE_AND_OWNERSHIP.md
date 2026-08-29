@@ -27,7 +27,8 @@ A Delivery Flow is the single lifecycle composition concept. It contains:
 - checkpoints;
 - Flow constraints;
 - role-assignment and timebox behavior;
-- Artifact profiles and required Integrations.
+- delivery defaults, including the recommended Requirements profile;
+- explicit Integration allow-list constraints.
 
 There is no separate Workflow or User Journey model.
 
@@ -141,7 +142,7 @@ The Harness control model is a chain of distinct authorities. They are evaluated
                 v
 2. Delivery Flow Controls
    Status model, checkpoints, constraints, role/timebox behavior,
-   Artifact profiles, required Integrations, Flow-local controls
+   recommended Requirements profile, Integration allow-list, Flow-local controls
                 |
                 v
 3. Stage Completion Contract
@@ -226,7 +227,7 @@ Before every Stage, the Runner must:
 7. Produce one provenance-rich effective Control set.
 8. Return Controls separately from Knowledge, Domain contributions, and Integrations.
 9. Require the Agent or Runner to satisfy, evidence, approve, or formally except each applicable obligation at its declared `enforceAt` Stage.
-10. After Stage work, validate a receipt against the exact resolved asset set and content hash; record Knowledge, Agent, Skill, and Integration use or an explained `not-used` disposition.
+10. At a controlled boundary or after material Domain/Integration use, validate a receipt against the exact resolved asset set and content hash; record Knowledge, Agent, Skill, and Integration use or an explained `not-used` disposition.
 11. Persist Context Applications, Control applications, exception references, evidence, Checkpoint decisions, content hashes, and audit events.
 
 Context resolution is a system operation before each Stage; it is not itself a Stage.
@@ -236,10 +237,10 @@ Context resolution is a system operation before each Stage; it is not itself a S
 Discovery alone does not prove application. v2 therefore uses a lightweight two-step contract:
 
 1. `context <stage>` resolves only the requested Stage and returns its registered Role definitions, exact Policies, Knowledge, Domain contributions, Integrations, and a SHA-256 `contextHash`. This operation is read-only.
-2. After the Stage work, the Agent submits a Stage Context Receipt. Policies must be acknowledged. Knowledge, Domain contributions, and Integrations must be marked `used` with evidence references or `not-used` with a reason. The Runner rejects missing assets, unexpected assets, changed Agent/Skill sets, or a stale hash.
-3. The Runner stores the validated Context Application in the Delivery Record and appends a `STAGE_CONTEXT_APPLIED` audit event. Build Readiness requires current applications for `requirements-clarification` and `build-readiness`.
+2. When provenance is material, the Agent submits a Stage Context Receipt. Policies must be acknowledged. Knowledge, Domain contributions, and Integrations must be marked `used` with evidence references or `not-used` with a reason. The Runner rejects missing assets, unexpected assets, changed Agent/Skill sets, or a stale hash.
+3. The Runner stores the validated Context Application in the Delivery Record and appends a `STAGE_CONTEXT_APPLIED` audit event. Build Readiness requires current applications for `requirements-clarification` and `build-readiness`. Verify revalidates those Commit-time applications and additionally requires current applications for `implementation`, `developer-verification`, `acceptance-verification`, and the conditional `security-verification` Stage when active.
 
-This mechanism provides deterministic provenance and evidence; it does not claim to inspect an Agent's hidden reasoning. It keeps startup fast because it performs no network access, loads no future Stage, adds no user question, and writes the receipt only after current-Stage work. A typical current-Stage context call remains a small local-file operation.
+This mechanism provides deterministic provenance and evidence; it does not claim to inspect an Agent's hidden reasoning. It keeps startup fast because it performs no network access, loads no future Stage, adds no user question, and does not write receipts for analysis-only Stages merely to prove traversal. A typical current-Stage context call remains a small local-file operation.
 
 ### 4.6 Enforcement modes and failure behavior
 
@@ -286,17 +287,19 @@ The v2 implementation currently provides:
 
 - schema and reference invariants;
 - explicit Delivery Flow registration;
-- executable POC constraints and Build Readiness;
+- executable POC constraints and Build Readiness/Commit;
 - Stage Completion Contracts;
 - enterprise and Project Control resolution;
 - locked-Control versus Default conflict detection;
 - Requirements content-hash approval binding;
 - per-Stage Control enforcement points;
+- Verify evidence and current-context enforcement;
+- Decide outcomes with rationale, follow-up, terminal state, and audit events;
 - hashed Stage Context Receipts covering Role definitions, Policies, Knowledge, Agents, Skills, and Integrations;
 - Delivery Record and audit infrastructure;
 - Domain Hook and Integration permission metadata.
 
-Formal `commit`, `verify`, and `decide` state transitions, generalized per-rule evidence evaluation, and production/release integration remain planned. Their absence must not be represented as a passed control.
+The POC path now executes `commit`, `verify`, and `decide`. Implementation and end-to-end PDLC Flows, arbitrary automatic-rule evaluator registration, and production/release integration remain planned. Their absence must not be represented as a passed control.
 
 ## 5. Roles and collaboration
 
@@ -358,7 +361,7 @@ Expert teams contribute through Domain ownership rather than attending every del
 | Harness Engineering | Core registries, schemas, Runner, resolution, tests |
 | PDLC Governance | Stage Catalog and Delivery Flow Catalog/definitions |
 
-Ownership metadata explains responsibility. CODEOWNERS enforces review routing. Domain assets use `ownerDomain`; top-level Integrations declare their own `owners` and `maintainers`.
+Ownership metadata explains responsibility. Domain assets use `ownerDomain`; top-level Integrations declare their own `owners` and `maintainers`. GitHub review routing is enforced only after an adopter replaces the sample handles in `.github/CODEOWNERS.template` and installs it as `.github/CODEOWNERS`.
 
 ## 6. Folder contract
 
@@ -498,7 +501,7 @@ Do not place configuration in a runtime folder, and do not manually edit control
 Domain, Owner/Approver/Maintainer, and Contribution Mode are metadata and repository governance, not another runtime layer.
 
 - `domain.json` declares owners, policy approvers, maintainers, and a contribution mode for Artifacts, Policies, Knowledge, Skills, Agents, and Hooks. Each category is `restricted`, `reviewed`, or `open`.
-- CODEOWNERS maps folders to review teams.
+- An installed `.github/CODEOWNERS` maps folders to review teams; the repository template alone is documentation, not enforcement.
 - Asset validators require `ownerDomain` consistency.
 - Controls declare exception approvers.
 - Domain Hook descriptors and Integration manifests declare permissions.

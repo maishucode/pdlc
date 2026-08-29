@@ -71,6 +71,9 @@ test("loads only explicitly cataloged Delivery Flows and resolves conditional St
   assert.deepEqual(flows.catalog.flows.map(({ id }) => id), ["poc", "implementation", "pdlc"]);
   assert.equal(stages.list().length, 29);
   assert.equal(flows.get("pdlc").stageSequence.length, 29);
+  assert.equal(flows.get("poc").stageSequence.length, 10);
+  assert.equal(flows.getExecutable("poc").controls.deliveryDefaults.requirementsProfile, "standard");
+  assert.deepEqual(flows.getExecutable("poc").controls.checkpoints.find(({ id }) => id === "commit")?.from, ["DRAFT", "COMMITTED"]);
   assert(!stages.has("principle-applicability"));
   assert.throws(() => flows.getExecutable("pdlc"), (error: unknown) => error instanceof PdlcError && error.code === "DELIVERY_FLOW_NOT_EXECUTABLE");
   assert.equal(flows.resolve("poc").some(({ definition }) => definition.id === "ux-design"), false);

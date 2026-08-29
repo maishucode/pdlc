@@ -19,7 +19,7 @@ const EXPECTATIONS: EntrypointExpectation[] = [
   },
   {
     path: ".github/copilot-instructions.md",
-    markers: [".agents/skills/lean-pdlc/SKILL.md", "When a request begins with `/pdlc`", "v2 currently executes the POC Delivery Flow only"],
+    markers: [".agents/skills/lean-pdlc/SKILL.md", "When a request begins with `/pdlc`", "v2 currently executes the POC Delivery Flow, including Build Readiness/Commit, Verify, and Decide"],
     maximumBytes: 2_500,
   },
   {

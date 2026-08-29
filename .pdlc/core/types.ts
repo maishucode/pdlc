@@ -269,14 +269,13 @@ export interface DeliveryFlowControls {
     roleAssignmentMode: "approval-actor-all-roles";
     timebox: string;
     collectDuringRequirements: false;
+    requirementsProfile?: RequirementsDepth;
   };
   constraints: {
     productionUse: boolean;
     externalIntegrations: string[];
     allowSinglePersonAllRoles: boolean;
   };
-  artifactProfiles?: Record<string, string>;
-  requiredIntegrations?: string[];
 }
 
 export interface DeliveryFlowDefinition {

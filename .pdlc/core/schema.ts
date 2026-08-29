@@ -472,7 +472,7 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
   }
   const controls = object(flow.controls, "$.controls", issues);
   if (controls) {
-    exact(controls, ["initialStatus", "terminalStatuses", "checkpoints", "deliveryDefaults", "constraints", "artifactProfiles", "requiredIntegrations"], "$.controls", issues);
+    exact(controls, ["initialStatus", "terminalStatuses", "checkpoints", "deliveryDefaults", "constraints"], "$.controls", issues);
     string(controls.initialStatus, "$.controls.initialStatus", issues);
     stringArray(controls.terminalStatuses, "$.controls.terminalStatuses", issues, 1);
     if (!Array.isArray(controls.checkpoints) || controls.checkpoints.length === 0) issue(issues, "EXPECTED_CHECKPOINTS", "$.controls.checkpoints", "Expected at least one checkpoint");
@@ -493,10 +493,11 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
     });
     const deliveryDefaults = object(controls.deliveryDefaults, "$.controls.deliveryDefaults", issues);
     if (deliveryDefaults) {
-      exact(deliveryDefaults, ["roleAssignmentMode", "timebox", "collectDuringRequirements"], "$.controls.deliveryDefaults", issues);
+      exact(deliveryDefaults, ["roleAssignmentMode", "timebox", "collectDuringRequirements", "requirementsProfile"], "$.controls.deliveryDefaults", issues);
       if (deliveryDefaults.roleAssignmentMode !== "approval-actor-all-roles") issue(issues, "INVALID_ROLE_ASSIGNMENT_MODE", "$.controls.deliveryDefaults.roleAssignmentMode", "Expected approval-actor-all-roles");
       string(deliveryDefaults.timebox, "$.controls.deliveryDefaults.timebox", issues);
       if (deliveryDefaults.collectDuringRequirements !== false) issue(issues, "INVALID_REQUIREMENTS_CONTROL", "$.controls.deliveryDefaults.collectDuringRequirements", "Expected false");
+      if (deliveryDefaults.requirementsProfile !== undefined && !REQUIREMENTS_DEPTHS.includes(deliveryDefaults.requirementsProfile as never)) issue(issues, "INVALID_REQUIREMENTS_PROFILE", "$.controls.deliveryDefaults.requirementsProfile", "Unsupported requirements profile");
     }
     const constraints = object(controls.constraints, "$.controls.constraints", issues);
     if (constraints) {
@@ -505,11 +506,6 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
       stringArray(constraints.externalIntegrations, "$.controls.constraints.externalIntegrations", issues);
       if (typeof constraints.allowSinglePersonAllRoles !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.controls.constraints.allowSinglePersonAllRoles", "Expected a boolean");
     }
-    if (controls.artifactProfiles !== undefined) {
-      const profiles = object(controls.artifactProfiles, "$.controls.artifactProfiles", issues);
-      if (profiles) Object.entries(profiles).forEach(([key, profile]) => string(profile, `$.controls.artifactProfiles.${key}`, issues));
-    }
-    if (controls.requiredIntegrations !== undefined) stringArray(controls.requiredIntegrations, "$.controls.requiredIntegrations", issues);
   }
   return result<DeliveryFlowDefinition>(value, issues);
 }

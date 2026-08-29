@@ -18,11 +18,10 @@ interface ContextOutput {
   integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
 }
 
-async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent"): Promise<void> {
+async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent", evidenceRefs = ["requirements.md"]): Promise<void> {
   const context = await runCli(["context", stage, "--root", workspace], workspace);
   assert.equal(context.exitCode, 0, JSON.stringify(context.output));
   const output = context.output as ContextOutput;
-  const evidenceRefs = ["requirements.md"];
   const receipt = {
     schemaVersion: 1,
     stage,
@@ -63,12 +62,12 @@ test("validate checks all v2 Harness assets", async () => {
   assert.equal((result.output as { ok: boolean }).ok, true);
 });
 
-test("rejects unimplemented checkpoint execution deterministically", async () => {
+test("explains that Commit is owned by Build Readiness", async () => {
   const result = await runCli(["checkpoint", "commit"]);
   assert.equal(result.exitCode, 2);
   assert.equal(
     (result.output as { error: { code: string } }).error.code,
-    "CHECKPOINT_NOT_IMPLEMENTED",
+    "INVALID_ARGUMENT",
   );
 });
 
@@ -130,6 +129,7 @@ test("build readiness records one approved and content-bound decision", async (c
   const result = await runCli(["readiness", "build", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   const approved = await store.readRecord(record.id);
+  assert.equal(approved.status, "COMMITTED");
   assert.equal(approved.requirements.status, "approved");
   assert.equal(approved.requirements.approvedBy, "product-owner");
   assert.equal(approved.requirements.approvedContentHash.length, 64);
@@ -140,7 +140,44 @@ test("build readiness records one approved and content-bound decision", async (c
   });
   assert.equal(approved.idea.timebox, "1 working day");
   const events = await new AuditLog(workspace).readAll();
-  assert.deepEqual(events.map(({ eventType }) => eventType), ["STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "BUILD_READINESS_APPROVED"]);
+  assert.deepEqual(events.map(({ eventType }) => eventType), ["STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "CHECKPOINT_APPROVED"]);
+  assert.deepEqual(events.at(-1) && { checkpoint: events.at(-1)?.checkpoint, from: events.at(-1)?.fromStatus, to: events.at(-1)?.toStatus }, { checkpoint: "commit", from: "DRAFT", to: "COMMITTED" });
+
+  const verificationEvidence = ["evidence/tests.txt", "evidence/build.txt", "evidence/security.txt", "evidence/demo.txt"];
+  const prepared: PocDeliveryRecord = {
+    ...approved,
+    revision: approved.revision + 1,
+    updatedAt: new Date().toISOString(),
+    resolution: {
+      ...approved.resolution,
+      controls: {
+        ...approved.resolution.controls,
+        applications: approved.resolution.controls.applications.map((application) => ({ ...application, evidenceRefs: [...new Set([...application.evidenceRefs, ...verificationEvidence])] })),
+      },
+    },
+    evidence: {
+      tests: [{ kind: "file", ref: verificationEvidence[0], description: "Passing test output." }],
+      build: [{ kind: "file", ref: verificationEvidence[1], description: "Successful production build." }],
+      security: [{ kind: "file", ref: verificationEvidence[2], description: "Sensitive-data verification." }],
+      demo: [{ kind: "demo", ref: verificationEvidence[3], description: "Browser acceptance demonstration." }],
+    },
+    decision: { outcome: "", rationale: "The POC met its acceptance criteria.", followUp: "Prepare an Implementation Delivery Flow." },
+  };
+  await store.writeRecord(prepared, approved.revision);
+  for (const stage of ["implementation", "developer-verification", "security-verification", "acceptance-verification"]) {
+    await applyContextReceipt(workspace, stage, "product-owner", verificationEvidence);
+  }
+  const verified = await runCli(["checkpoint", "verify", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(verified.exitCode, 0, JSON.stringify(verified.output));
+  assert.equal((await store.readRecord(record.id)).status, "VERIFIED");
+
+  const decided = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "product-owner", "--outcome", "productize"], workspace);
+  assert.equal(decided.exitCode, 0, JSON.stringify(decided.output));
+  const closed = await store.readRecord(record.id);
+  assert.equal(closed.status, "CLOSED_PRODUCTIZED");
+  assert.equal(closed.decision.outcome, "productize");
+  const completedEvents = await new AuditLog(workspace).readAll();
+  assert.deepEqual(completedEvents.filter(({ eventType }) => eventType === "CHECKPOINT_APPROVED").map(({ checkpoint }) => checkpoint), ["commit", "verify", "decide"]);
 });
 
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {

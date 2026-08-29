@@ -52,6 +52,16 @@ pdlc-docs/
 
 Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Policies/Controls, Knowledge, Domain contributions, and Integrations before each Stage. Add project-specific context only under `pdlc/config/domains/`.
 
+### Enable ownership review routing
+
+The included `.github/CODEOWNERS.template` is intentionally inactive because its sample team handles cannot be valid for every adopter. Before relying on repository review enforcement:
+
+1. replace every `@your-org/...` handle with a real user or team that has repository access;
+2. save the result as `.github/CODEOWNERS`;
+3. protect the relevant branch and require CODEOWNER review for governed paths.
+
+Until those steps are complete, `ownerDomain`, owner, approver, and maintainer metadata remains useful for validation and accountability, but GitHub does not enforce review routing.
+
 Maintainers may project all enabled Domain Agents and Skills into VS Code-native directories with:
 
 ```sh

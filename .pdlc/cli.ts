@@ -10,20 +10,20 @@ import { projectKnowledgeRefs, resolveDomainContext } from "./core/domain-resolv
 import { PdlcError } from "./core/errors.ts";
 import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
-import { assessPocBuildReadiness, hashRequirementsDocument } from "./core/readiness.ts";
+import { assessControlApplications, assessPocBuildReadiness, assessResolvedControlSet, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsFlowControl } from "./core/requirements.ts";
 import { RoleRegistry, type ResolvedRole } from "./core/role-registry.ts";
 import { validatePocDeliveryRecord, validateStageContextReceipt } from "./core/schema.ts";
 import { FileStateStore } from "./core/state.ts";
 import { StageRegistry } from "./core/stage-registry.ts";
-import type { DomainGuidanceResolution, PocDeliveryRecord, StageContextReceipt, ValidationIssue } from "./core/types.ts";
+import type { DeliveryFlowCheckpoint, DomainGuidanceResolution, ExecutableDeliveryFlowDefinition, PocDeliveryRecord, StageContextReceipt, ValidationIssue } from "./core/types.ts";
 import { validateConversationEntrypoints } from "./platform-adapters/validate-entrypoints.ts";
 import { validateCorePortability } from "./platform-adapters/validate-portability.ts";
 
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const HARNESS_ROOT = resolve(MODULE_DIRECTORY, "..");
 
-interface CliOptions { root: string; record?: string; actor?: string; receipt?: string }
+interface CliOptions { root: string; record?: string; actor?: string; receipt?: string; outcome?: string }
 interface ParsedArguments { command?: string; subcommand?: string; options: CliOptions }
 
 function parseArguments(args: string[], currentDirectory: string): ParsedArguments {
@@ -32,19 +32,55 @@ function parseArguments(args: string[], currentDirectory: string): ParsedArgumen
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--help") positional.push("help");
-    else if (["--root", "--record", "--actor", "--receipt"].includes(argument)) {
+    else if (["--root", "--record", "--actor", "--receipt", "--outcome"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Missing value for ${argument}`);
       if (argument === "--root") options.root = resolve(currentDirectory, value);
       else if (argument === "--record") options.record = value;
       else if (argument === "--actor") options.actor = value;
-      else options.receipt = value;
+      else if (argument === "--receipt") options.receipt = value;
+      else options.outcome = value;
       index += 1;
     } else if (argument.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Unknown option: ${argument}`);
     else positional.push(argument);
   }
   if (positional.length > 2) throw new PdlcError("INVALID_ARGUMENT", `Too many positional arguments: ${positional.slice(2).join(" ")}`);
   return { command: positional[0], subcommand: positional[1], options };
+}
+
+function checkpointFor(flow: ExecutableDeliveryFlowDefinition, id: string): DeliveryFlowCheckpoint {
+  const checkpoint = flow.controls.checkpoints.find((entry) => entry.id === id);
+  if (!checkpoint) throw new PdlcError("INVALID_ARGUMENT", `Unknown checkpoint for ${flow.id}: ${id}`);
+  return checkpoint;
+}
+
+function assertCheckpointActor(record: PocDeliveryRecord, checkpoint: DeliveryFlowCheckpoint, actor?: string): string {
+  if (!actor?.trim()) throw new PdlcError("INVALID_ARGUMENT", `Checkpoint '${checkpoint.id}' requires --actor <identity>`);
+  const assigned = record.assignments[checkpoint.ownerRole];
+  if (!assigned || assigned !== actor) throw new PdlcError("INVALID_ARGUMENT", `Checkpoint '${checkpoint.id}' must be performed by the assigned ${checkpoint.ownerRole} role`);
+  return actor;
+}
+
+function constraintIssues(
+  record: PocDeliveryRecord,
+  flow: ExecutableDeliveryFlowDefinition,
+  resolvedIntegrations: readonly string[],
+  requiredRoles: readonly string[],
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (record.scope.productionUse !== flow.controls.constraints.productionUse) {
+    issues.push({ code: "FLOW_PRODUCTION_CONSTRAINT", path: "$.scope.productionUse", message: `Delivery Flow requires productionUse=${flow.controls.constraints.productionUse}` });
+  }
+  const allowedIntegrations = new Set(flow.controls.constraints.externalIntegrations);
+  for (const ref of resolvedIntegrations) {
+    const id = ref.split("@")[0];
+    if (!allowedIntegrations.has(ref) && !allowedIntegrations.has(id)) issues.push({ code: "FLOW_INTEGRATION_CONSTRAINT", path: "$.resolution.integrations", message: `External Integration is not allowed by this Delivery Flow: ${ref}` });
+  }
+  if (!flow.controls.constraints.allowSinglePersonAllRoles) {
+    const identities = requiredRoles.map((role) => record.assignments[role]).filter(Boolean);
+    if (new Set(identities).size !== identities.length) issues.push({ code: "ROLE_SEPARATION_REQUIRED", path: "$.assignments", message: "This Delivery Flow requires separate identities for its required Roles" });
+  }
+  return issues;
 }
 
 function stageFor(record: PocDeliveryRecord): string {
@@ -143,6 +179,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
   const original = await readRecord(options);
   const { roles, deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
   const flow = deliveryFlows.getExecutable("poc");
+  const commit = checkpointFor(flow, "commit");
   let record = original;
   const activeStages = deliveryFlows.resolve(flow.id, contextTags(record)).map(({ definition }) => definition.id);
   const requiredRoles = deliveryFlows.requiredRoles(flow.id, contextTags(record));
@@ -156,6 +193,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
   if (resolution.issues.length > 0) throw new PdlcError("BUILD_NOT_READY", "Domain context contains unresolved conflicts", resolution.issues);
 
   if (options.actor) {
+    if (!commit.from.includes(original.status) || !commit.to) throw new PdlcError("INVALID_ARGUMENT", `Build Readiness cannot Commit a record in status ${original.status}`);
     let approvedContentHash: string;
     try {
       approvedContentHash = await hashRequirementsDocument(options.root, original.requirements.documentRef);
@@ -170,6 +208,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     const timestamp = new Date().toISOString();
     record = {
       ...original,
+      status: commit.to as PocDeliveryRecord["status"],
       revision: original.revision + 1,
       updatedAt: timestamp,
       assignments: Object.fromEntries(requiredRoles.map((role) => [role, options.actor])),
@@ -188,6 +227,8 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
 
   const roleIssues = roles.validateAssignments(record, requiredRoles);
   if (roleIssues.length > 0) throw new PdlcError("BUILD_NOT_READY", "Required Delivery Flow Roles are not assigned", roleIssues);
+  const constraints = constraintIssues(record, flow, resolution.integrations.map(({ ref }) => ref), requiredRoles);
+  if (constraints.length > 0) throw new PdlcError("BUILD_NOT_READY", "Delivery Flow constraints are not satisfied", constraints);
 
   const receiptStages = ["requirements-clarification", "build-readiness"];
   const receiptSnapshots = new Map<string, StageContextSnapshot>();
@@ -202,7 +243,10 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     await new FileStateStore(options.root).writeRecord(record, original.revision);
     await new AuditLog(options.root).append(new AuditLog(options.root).create(record, {
       recordId: record.id,
-      eventType: "BUILD_READINESS_APPROVED",
+      eventType: "CHECKPOINT_APPROVED",
+      checkpoint: "commit",
+      fromStatus: original.status,
+      toStatus: record.status,
       actor: options.actor,
       riskLevel: record.risk.level,
       evidenceRefs: [record.requirements.documentRef, ...record.resolution.controls.applicable],
@@ -212,9 +256,10 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     ok: true,
     recordId: record.id,
     target,
+    transition: options.actor ? { checkpoint: "commit", from: original.status, to: record.status } : undefined,
     deliveryFlow: { id: flow.id, activeStages },
     approval: { status: record.requirements.status, approvedBy: record.requirements.approvedBy, approvedAt: record.requirements.approvedAt, contentHash: record.requirements.approvedContentHash },
-    deliveryControls: { roleAssignmentMode: flow.controls.deliveryDefaults.roleAssignmentMode, assignments: record.assignments, timebox: record.idea.timebox },
+    deliveryControls: { roleAssignmentMode: flow.controls.deliveryDefaults.roleAssignmentMode, assignments: record.assignments, timebox: record.idea.timebox, requirementsProfile: flow.controls.deliveryDefaults.requirementsProfile },
     requirements: result.requirementsDocument,
     controls: result.controls,
     projectBaselines: resolution.baselines.map(({ ref }) => ref),
@@ -222,6 +267,81 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     knowledge: [...resolution.knowledge.map(({ ref }) => ref), ...projectKnowledgeRefs(project, options.root)],
     integrations: resolution.integrations.map(({ ref, owners, permissions, skills }) => ({ ref, owners, permissions, skills: skills.map(({ id }) => id) })),
   };
+}
+
+async function checkpoint(options: CliOptions, checkpointId?: string): Promise<unknown> {
+  if (!checkpointId) throw new PdlcError("INVALID_ARGUMENT", "Checkpoint id is required");
+  if (checkpointId === "commit") throw new PdlcError("INVALID_ARGUMENT", "Commit is performed by the approved 'readiness build' operation");
+  const original = await readRecord(options);
+  const { deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
+  const flow = deliveryFlows.getExecutable(original.deliveryFlow);
+  const definition = checkpointFor(flow, checkpointId);
+  const actor = assertCheckpointActor(original, definition, options.actor);
+  if (!definition.from.includes(original.status)) throw new PdlcError("INVALID_ARGUMENT", `Checkpoint '${checkpointId}' cannot transition a record in status ${original.status}`);
+
+  let targetStatus: PocDeliveryRecord["status"];
+  let decision: string | undefined;
+  let evidenceRefs: string[] = [];
+  if (checkpointId === "verify") {
+    if (!definition.to) throw new PdlcError("INVALID_ARGUMENT", "Verify checkpoint has no target status");
+    const activeStages = deliveryFlows.resolve(flow.id, contextTags(original)).map(({ definition: stage }) => stage.id);
+    const requiredRoles = deliveryFlows.requiredRoles(flow.id, contextTags(original));
+    const resolution = resolveDomainContext(domains, integrations, project, {
+      deliveryFlow: flow.id,
+      stages: activeStages,
+      riskTriggers: original.risk.triggers,
+      technologies: original.design.technologies,
+      domains: original.design.domains,
+    });
+    if (resolution.issues.length > 0) throw new PdlcError("BUILD_NOT_READY", "Domain context contains unresolved conflicts", resolution.issues);
+    const issues = constraintIssues(original, flow, resolution.integrations.map(({ ref }) => ref), requiredRoles);
+    if (original.evidence.tests.length === 0) issues.push({ code: "TEST_EVIDENCE_MISSING", path: "$.evidence.tests", message: "Test evidence is required before Verify" });
+    if (original.evidence.build.length === 0) issues.push({ code: "BUILD_EVIDENCE_MISSING", path: "$.evidence.build", message: "Build evidence is required before Verify" });
+    if (original.evidence.demo.length === 0) issues.push({ code: "DEMO_EVIDENCE_MISSING", path: "$.evidence.demo", message: "POC demonstration evidence is required before Verify" });
+    if (activeStages.includes("security-verification") && original.evidence.security.length === 0) issues.push({ code: "SECURITY_EVIDENCE_MISSING", path: "$.evidence.security", message: "Security evidence is required because the Security Verification Stage is active" });
+    evidenceRefs = [original.evidence.tests, original.evidence.build, original.evidence.security, original.evidence.demo].flat().map(({ ref }) => ref);
+    issues.push(...assessResolvedControlSet(original, resolution.controls));
+    issues.push(...assessControlApplications(original, resolution.controls, ["developer-verification", "security-verification", "acceptance-verification"], new Set(evidenceRefs)));
+    const receiptStages = ["requirements-clarification", "build-readiness", "implementation", "developer-verification", ...(activeStages.includes("security-verification") ? ["security-verification"] : []), "acceptance-verification"];
+    const snapshots = new Map<string, StageContextSnapshot>();
+    for (const stageId of receiptStages) snapshots.set(stageId, (await resolveStageMaterial(options, stageId, original)).snapshot);
+    issues.push(...requiredContextIssues(original, receiptStages, snapshots));
+    if (issues.length > 0) throw new PdlcError("BUILD_NOT_READY", "POC evidence or mandatory Controls are not ready for Verify", issues);
+    targetStatus = definition.to as PocDeliveryRecord["status"];
+  } else if (checkpointId === "decide") {
+    if (!definition.toByOutcome) throw new PdlcError("INVALID_ARGUMENT", "Decide checkpoint has no outcome transitions");
+    if (!options.outcome || !["kill", "pivot", "productize"].includes(options.outcome)) throw new PdlcError("INVALID_ARGUMENT", "Decide requires --outcome kill|pivot|productize");
+    if (original.decision.outcome && original.decision.outcome !== options.outcome) throw new PdlcError("INVALID_ARGUMENT", "Requested outcome conflicts with the Delivery Record decision");
+    if (!original.decision.rationale.trim() || !original.decision.followUp.trim()) throw new PdlcError("BUILD_NOT_READY", "Decision rationale and follow-up are required before Decide");
+    decision = options.outcome;
+    const mapped = definition.toByOutcome[decision];
+    if (!mapped) throw new PdlcError("INVALID_ARGUMENT", `No Decide transition is defined for outcome: ${decision}`);
+    targetStatus = mapped as PocDeliveryRecord["status"];
+  } else {
+    throw new PdlcError("INVALID_ARGUMENT", `Unsupported checkpoint: ${checkpointId}`);
+  }
+
+  const timestamp = new Date().toISOString();
+  const updated: PocDeliveryRecord = {
+    ...original,
+    status: targetStatus,
+    revision: original.revision + 1,
+    updatedAt: timestamp,
+    decision: decision ? { ...original.decision, outcome: decision as PocDeliveryRecord["decision"]["outcome"] } : original.decision,
+  };
+  await new FileStateStore(options.root).writeRecord(updated, original.revision);
+  await new AuditLog(options.root).append(new AuditLog(options.root).create(updated, {
+    recordId: updated.id,
+    eventType: "CHECKPOINT_APPROVED",
+    checkpoint: checkpointId,
+    fromStatus: original.status,
+    toStatus: updated.status,
+    actor,
+    riskLevel: updated.risk.level,
+    evidenceRefs,
+    decision,
+  }));
+  return { ok: true, recordId: updated.id, checkpoint: checkpointId, from: original.status, to: updated.status, revision: updated.revision, decision };
 }
 
 async function status(options: CliOptions): Promise<unknown> {
@@ -437,7 +557,7 @@ async function validate(options: CliOptions): Promise<unknown> {
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "context-apply <stage>", "readiness build", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome <outcome>", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "context") return { exitCode: 0, output: await stageContext(parsed.options, parsed.subcommand) };
@@ -449,7 +569,7 @@ export async function runCli(args: string[], currentDirectory = process.cwd()): 
     if (parsed.command === "domain") throw new PdlcError("INVALID_ARGUMENT", "Domain command must be list or sync");
     if (parsed.command === "integration" && parsed.subcommand === "list") return { exitCode: 0, output: await integrationList() };
     if (parsed.command === "integration") throw new PdlcError("INVALID_ARGUMENT", "Integration command must be list");
-    if (parsed.command === "checkpoint") throw new PdlcError("CHECKPOINT_NOT_IMPLEMENTED", `Checkpoint '${parsed.subcommand ?? ""}' cannot change state yet`);
+    if (parsed.command === "checkpoint") return { exitCode: 0, output: await checkpoint(parsed.options, parsed.subcommand) };
     throw new PdlcError("INVALID_ARGUMENT", `Unknown command: ${parsed.command}`);
   } catch (error) {
     if (error instanceof PdlcError) return { exitCode: 2, output: { ok: false, error: { code: error.code, message: error.message, details: error.details } } };

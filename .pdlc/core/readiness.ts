@@ -24,6 +24,69 @@ export interface BuildReadinessResult {
   controls: Array<{ ref: string; ownerDomain: string; ruleCount: number }>;
 }
 
+export function assessResolvedControlSet(record: PocDeliveryRecord, controls: ResolvedControl[]): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const selectedRefs = new Set(controls.map((control) => control.ref));
+  const recordedRefs = new Set(record.resolution.controls.applicable);
+  for (const ref of selectedRefs) {
+    if (!recordedRefs.has(ref)) issues.push(issue("APPLICABLE_CONTROL_MISSING", "$.resolution.controls.applicable", `Resolved Control is not recorded: ${ref}`));
+  }
+  for (const ref of recordedRefs) {
+    if (!selectedRefs.has(ref)) issues.push(issue("STALE_CONTROL_REFERENCE", "$.resolution.controls.applicable", `Recorded Control is not applicable to the active context: ${ref}`));
+  }
+  return issues;
+}
+
+export function assessControlApplications(
+  record: PocDeliveryRecord,
+  controls: ResolvedControl[],
+  enforcementStages: readonly string[],
+  acceptedEvidenceRefs?: ReadonlySet<string>,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const applications = new Map<string, PocDeliveryRecord["resolution"]["controls"]["applications"][number]>();
+  for (const application of record.resolution.controls.applications) {
+    if (applications.has(application.control)) issues.push(issue("DUPLICATE_CONTROL_APPLICATION", "$.resolution.controls.applications", `Control is applied more than once: ${application.control}`));
+    applications.set(application.control, application);
+  }
+  for (const control of controls) {
+    const ref = control.ref;
+    const enforcedRules = control.policy.rules.filter((rule) => rule.enforceAt.some((stage) => enforcementStages.includes(stage)));
+    if (enforcedRules.length === 0) continue;
+    const application = applications.get(ref);
+    if (!application) {
+      issues.push(issue("CONTROL_APPLICATION_MISSING", "$.resolution.controls.applications", `No disposition is recorded for ${ref} at ${enforcementStages.join(", ")}`));
+      continue;
+    }
+    if (application.disposition === "exception") {
+      if (!record.resolution.controls.exceptions.some((entry) => entry.startsWith(`${ref}:`))) {
+        issues.push(issue("CONTROL_EXCEPTION_MISSING", "$.resolution.controls.exceptions", `An approved exception reference is required for ${ref}`));
+      }
+      const approvers = new Set(enforcedRules.flatMap((rule) => rule.exceptionApprovers ?? []));
+      if (!application.approvedBy || (approvers.size > 0 && !approvers.has(application.approvedBy))) {
+        issues.push(issue("CONTROL_EXCEPTION_APPROVER_INVALID", "$.resolution.controls.applications", `Exception for ${ref} must be approved by one of: ${[...approvers].join(", ")}`));
+      }
+      continue;
+    }
+    const evidenceRequired = enforcedRules.some((rule) => rule.requiredEvidence?.length);
+    if (evidenceRequired && application.evidenceRefs.length === 0) {
+      issues.push(issue("CONTROL_EVIDENCE_MISSING", "$.resolution.controls.applications", `Evidence is required for ${ref} at ${enforcementStages.join(", ")}`));
+    } else if (evidenceRequired && acceptedEvidenceRefs && !application.evidenceRefs.some((evidenceRef) => acceptedEvidenceRefs.has(evidenceRef))) {
+      issues.push(issue("CONTROL_EVIDENCE_NOT_LINKED", "$.resolution.controls.applications", `Evidence for ${ref} must reference captured Delivery Record evidence`));
+    }
+    if (enforcedRules.some((rule) => rule.enforcement === "approval") && !application.approvedBy.trim()) {
+      issues.push(issue("CONTROL_APPROVAL_MISSING", "$.resolution.controls.applications", `An approval identity is required for ${ref} at ${enforcementStages.join(", ")}`));
+    }
+    for (const rule of enforcedRules.filter((entry) => entry.enforcement === "automatic")) {
+      const ruleRef = `${ref}#${rule.id}`;
+      if (ruleRef !== "product-management.requirements-quality@1.0.0#resolve-material-ambiguity") {
+        issues.push(issue("AUTOMATIC_CONTROL_NOT_IMPLEMENTED", "$.resolution.controls.applications", `No automatic evaluator is registered for ${ruleRef}`));
+      }
+    }
+  }
+  return issues;
+}
+
 function issue(code: string, path: string, message: string): ValidationIssue {
   return { code, path, message };
 }
@@ -125,54 +188,12 @@ export async function assessPocBuildReadiness(
   if (record.requirements.clarification.contradictions.length > 0) issues.push(issue("REQUIREMENTS_CONTRADICTIONS", "$.requirements.clarification.contradictions", "Contradictions must be resolved before approval"));
   if (!record.design.summary.trim() || record.design.decisions.length === 0) issues.push(issue("LIGHTWEIGHT_DESIGN_MISSING", "$.design", "A lightweight design summary and at least one decision are required before build"));
 
-  const selectedRefs = new Set(controls.map((control) => control.ref));
-  const recordedRefs = new Set(record.resolution.controls.applicable);
-  for (const ref of selectedRefs) {
-    if (!recordedRefs.has(ref)) issues.push(issue("APPLICABLE_CONTROL_MISSING", "$.resolution.controls.applicable", `Resolved Control is not recorded: ${ref}`));
-  }
-  for (const ref of recordedRefs) {
-    if (!selectedRefs.has(ref)) issues.push(issue("STALE_CONTROL_REFERENCE", "$.resolution.controls.applicable", `Recorded Control is not applicable to the active context: ${ref}`));
-  }
+  issues.push(...assessResolvedControlSet(record, controls));
 
-  const applications = new Map<string, PocDeliveryRecord["resolution"]["controls"]["applications"][number]>();
-  for (const application of record.resolution.controls.applications) {
-    if (applications.has(application.control)) issues.push(issue("DUPLICATE_CONTROL_APPLICATION", "$.resolution.controls.applications", `Control is applied more than once: ${application.control}`));
-    applications.set(application.control, application);
-  }
-  for (const control of controls) {
-    const ref = control.ref;
-    const enforcedRules = control.policy.rules.filter((rule) => rule.enforceAt.includes(enforcementStage));
-    if (enforcedRules.length === 0) continue;
-    const application = applications.get(ref);
-    if (!application) {
-      issues.push(issue("CONTROL_APPLICATION_MISSING", "$.resolution.controls.applications", `No ${enforcementStage} application disposition is recorded for ${ref}`));
-      continue;
-    }
-    if (application.disposition === "exception") {
-      if (!record.resolution.controls.exceptions.some((entry) => entry.startsWith(`${ref}:`))) {
-        issues.push(issue("CONTROL_EXCEPTION_MISSING", "$.resolution.controls.exceptions", `An approved exception reference is required for ${ref}`));
-      }
-      const approvers = new Set(enforcedRules.flatMap((rule) => rule.exceptionApprovers ?? []));
-      if (!application.approvedBy || (approvers.size > 0 && !approvers.has(application.approvedBy))) {
-        issues.push(issue("CONTROL_EXCEPTION_APPROVER_INVALID", "$.resolution.controls.applications", `Exception for ${ref} must be approved by one of: ${[...approvers].join(", ")}`));
-      }
-    } else {
-      if (enforcedRules.some((rule) => rule.requiredEvidence?.length) && application.evidenceRefs.length === 0) {
-        issues.push(issue("CONTROL_EVIDENCE_MISSING", "$.resolution.controls.applications", `Evidence is required for ${ref} at ${enforcementStage}`));
-      }
-      if (enforcedRules.some((rule) => rule.enforcement === "approval") && !application.approvedBy.trim()) {
-        issues.push(issue("CONTROL_APPROVAL_MISSING", "$.resolution.controls.applications", `An approval identity is required for ${ref} at ${enforcementStage}`));
-      }
-      if (ref === "product-management.requirements-quality@1.0.0" && application.approvedBy !== record.requirements.approvedBy) {
-        issues.push(issue("PRODUCT_CONTROL_APPROVER_MISMATCH", "$.resolution.controls.applications", `Product Control approval must match the approved Requirements owner for ${ref}`));
-      }
-      for (const rule of enforcedRules.filter((entry) => entry.enforcement === "automatic")) {
-        const ruleRef = `${ref}#${rule.id}`;
-        if (ruleRef !== "product-management.requirements-quality@1.0.0#resolve-material-ambiguity") {
-          issues.push(issue("AUTOMATIC_CONTROL_NOT_IMPLEMENTED", "$.resolution.controls.applications", `No automatic evaluator is registered for ${ruleRef}`));
-        }
-      }
-    }
+  issues.push(...assessControlApplications(record, controls, [enforcementStage]));
+  const productApplication = record.resolution.controls.applications.find(({ control }) => control === "product-management.requirements-quality@1.0.0");
+  if (productApplication?.disposition === "satisfied" && productApplication.approvedBy !== record.requirements.approvedBy) {
+    issues.push(issue("PRODUCT_CONTROL_APPROVER_MISMATCH", "$.resolution.controls.applications", "Product Control approval must match the approved Requirements owner"));
   }
   if (requirementsDocument) for (const ref of record.resolution.controls.applicable) {
     if (!requirementsDocument.includes(ref)) issues.push(issue("CONTROL_NOT_TRACED", "$.requirements.documentRef", `Requirements document does not reference ${ref}`));

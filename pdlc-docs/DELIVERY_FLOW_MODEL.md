@@ -43,7 +43,7 @@ Do not create a Stage solely to perform context resolution. The Runner resolves 
 1. Create `.pdlc/delivery-flows/<id>/flow.json`.
 2. Compose canonical Stage ids without redefining their semantics.
 3. Mark incomplete Flows `planned` and omit executable controls.
-4. When executable behavior is ready, add statuses, checkpoints, constraints, delivery defaults, Artifact profiles, and required Integrations; mark it `active`.
+4. When executable behavior is ready, add statuses, checkpoints, constraints, and delivery defaults; mark it `active`. Integration eligibility remains owned by Integration applicability and the Flow's explicit allow-list constraint.
 5. Register the definition explicitly in `.pdlc/delivery-flows/catalog.json`.
 6. Add validation and lifecycle tests.
 
@@ -53,7 +53,7 @@ A Flow change can alter delivery obligations even when Stage definitions are unc
 
 - sequence and conditional tags;
 - checkpoint ownership;
-- Artifact profiles;
+- delivery defaults, including the recommended Requirements profile;
 - role/timebox behavior;
 - Control and Knowledge applicability;
 - Domain Hook and Integration eligibility;

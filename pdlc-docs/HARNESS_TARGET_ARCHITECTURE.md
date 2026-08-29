@@ -16,7 +16,7 @@ The target architecture uses a small set of concepts:
 8. Integrations may bundle Skills so existing JIRA, Xray, Databricks, and similar system procedures can be reused.
 9. A `Project Overlay` supplies approved project facts, project Policies, Defaults, and local Knowledge.
 10. The Runner performs deterministic resolution, readiness, state, and audit behavior. The Agent provides the conversation and delivery work.
-11. Governance is expressed through ownership metadata, CODEOWNERS, schemas, approvals, and tests rather than a separate runtime layer.
+11. Governance is expressed through ownership metadata, an adopter-installed CODEOWNERS file, schemas, approvals, and tests rather than a separate runtime layer.
 
 There is no `Principle Pack`, `Plugin`, or generic `Capability` runtime concept in v2.
 
@@ -25,7 +25,7 @@ There is no `Principle Pack`, `Plugin`, or generic `Capability` runtime concept 
 ```text
 Delivery Flow
   -> orders canonical Stages
-  -> owns checkpoints, constraints, role behavior, and timebox
+  -> owns checkpoints, constraints, role behavior, timebox, and recommended Requirements profile
 
 Stage entry
   -> resolves registered Role definitions for the current Stage
@@ -227,6 +227,7 @@ Place the smallest necessary content under `pdlc/config/domains/<domain>/`. Do n
 - Project configuration cannot override locked enterprise constraints.
 - Requirements approval is content-hash bound.
 - Controlled state changes go through the Runner and audit log.
+- Build Readiness performs Commit; Verify and Decide enforce evidence, authority, and terminal outcome transitions.
 - Platform adapters remain thin and do not duplicate governance logic.
 
 See [Harness Architecture and Ownership](HARNESS_ARCHITECTURE_AND_OWNERSHIP.md) for the detailed governance and Control review model.

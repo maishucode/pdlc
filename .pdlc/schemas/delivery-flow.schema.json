@@ -61,8 +61,86 @@
       }
     },
     "controls": {
-      "type": "object"
+      "type": "object",
+      "required": [
+        "initialStatus",
+        "terminalStatuses",
+        "checkpoints",
+        "deliveryDefaults",
+        "constraints"
+      ],
+      "properties": {
+        "initialStatus": {
+          "type": "string",
+          "minLength": 1
+        },
+        "terminalStatuses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "checkpoints": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "from", "ownerRole"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "from": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "to": { "type": "string", "minLength": 1 },
+              "toByOutcome": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": { "type": "string", "minLength": 1 }
+              },
+              "ownerRole": { "type": "string", "minLength": 1 }
+            },
+            "oneOf": [
+              { "required": ["to"], "not": { "required": ["toByOutcome"] } },
+              { "required": ["toByOutcome"], "not": { "required": ["to"] } }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "deliveryDefaults": {
+          "type": "object",
+          "required": ["roleAssignmentMode", "timebox", "collectDuringRequirements"],
+          "properties": {
+            "roleAssignmentMode": { "const": "approval-actor-all-roles" },
+            "timebox": { "type": "string", "minLength": 1 },
+            "collectDuringRequirements": { "const": false },
+            "requirementsProfile": { "enum": ["minimal", "standard", "comprehensive"] }
+          },
+          "additionalProperties": false
+        },
+        "constraints": {
+          "type": "object",
+          "required": ["productionUse", "externalIntegrations", "allowSinglePersonAllRoles"],
+          "properties": {
+            "productionUse": { "type": "boolean" },
+            "externalIntegrations": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "allowSinglePersonAllRoles": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "active" } } },
+      "then": { "required": ["controls"] },
+      "else": { "not": { "required": ["controls"] } }
+    }
+  ],
   "additionalProperties": false
 }

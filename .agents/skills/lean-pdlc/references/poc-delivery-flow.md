@@ -22,9 +22,9 @@ Build Readiness is the single pre-build human confirmation. It freezes the revie
 
 ## Checkpoints
 
-1. `commit`: confirm the approved Requirements, measurable success criteria, timebox, scope, role assignments, safety boundary, Controls and exceptions, Project Baselines, and lightweight design. `readiness build` enforces the pre-build subset without imitating an unimplemented state transition.
-2. `verify`: confirm the implementation result and evidence against every success criterion.
-3. `decide`: record `kill`, `pivot`, or `productize` with rationale and follow-up.
+1. `commit`: approved `readiness build` confirms the Requirements, measurable success criteria, timebox, scope, role assignments, safety boundary, Controls and exceptions, Project Baselines, and lightweight design, then moves `DRAFT → COMMITTED`. A materially revised POC may repeat the approval as an audited `COMMITTED → COMMITTED` recommit.
+2. `verify`: confirm tests, build, demo, conditionally required security evidence, current material Stage receipts, and Control evidence, then move `COMMITTED → VERIFIED`.
+3. `decide`: record `kill`, `pivot`, or `productize` with rationale and follow-up, then close the POC in the corresponding terminal status.
 
 Do not deploy to production, create JIRA/XRAY assets, or treat `productize` as release approval. Productize closes the POC and supplies evidence to a new formal Delivery Flow.
 

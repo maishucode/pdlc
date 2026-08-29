@@ -2,7 +2,7 @@
 
 This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`. When a request begins with `/pdlc`, selects the Lean PDLC custom Agent, invokes the `lean-pdlc` skill, or naturally asks to start or continue product delivery work, load `.agents/skills/lean-pdlc/SKILL.md`.
 
-- v2 currently executes the POC Delivery Flow only. Do not simulate planned Implementation, end-to-end PDLC, checkpoint, JIRA, XRAY, or production-release capabilities.
+- v2 currently executes the POC Delivery Flow, including Build Readiness/Commit, Verify, and Decide. Do not simulate planned Implementation, end-to-end PDLC, JIRA, XRAY, or production-release capabilities.
 - Keep delivery interaction conversational. Never ask the user to run Bun, TypeScript, or shell commands.
 - Read current Delivery Flow state from `.pdlc/runtime/` and project-owned configuration and artifacts from `pdlc/` before considering an internal Runner call.
 - Resolve canonical Stages from `.pdlc/stages/catalog.json` and the selected definition under `.pdlc/delivery-flows/`. Do not duplicate Stage semantics or treat every Stage as an approval.
