@@ -26,11 +26,13 @@ Before each Stage
   -> apply Project Baselines and resolved Defaults
   -> retrieve relevant Guidance, References, and KB
   -> compose Domain Agents and Skills through Hooks
+  -> emit context-bound required Agent invocation contracts
   -> resolve eligible top-level Integrations and bundled Skills
 
 Stage execution
+  -> delegates required contributions through the native GitHub Copilot agent tool
   -> reads and produces Domain-owned Artifacts
-  -> applies a hashed Stage Context Receipt after the work is done
+  -> applies a hashed Stage Context Receipt with completed invocation metadata
   -> updates the Delivery Record and evidence
 ```
 
@@ -103,6 +105,8 @@ Bundled Domains demonstrate the model:
 
 - Product Management owns Requirements, Story, and Productization Package Artifact Definitions, requirements quality Policies, and authoring guidance.
 - UX owns experience Policies, design guidance, web-POC Defaults, Skills, an Agent, and Stage Hooks.
+
+The current platform path is GitHub Copilot. Every active UX Hook binding has a globally unique capability id and required invocation policy. The Runner binds each invocation id to the resolved Stage context; `context-apply` rejects skipped, incomplete, stale, or mismatched Agent capability receipts. Additional Java, Python, or other expert categories use the same Domain Hook contract and do not require a new runtime abstraction.
 - Solution Architecture owns reversible-delivery Controls and minimum-design guidance/defaults.
 - Security owns credential and sensitive-data Controls.
 - Data Platform owns the Databricks connectivity KB example; the external connection is registered separately under `.pdlc/integrations/databricks/`.
