@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/knowledge-metadata.schema.json",
+  "title": "Knowledge Asset",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "description",
+    "ownerDomain",
+    "version",
+    "kind",
+    "appliesTo"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "ownerDomain": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "guidance",
+        "default",
+        "reference",
+        "kb"
+      ]
+    },
+    "appliesTo": {
+      "type": "object"
+    },
+    "contentRef": {
+      "type": "string"
+    },
+    "defaults": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management.requirements-writing",
+  "title": "Writing effective requirements",
+  "description": "Recommended practices for expressing product intent without prescribing premature implementation details.",
+  "ownerDomain": "product-management",
+  "version": "1.0.0",
+  "kind": "guidance",
+  "appliesTo": { "stages": ["requirements-clarification", "requirements-analysis", "acceptance-criteria-definition"] },
+  "contentRef": "requirements-writing.md"
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/control-policy.schema.json",
+  "title": "Control Policy",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "description",
+    "ownerDomain",
+    "version",
+    "appliesTo",
+    "rules"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "ownerDomain": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "appliesTo": {
+      "type": "object"
+    },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}

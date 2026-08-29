@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/requirements-flow-control.schema.json",
+  "title": "Requirements Flow Control",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "owner",
+    "version",
+    "artifactType",
+    "profiles",
+    "questionRules"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "owner": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "artifactType": {
+      "const": "product-management.requirements"
+    },
+    "profiles": {
+      "type": "object",
+      "required": [
+        "minimal",
+        "standard",
+        "comprehensive"
+      ]
+    },
+    "questionRules": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

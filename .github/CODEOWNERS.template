@@ -15,18 +15,13 @@
 /pdlc/schemas/                                 @your-org/pdlc-harness-engineering @your-org/pdlc-governance
 /pdlc/tests/                                   @your-org/pdlc-harness-engineering
 /pdlc/stages/                                  @your-org/pdlc-governance
-/pdlc/journeys/                                @your-org/pdlc-governance
-/pdlc/workflows/                               @your-org/pdlc-governance
+/pdlc/delivery-flows/                          @your-org/pdlc-governance
 /pdlc/roles/                                   @your-org/pdlc-governance
-/pdlc/templates/                               @your-org/product-governance
-/pdlc/defaults/harness/                        @your-org/pdlc-harness-product
-/pdlc/harnesses/                               @your-org/developer-experience @your-org/pdlc-harness-engineering
-/pdlc/integrations/                            @your-org/pdlc-harness-engineering @your-org/enterprise-integration-platform
+/pdlc/platform-adapters/                       @your-org/developer-experience @your-org/pdlc-harness-engineering
+/pdlc/domains/*/capabilities/adapters/          @your-org/pdlc-harness-engineering @your-org/enterprise-integration-platform
 
-/pdlc/principles/business-architecture/        @your-org/business-architecture
-/pdlc/principles/solution-architecture/        @your-org/solution-architecture
-/pdlc/principles/ai-governance/                @your-org/ai-governance
-/pdlc/principles/ux/                           @your-org/ux-governance
-/pdlc/principles/quality/                      @your-org/qa-governance
-/pdlc/principles/security/                     @your-org/security
-/pdlc/principles/operations/                   @your-org/platform-operations
+/pdlc/domains/product-management/              @your-org/product-governance
+/pdlc/domains/solution-architecture/            @your-org/solution-architecture
+/pdlc/domains/ux/                               @your-org/ux-governance
+/pdlc/domains/security/                         @your-org/security
+/pdlc/domains/data-platform/                    @your-org/data-platform

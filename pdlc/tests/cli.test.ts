@@ -22,13 +22,13 @@ test("status is safe when no record is active", async (context) => {
   });
 });
 
-test("validate checks all Phase 1 artifacts", async () => {
+test("validate checks all v2 Harness assets", async () => {
   const result = await runCli(["validate"]);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   assert.equal((result.output as { ok: boolean }).ok, true);
 });
 
-test("Phase 1 rejects checkpoint execution deterministically", async () => {
+test("rejects unimplemented checkpoint execution deterministically", async () => {
   const result = await runCli(["checkpoint", "commit"]);
   assert.equal(result.exitCode, 2);
   assert.equal(
@@ -55,7 +55,7 @@ test("build readiness records one approved and content-bound decision", async (c
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, "pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.requirements.documentRef = "requirements.md";
-  record.requirements.depth = "standard";
+  record.requirements.profile = "standard";
   record.requirements.clarification = {
     questionsAnswered: 8,
     coverage: {
@@ -73,8 +73,14 @@ test("build readiness records one approved and content-bound decision", async (c
   record.design.summary = "A reversible browser-only experiment.";
   record.design.decisions = ["Use local browser state only."];
   record.design.technologies = ["web-ui", "react"];
-  record.principles.applicable = ["security@1.0.0", "solution-architecture@1.0.0", "ux@1.0.0"];
-  record.principles.applications = record.principles.applicable.map((pack) => ({ pack, disposition: "adopted", notes: `Apply ${pack}.` }));
+  record.risk.triggers = ["sensitive-data"];
+  record.resolution.controls.applications = [
+    "product-management.requirements-quality@1.0.0",
+    "security.credential-boundary@1.0.0",
+    "security.sensitive-data@1.0.0",
+    "solution-architecture.reversible-delivery@1.0.0",
+    "ux.experience-quality@1.0.0",
+  ].map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.` }));
   await writeFile(
     join(workspace, "requirements.md"),
     await readFile(join(projectRoot, "pdlc/tests/fixtures/ready-requirements.md"), "utf8"),

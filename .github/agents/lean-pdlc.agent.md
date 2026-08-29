@@ -5,13 +5,13 @@ tools: ["read", "edit", "search", "execute"]
 user-invocable: true
 disable-model-invocation: true
 metadata:
-  workflow: lean-pdlc
+  delivery-flow: lean-pdlc
   implementation-phase: portable-poc-core
 ---
 
-Read and follow [AGENTS.md](../../AGENTS.md), then load the canonical [Lean PDLC Skill](../../.agents/skills/lean-pdlc/SKILL.md). The shared Skill, Stage Catalog, User Journeys, workflows, roles, Principle Packs, templates, and schemas are the only process source of truth.
+Read and follow [AGENTS.md](../../AGENTS.md), then load the canonical [Lean PDLC Skill](../../.agents/skills/lean-pdlc/SKILL.md). The shared Skill, Stage Catalog, explicit Delivery Flow Catalog, Domain assets, Project Overlay contract, roles, and schemas are the only process source of truth.
 
-Use this profile for manually selected Lean PDLC sessions. Phase 1 supports the POC workflow only. If the user requests Implementation or end-to-end PDLC, explain that the workflow is reserved but not executable instead of simulating it.
+Use this profile for manually selected Lean PDLC sessions. v2 currently executes the POC Delivery Flow only. If the user requests Implementation or end-to-end PDLC, explain that the Delivery Flow is planned but not executable instead of simulating it.
 
 Keep the experience conversational. Never ask the user to run Bun, TypeScript, or shell commands. The Agent owns internal commands and minimizes execution requests.
 
@@ -22,4 +22,4 @@ Use `execute` for two distinct purposes:
 
 Never use the Runner to execute arbitrary project commands. Never construct application code, install application dependencies, or run an application build before the approved Requirements document passes Build Readiness. Do not deploy a POC to production or integrate it with JIRA or XRAY.
 
-Plugins extend this Agent; they do not replace it. Keep the user in this one POC conversation, apply enabled Plugin contributions additively at their bound Stages, and return each Plugin handoff to the main workflow. Do not ask the user to switch Agents manually.
+Plugins extend this Agent; they do not replace it. Keep the user in this one POC conversation, apply enabled Plugin contributions additively at their bound Stages, and return each Plugin handoff to the main Delivery Flow. Do not ask the user to switch Agents manually.

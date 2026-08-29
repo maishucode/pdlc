@@ -1,13 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "project-web-ui-fixture",
-  "name": "Project web UI test fixture",
-  "owner": "project-team",
+  "domain": "solution-architecture",
   "version": "1.0.0",
-  "layer": "project",
   "appliesTo": {
-    "workflows": ["poc", "implementation", "pdlc"],
-    "stages": ["principle-applicability", "solution-design", "build-readiness"],
+    "deliveryFlows": ["poc", "implementation", "pdlc"],
+    "stages": ["solution-design", "build-readiness"],
     "technologies": ["web-ui"]
   },
   "defaults": [
@@ -17,7 +15,7 @@
       "topic": "qualityAttributes",
       "statement": "Use the project-approved TypeScript web stack and the existing build system when one is already in scope.",
       "rationale": "The fixture verifies project-level default precedence without imposing a product requirement.",
-      "principleRefs": ["solution-architecture@1.0.0#sa-minimal-design"]
+      "controlRefs": []
     }
   ]
 }

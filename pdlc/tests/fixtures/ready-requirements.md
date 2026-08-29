@@ -1,4 +1,4 @@
-<!-- pdlc:poc-requirements:v2 -->
+<!-- pdlc:requirements:v2 -->
 # POC Requirements: Test Web UI
 
 ## Intent Analysis
@@ -65,32 +65,32 @@ Synthetic sample data stays in browser-local storage. There are no external inte
 Automated tests, a successful production bundle, and browser verification must satisfy every acceptance criterion.
 
 <!-- pdlc:section:delivery-controls -->
-## Workflow Delivery Controls
+## Delivery Flow Controls
 
-The POC workflow assigns Product, Developer, and QA to the Build Readiness actor and applies a one-working-day timebox. These are workflow controls, not product requirements.
+The POC Delivery Flow assigns Product, Developer, and QA to the Build Readiness actor and applies a one-working-day timebox. These are Delivery Flow controls, not product requirements.
 
-<!-- pdlc:section:principle-packs -->
-## Applicable Principle Packs
+<!-- pdlc:section:controls -->
+## Applicable Controls
 
-The POC adopts security@1.0.0, solution-architecture@1.0.0, and ux@1.0.0.
+The POC satisfies product-management.requirements-quality@1.0.0, security.credential-boundary@1.0.0, security.sensitive-data@1.0.0, solution-architecture.reversible-delivery@1.0.0, and ux.experience-quality@1.0.0.
 
-<!-- pdlc:section:standard-defaults -->
+<!-- pdlc:section:defaults -->
 ## Applied Standards and Defaults
 
 | Key | Source | Policy | Applied requirement | Disposition |
 |---|---|---|---|---|
-| architecture.minimum-design | solution-architecture@1.0.0#sa-minimal-design | overrideable | Use the smallest design that tests the hypothesis. | applied |
-| architecture.reversible-poc | solution-architecture@1.0.0#sa-reversible-poc | locked | Keep the POC reversible. | applied |
-| quality.browser-baseline | harness:poc-web-ui@1.0.0 | overrideable | Verify the supported browser and viewports. | applied |
-| quality.performance-baseline | harness:poc-web-ui@1.0.0 | overrideable | Require no obvious lag. | applied |
-| quality.test-evidence-baseline | harness:poc-web-ui@1.0.0 | overrideable | Use proportionate automated and manual evidence. | applied |
-| security.credential-boundary | security@1.0.0#sec-no-embedded-secret | locked | Do not embed credentials. | applied |
-| security.data-boundary | security@1.0.0#sec-no-production-data | locked | Do not use production or regulated data. | applied |
-| ux.accessible-interaction | ux@1.0.0#ux-accessible-interaction | locked | Use accessible semantic interaction. | applied |
-| ux.complete-states | ux@1.0.0#ux-complete-states | locked | Implement complete interaction states. | applied |
-| ux.responsive-baseline | ux@1.0.0#ux-responsive-baseline | locked | Support mobile and desktop layouts. | applied |
-| ux.semantic-color | ux@1.0.0#ux-semantic-color | locked | Do not communicate state by color alone. | applied |
-| ux.visual-foundation | ux@1.0.0#ux-blue-foundation | locked | Use the approved blue visual foundation. | applied |
+| architecture.minimum-design | solution-architecture.poc-design-defaults@1.0.0 | overrideable | Use the smallest design that supports the decision. | applied |
+| architecture.reversible-poc | solution-architecture.reversible-delivery@1.0.0#reversible-poc | locked | Keep the POC reversible. | applied |
+| quality.browser-baseline | ux.poc-web-ui-defaults@1.0.0 | overrideable | Verify the supported browser and viewports. | applied |
+| quality.performance-baseline | solution-architecture.poc-design-defaults@1.0.0 | overrideable | Require no obvious lag. | applied |
+| quality.test-evidence-baseline | solution-architecture.poc-design-defaults@1.0.0 | overrideable | Use proportionate automated and manual evidence. | applied |
+| security.credential-boundary | security.credential-boundary@1.0.0#no-embedded-secret | locked | Do not embed credentials. | applied |
+| security.data-boundary | security.sensitive-data@1.0.0#approved-data-use | locked | Use synthetic or approved data. | applied |
+| ux.accessible-interaction | ux.experience-quality@1.0.0#accessible-interaction | locked | Use accessible semantic interaction. | applied |
+| ux.complete-states | ux.experience-quality@1.0.0#complete-interaction-states | locked | Implement complete interaction states. | applied |
+| ux.responsive-baseline | ux.experience-quality@1.0.0#responsive-baseline | locked | Support mobile and desktop layouts. | applied |
+| ux.semantic-color | ux.experience-quality@1.0.0#semantic-color | locked | Do not communicate state by color alone. | applied |
+| ux.visual-foundation | ux.experience-quality@1.0.0#approved-visual-foundation | locked | Use the approved blue visual foundation. | applied |
 
 <!-- pdlc:section:lightweight-design -->
 ## Lightweight Design

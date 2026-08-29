@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management",
+  "name": "Product Management",
+  "description": "Owns product intent, requirements, stories, acceptance outcomes, and their quality controls.",
+  "owners": ["product-management-leadership"],
+  "policyApprovers": ["product-governance"],
+  "maintainers": ["product-management-practice"],
+  "contributionMode": {
+    "artifacts": "reviewed",
+    "controls": "restricted",
+    "knowledge": "open",
+    "capabilities": "reviewed"
+  }
+}

@@ -6,23 +6,28 @@ import test from "node:test";
 import { runCli } from "../cli.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
-const pluginRoot = join(projectRoot, "plugins/lean-pdlc-ux");
+const pluginRoot = join(projectRoot, "pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux");
 
-test("keeps the complete POC Plugin definition inside plugins", async () => {
+test("keeps the complete UX Plugin inside its owning Domain", async () => {
   const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8"));
   assert.deepEqual(manifest, {
-    schemaVersion: 1,
-    name: "lean-pdlc-ux",
+    schemaVersion: 2,
+    kind: "plugin",
+    id: "lean-pdlc-ux",
+    ownerDomain: "ux",
     version: "0.3.0",
     description: "Stage-aware UX design, React delivery, and verification contributions for Lean PDLC.",
-    pdlc: {
-      workflows: ["poc"],
-      defaultEnabled: true,
-      contributes: {
-        stageBindings: "pdlc-stage-bindings.json",
-        agents: "agents",
-        skills: "skills",
-      },
+    deliveryFlows: ["poc"],
+    defaultEnabled: true,
+    permissions: {
+      filesystem: "write",
+      network: false,
+      externalWrites: false,
+    },
+    contributes: {
+      stageBindings: "pdlc-stage-bindings.json",
+      agents: "agents",
+      skills: "skills",
     },
   });
   await readFile(join(pluginRoot, "pdlc-stage-bindings.json"), "utf8");
@@ -33,16 +38,18 @@ test("keeps the complete POC Plugin definition inside plugins", async () => {
   }
 });
 
-test("lists independently discovered Plugins for the POC workflow", async () => {
+test("lists Domain-owned Plugins with permissions", async () => {
   const result = await runCli(["plugin", "list"], projectRoot);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   assert.deepEqual(result.output, {
     ok: true,
-    workflow: "poc",
     plugins: [{
-      name: "lean-pdlc-ux",
+      id: "lean-pdlc-ux",
+      ownerDomain: "ux",
       version: "0.3.0",
       enabled: true,
+      permissions: { filesystem: "write", network: false, externalWrites: false },
+      deliveryFlows: ["poc"],
       stages: [
         "requirements-clarification",
         "ux-design",
@@ -57,7 +64,7 @@ test("lists independently discovered Plugins for the POC workflow", async () => 
 test("requires the main POC entry point to compose Plugins at every Stage", async () => {
   const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
   const agent = await readFile(join(projectRoot, ".github/agents/lean-pdlc.agent.md"), "utf8");
-  assert.match(skill, /guidance <stage-id>/);
+  assert.match(skill, /context <stage-id>/);
   assert.match(skill, /Never ask the end user to select a Plugin Agent manually/);
   assert.match(agent, /Plugins extend this Agent; they do not replace it/);
 });

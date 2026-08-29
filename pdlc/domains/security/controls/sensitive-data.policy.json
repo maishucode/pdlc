@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "security.sensitive-data",
+  "title": "Sensitive data boundary",
+  "description": "Protects production, confidential, regulated, and otherwise sensitive data when risk triggers apply.",
+  "ownerDomain": "security",
+  "version": "1.0.0",
+  "appliesTo": {
+    "deliveryFlows": ["poc", "implementation", "pdlc"],
+    "stages": ["data-integration-boundaries", "risk-classification", "solution-design", "build-readiness", "implementation", "security-verification", "test-execution", "release-readiness", "deployment", "production-validation"],
+    "riskTriggers": ["sensitive-data", "external-access", "regulated-data"]
+  },
+  "rules": [
+    {
+      "id": "approved-data-use",
+      "statement": "Use synthetic or approved data unless an explicitly approved control exception and evidence reference permits otherwise.",
+      "enforcement": "approval",
+      "requiredEvidence": ["Data classification and approved data-use evidence"],
+      "exceptionApprovers": ["security-governance"],
+      "standardDefault": { "key": "security.data-boundary", "topic": "dataIntegrations" }
+    }
+  ]
+}

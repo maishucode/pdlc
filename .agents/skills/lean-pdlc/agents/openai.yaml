@@ -1,4 +1,4 @@
 interface:
   display_name: "Lean PDLC"
-  short_description: "Risk-based delivery workflow with explicit checkpoints"
-  default_prompt: "Use $lean-pdlc to start or continue a controlled product delivery workflow."
+  short_description: "Risk-based Delivery Flow with explicit checkpoints"
+  default_prompt: "Use $lean-pdlc to start or continue a controlled product Delivery Flow."

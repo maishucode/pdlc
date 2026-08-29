@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/integration-adapter.schema.json",
+  "title": "Integration Adapter Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "ownerDomain",
+    "version",
+    "description",
+    "appliesTo",
+    "permissions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "integration-adapter"
+    },
+    "id": {
+      "type": "string"
+    },
+    "ownerDomain": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "appliesTo": {
+      "type": "object"
+    },
+    "permissions": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

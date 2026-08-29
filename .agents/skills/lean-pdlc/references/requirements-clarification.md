@@ -1,6 +1,6 @@
 # Requirements clarification reference
 
-Use `pdlc/workflows/poc/requirements-policy.json` as the deterministic policy and `pdlc/templates/poc-requirements.md` as the document contract.
+Use `pdlc/delivery-flows/poc/controls/requirements.json` as the deterministic Flow Control and the Product Management Requirements Artifact Definition and templates as the document contract.
 
 ## Adaptive depth
 
@@ -22,9 +22,9 @@ Ask focused conversational rounds with no more than the policy's `maxQuestionsPe
 6. `dataIntegrations`: data model, persistence, classification, retention, integrations, credentials, and unavailable or corrupt data behavior.
 7. `scopeSuccess`: explicit in/out scope, measurable success and failure signals, and required evidence.
 
-Role assignments and timebox are delivery controls, not product requirements. Read them from the selected workflow's `deliveryDefaults`. When `collectDuringRequirements` is `false`, never ask the user to choose them during requirements clarification and never count them as an `RQ-xxx` decision. The Runner binds the configured role-assignment mode to the Build Readiness actor.
+Role assignments and timebox are delivery controls, not product requirements. Read them from the selected Delivery Flow's `controls.deliveryDefaults`. When `collectDuringRequirements` is `false`, never ask the user to choose them during requirements clarification and never count them as an `RQ-xxx` decision. The Runner binds the configured role-assignment mode to the Build Readiness actor.
 
-Applicable standards and defaults are also not product answers. Resolve them through [standard-defaults.md](standard-defaults.md), write them into the Requirements standards section, and do not count them as `RQ-xxx` decisions or `questionsAnswered`. They may satisfy the corporate baseline portion of UX, quality, security, architecture, or engineering coverage, but product-specific interaction, failure, data, scope, and success decisions still require clarification. For example, do not ask for the corporate blue palette or semantic-control baseline; do ask whether this product uses inline editing, Undo, confirmation, or another product behavior.
+Applicable Controls, Baselines, and Defaults are also not product answers. Resolve them through the current Stage context described in [domain-context.md](domain-context.md), write their references into the Draft without delaying the first question, and do not count them as `RQ-xxx` decisions or `questionsAnswered`. Expand concrete applications and provenance incrementally, completing them before final Requirements review. They may satisfy the corporate baseline portion of UX, quality, security, architecture, or engineering coverage, but product-specific interaction, failure, data, scope, and success decisions still require clarification. For example, do not ask for the corporate blue palette or semantic-control baseline; do ask whether this product uses inline editing, Undo, confirmation, or another product behavior.
 
 When choices help the user decide, provide only meaningful mutually exclusive options plus a custom-response path, subject to the active platform's interaction rules. Accept natural-language answers.
 
@@ -42,7 +42,7 @@ Use chat mode by default. If more questions remain than fit in one round, briefl
 
 Use only when `allowDocumentAnswers` is true and the user chooses it.
 
-1. Generate the policy's `questionDocumentPattern` from `pdlc/templates/poc-requirements-questions.md`, replacing `{recordId}` with the active POC ID.
+1. Generate the Flow Control's `questionDocumentPattern` from `pdlc/domains/product-management/artifacts/requirements/templates/questions.md`, replacing `{recordId}` with the active POC ID.
 2. Include all currently outstanding product questions; document mode is not limited to three questions.
 3. Give every question a stable ID, meaningful mutually exclusive options, `X) Other`, an empty `[Answer]:` tag, and an optional `[Notes]:` tag.
 4. Link the file, explain that the user may fill it directly, and stop. Do not proceed from an unfilled questionnaire.
@@ -70,10 +70,10 @@ Do not store raw conversation transcripts. Record the confirmed decision and its
 
 Before approval:
 
-1. Resolve every required topic, open question, contradiction, placeholder, applicable Principle Pack disposition, and standard default/override disposition.
+1. Resolve every required topic, open question, contradiction, placeholder, applicable Control disposition, Project Baseline, and Default/override disposition.
 2. Reconcile the Delivery Record with the Requirements document.
 3. Replace `pdlc:open-questions:pending` with `pdlc:open-questions:none`.
-4. Present the complete Requirements document link and a concise review summary covering behavior, edge cases, UX, NFRs, scope, data, success measures, principles, design, and a separately labelled workflow delivery-controls summary.
+4. Present the complete Requirements Artifact link and a concise review summary covering behavior, edge cases, UX, quality attributes, scope, data, success measures, Controls, Baselines, Defaults, design, and a separately labelled Delivery Flow controls summary.
 5. Only after presenting it, replace `pdlc:requirements-review:pending` with `pdlc:requirements-review:presented` and ask for explicit approval of the named document and Build Readiness.
 6. Stop. A short confirmation to an earlier clarification question is not final Requirements approval.
 

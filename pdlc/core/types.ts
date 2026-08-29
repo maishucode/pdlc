@@ -1,5 +1,4 @@
-export const WORKFLOW_IDS = ["poc", "implementation", "pdlc"] as const;
-export type WorkflowId = (typeof WORKFLOW_IDS)[number];
+export type DeliveryFlowId = string;
 
 export const ROLE_SLOTS = ["product", "developer", "qa"] as const;
 export type RoleSlot = (typeof ROLE_SLOTS)[number];
@@ -16,14 +15,6 @@ export type PocStatus = (typeof POC_STATUSES)[number];
 
 export const RISK_LEVELS = ["low", "medium", "high", "blocked"] as const;
 export type RiskLevel = (typeof RISK_LEVELS)[number];
-
-export const ENFORCEMENT_LEVELS = [
-  "required",
-  "risk-based",
-  "advisory",
-  "not-applicable",
-] as const;
-export type EnforcementLevel = (typeof ENFORCEMENT_LEVELS)[number];
 
 export const REQUIREMENTS_DEPTHS = ["minimal", "standard", "comprehensive"] as const;
 export type RequirementsDepth = (typeof REQUIREMENTS_DEPTHS)[number];
@@ -45,31 +36,34 @@ export type RequirementsCoverageTopic = (typeof REQUIREMENTS_COVERAGE_TOPICS)[nu
 export const COVERAGE_STATUSES = ["pending", "complete"] as const;
 export type CoverageStatus = (typeof COVERAGE_STATUSES)[number];
 
-export const STANDARD_PROFILE_LAYERS = ["harness", "project"] as const;
-export type StandardProfileLayer = (typeof STANDARD_PROFILE_LAYERS)[number];
+export const CONTROL_DISPOSITIONS = ["satisfied", "exception"] as const;
+export type ControlDisposition = (typeof CONTROL_DISPOSITIONS)[number];
 
-export const STANDARD_DEFAULT_POLICIES = ["constraint", "default"] as const;
-export type StandardDefaultPolicy = (typeof STANDARD_DEFAULT_POLICIES)[number];
+export const CONTROL_ENFORCEMENT_TYPES = ["automatic", "evidence", "approval"] as const;
+export type ControlEnforcementType = (typeof CONTROL_ENFORCEMENT_TYPES)[number];
 
-export const PRINCIPLE_DISPOSITIONS = ["adopted", "exception"] as const;
-export type PrincipleDisposition = (typeof PRINCIPLE_DISPOSITIONS)[number];
+export const KNOWLEDGE_KINDS = ["guidance", "default", "reference", "kb"] as const;
+export type KnowledgeKind = (typeof KNOWLEDGE_KINDS)[number];
 
-export const STAGE_PHASES = [
-  "discover",
-  "define",
-  "design",
-  "build",
-  "verify",
-  "release",
-  "outcome",
-] as const;
+export const CONTRIBUTION_MODES = ["restricted", "reviewed", "open"] as const;
+export type ContributionMode = (typeof CONTRIBUTION_MODES)[number];
+
+export const STAGE_PHASES = ["discover", "define", "design", "build", "verify", "release", "outcome"] as const;
 export type StagePhase = (typeof STAGE_PHASES)[number];
 
-export const JOURNEY_STATUSES = ["active", "planned"] as const;
-export type JourneyStatus = (typeof JOURNEY_STATUSES)[number];
+export const DELIVERY_FLOW_STATUSES = ["active", "planned", "deprecated"] as const;
+export type DeliveryFlowStatus = (typeof DELIVERY_FLOW_STATUSES)[number];
 
-export const JOURNEY_STAGE_INCLUSIONS = ["required", "conditional"] as const;
-export type JourneyStageInclusion = (typeof JOURNEY_STAGE_INCLUSIONS)[number];
+export const DELIVERY_FLOW_STAGE_INCLUSIONS = ["required", "conditional"] as const;
+export type DeliveryFlowStageInclusion = (typeof DELIVERY_FLOW_STAGE_INCLUSIONS)[number];
+
+export interface Applicability {
+  deliveryFlows?: string[];
+  stages?: string[];
+  riskTriggers?: string[];
+  technologies?: string[];
+  domains?: string[];
+}
 
 export interface EvidenceRef {
   kind: "file" | "url" | "ci" | "demo";
@@ -78,10 +72,16 @@ export interface EvidenceRef {
   capturedAt?: string;
 }
 
+export interface ControlApplication {
+  control: string;
+  disposition: ControlDisposition;
+  notes: string;
+}
+
 export interface PocDeliveryRecord {
-  schemaVersion: 1;
+  schemaVersion: 2;
   id: string;
-  workflow: "poc";
+  deliveryFlow: "poc";
   status: PocStatus;
   title: string;
   revision: number;
@@ -96,8 +96,9 @@ export interface PocDeliveryRecord {
     timebox: string;
   };
   requirements: {
+    artifactType: "product-management.requirements";
     documentRef: string;
-    depth: RequirementsDepth;
+    profile: RequirementsDepth;
     status: RequirementsStatus;
     clarification: {
       questionsAnswered: number;
@@ -118,14 +119,16 @@ export interface PocDeliveryRecord {
     level: RiskLevel;
     triggers: string[];
   };
-  principles: {
-    applicable: string[];
-    exceptions: string[];
-    applications: Array<{
-      pack: string;
-      disposition: PrincipleDisposition;
-      notes: string;
-    }>;
+  resolution: {
+    controls: {
+      applicable: string[];
+      exceptions: string[];
+      applications: ControlApplication[];
+    };
+    baselines: string[];
+    defaults: string[];
+    knowledge: string[];
+    capabilities: string[];
   };
   design: {
     summary: string;
@@ -151,12 +154,13 @@ export interface RequirementsDepthPolicy {
   requiredTopics: RequirementsCoverageTopic[];
 }
 
-export interface RequirementsPolicy {
+export interface RequirementsFlowControl {
   schemaVersion: 1;
   id: string;
   owner: string;
   version: string;
-  depths: Record<RequirementsDepth, RequirementsDepthPolicy>;
+  artifactType: "product-management.requirements";
+  profiles: Record<RequirementsDepth, RequirementsDepthPolicy>;
   questionRules: {
     maxQuestionsPerRound: number;
     requireOtherOption: boolean;
@@ -176,13 +180,162 @@ export interface StageDefinition {
   roleSlots: RoleSlot[];
   requirements: string[];
   outputs: string[];
+  inputArtifacts?: string[];
+  outputArtifacts?: string[];
 }
 
 export interface StageCatalog {
-  schemaVersion: 1;
+  schemaVersion: 2;
   catalogVersion: string;
   owner: string;
   stages: StageDefinition[];
+}
+
+export interface DeliveryFlowCatalogEntry {
+  id: string;
+  definition: string;
+}
+
+export interface DeliveryFlowCatalog {
+  schemaVersion: 1;
+  owner: string;
+  flows: DeliveryFlowCatalogEntry[];
+}
+
+export interface DeliveryFlowStageRef {
+  stageId: string;
+  inclusion: DeliveryFlowStageInclusion;
+  activationTags?: string[];
+}
+
+export interface DeliveryFlowControls {
+  initialStatus: string;
+  terminalStatuses: string[];
+  checkpoints: DeliveryFlowCheckpoint[];
+  deliveryDefaults: {
+    roleAssignmentMode: "approval-actor-all-roles";
+    timebox: string;
+    collectDuringRequirements: false;
+  };
+  constraints: {
+    productionUse: boolean;
+    externalIntegrations: string[];
+    allowSinglePersonAllRoles: boolean;
+  };
+  artifactProfiles?: Record<string, string>;
+  requiredCapabilities?: string[];
+}
+
+export interface DeliveryFlowDefinition {
+  schemaVersion: 2;
+  id: DeliveryFlowId;
+  name: string;
+  description: string;
+  status: DeliveryFlowStatus;
+  stageSequence: DeliveryFlowStageRef[];
+  controls?: DeliveryFlowControls;
+}
+
+export interface ExecutableDeliveryFlowDefinition extends DeliveryFlowDefinition {
+  status: "active";
+  controls: DeliveryFlowControls;
+}
+
+export interface DeliveryFlowCheckpoint {
+  id: string;
+  from: string[];
+  to?: string;
+  toByOutcome?: Record<string, string>;
+  ownerRole: RoleSlot;
+}
+
+export interface DomainManifest {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  description: string;
+  owners: string[];
+  policyApprovers: string[];
+  maintainers: string[];
+  contributionMode: {
+    artifacts: ContributionMode;
+    controls: ContributionMode;
+    knowledge: ContributionMode;
+    capabilities: ContributionMode;
+  };
+  defaultApplicability?: Applicability;
+}
+
+export interface ArtifactDefinition {
+  schemaVersion: 1;
+  id: string;
+  name: string;
+  description: string;
+  ownerDomain: string;
+  version: string;
+  format: "markdown" | "json" | "reference";
+  schemaRef?: string;
+  profiles: string[];
+  defaultTemplate?: string;
+  examples?: string[];
+}
+
+export interface ControlRule {
+  id: string;
+  statement: string;
+  enforcement: ControlEnforcementType;
+  requiredEvidence?: string[];
+  exceptionApprovers?: string[];
+  standardDefault?: {
+    key: string;
+    topic: RequirementsCoverageTopic;
+  };
+}
+
+export interface ControlPolicy {
+  schemaVersion: 1;
+  id: string;
+  title: string;
+  description: string;
+  ownerDomain: string;
+  version: string;
+  appliesTo: Applicability;
+  rules: ControlRule[];
+}
+
+export interface StandardDefaultEntry {
+  key: string;
+  title: string;
+  topic: RequirementsCoverageTopic;
+  statement: string;
+  rationale: string;
+  controlRefs: string[];
+}
+
+export interface KnowledgeAsset {
+  schemaVersion: 1;
+  id: string;
+  title: string;
+  description: string;
+  ownerDomain: string;
+  version: string;
+  kind: KnowledgeKind;
+  appliesTo: Applicability;
+  contentRef?: string;
+  defaults?: StandardDefaultEntry[];
+}
+
+export interface ResolvedStandardDefault {
+  key: string;
+  title: string;
+  topic: RequirementsCoverageTopic;
+  statement: string;
+  rationale: string;
+  sourceRef: string;
+  sourceLayer: "domain" | "project" | "harness";
+  locked: boolean;
+  controlRefs: string[];
+  shadowedSources: string[];
 }
 
 export const PLUGIN_GUIDANCE_MODES = ["draft", "implement", "verify"] as const;
@@ -204,18 +357,38 @@ export interface PluginStageBindingsDescriptor {
 }
 
 export interface PluginManifest {
-  schemaVersion: 1;
-  name: string;
+  schemaVersion: 2;
+  kind: "plugin";
+  id: string;
+  ownerDomain: string;
   version: string;
   description: string;
-  pdlc: {
-    workflows: ["poc"];
-    defaultEnabled: boolean;
-    contributes: {
-      stageBindings: string;
-      agents: string;
-      skills: string;
-    };
+  deliveryFlows: string[];
+  defaultEnabled: boolean;
+  permissions: {
+    filesystem: "read" | "write";
+    network: boolean;
+    externalWrites: boolean;
+  };
+  contributes: {
+    stageBindings: string;
+    agents: string;
+    skills: string;
+  };
+}
+
+export interface IntegrationAdapterManifest {
+  schemaVersion: 1;
+  kind: "integration-adapter";
+  id: string;
+  ownerDomain: string;
+  version: string;
+  description: string;
+  appliesTo: Applicability;
+  permissions: {
+    network: boolean;
+    credentialRefs: string[];
+    externalWrites: boolean;
   };
 }
 
@@ -227,7 +400,9 @@ export interface DiscoveredPlugin {
 
 export interface PluginGuidanceContribution {
   plugin: string;
+  ownerDomain: string;
   version: string;
+  permissions: PluginManifest["permissions"];
   agent: { id: string; path: string };
   skills: Array<{ name: string; path: string }>;
   mode: PluginGuidanceMode;
@@ -236,119 +411,50 @@ export interface PluginGuidanceContribution {
 }
 
 export interface PluginGuidanceResolution {
-  workflow: "poc";
+  deliveryFlow: string;
   stage: StageDefinition;
   contributions: PluginGuidanceContribution[];
 }
 
-export interface JourneyStageRef {
-  stageId: string;
-  inclusion: JourneyStageInclusion;
-  activationTags?: string[];
-}
-
-export interface JourneyDefinition {
+export interface ProjectBaseline {
   schemaVersion: 1;
-  id: WorkflowId;
-  name: string;
-  description: string;
-  status: JourneyStatus;
-  stageSequence: JourneyStageRef[];
+  domain: string;
+  status: "approved";
+  approvedBy: string;
+  approvedAt: string;
+  decisions: Record<string, string | number | boolean>;
+  references: string[];
 }
 
-export interface WorkflowCheckpoint {
-  id: string;
-  from: string[];
-  to?: string;
-  toByOutcome?: Record<string, string>;
-  ownerRole: RoleSlot;
-}
-
-export interface WorkflowDefinition {
-  schemaVersion: 1;
-  id: WorkflowId;
-  name: string;
-  description: string;
-  initialStatus: string;
-  terminalStatuses: string[];
-  journeyId: WorkflowId;
-  checkpoints: WorkflowCheckpoint[];
-  deliveryDefaults: {
-    roleAssignmentMode: "approval-actor-all-roles";
-    timebox: string;
-    collectDuringRequirements: false;
-  };
-  constraints: {
-    productionUse: boolean;
-    externalIntegrations: string[];
-    allowSinglePersonAllRoles: boolean;
-  };
-}
-
-export interface Principle {
-  id: string;
-  title: string;
-  requirement: string;
-  standardDefault?: {
-    key: string;
-    topic: RequirementsCoverageTopic;
-    policy: StandardDefaultPolicy;
-  };
-}
-
-export interface PrinciplePack {
+export interface ProjectDefaultProfile {
   schemaVersion: 1;
   id: string;
-  name: string;
-  owner: string;
+  domain: string;
   version: string;
-  appliesTo: {
-    workflows: WorkflowId[];
-    stages: string[];
-    riskTriggers?: string[];
-    technologies?: string[];
-    domains?: string[];
-  };
-  enforcement: Record<WorkflowId, EnforcementLevel>;
-  principles: Principle[];
-}
-
-export interface StandardDefaultEntry {
-  key: string;
-  title: string;
-  topic: RequirementsCoverageTopic;
-  statement: string;
-  rationale: string;
-  principleRefs: string[];
-}
-
-export interface StandardProfile {
-  schemaVersion: 1;
-  id: string;
-  name: string;
-  owner: string;
-  version: string;
-  layer: StandardProfileLayer;
-  appliesTo: {
-    workflows: WorkflowId[];
-    stages: string[];
-    technologies?: string[];
-    domains?: string[];
-  };
+  appliesTo: Applicability;
   defaults: StandardDefaultEntry[];
 }
 
-export interface ResolvedStandardDefault {
-  key: string;
-  title: string;
-  topic: RequirementsCoverageTopic;
-  statement: string;
-  rationale: string;
-  sourceRef: string;
-  sourceLayer: "enterprise" | StandardProfileLayer;
-  locked: boolean;
-  principleRefs: string[];
-  shadowedSources: string[];
+export interface ResolvedControl {
+  ref: string;
+  ownerDomain: string;
+  policy: ControlPolicy;
+  matchedStages: string[];
+  source: "enterprise" | "project";
+}
+
+export interface ResolvedKnowledge {
+  ref: string;
+  ownerDomain: string;
+  asset: KnowledgeAsset;
+  matchedStages: string[];
+  contentPath?: string;
+}
+
+export interface ResolvedBaseline {
+  ref: string;
+  domain: string;
+  baseline: ProjectBaseline;
 }
 
 export interface AuditEvent {

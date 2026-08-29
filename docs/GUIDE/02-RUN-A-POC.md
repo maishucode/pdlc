@@ -1,6 +1,6 @@
 # 02. Run a POC
 
-This guide is for the person using Lean PDLC in a Copilot conversation. You describe the outcome; the Agent maintains the workflow files and invokes internal checks when needed.
+This guide is for the person using Lean PDLC in a Copilot conversation. You describe the outcome; the Agent maintains the Delivery Flow artifacts and invokes internal checks when needed.
 
 ## Start with an idea
 
@@ -12,7 +12,9 @@ Use a short outcome-oriented request:
 
 The Agent opens a draft POC. It does not start coding yet.
 
-You do not select Plugin Agents separately. Whenever the POC enters a Stage, the main Agent resolves enabled Plugin contributions and reads their Agent and Skill instructions inside the same conversation. For example, the bundled UX Plugin enriches requirements questions and later participates in UX design, React implementation, and verification.
+Startup uses a fast path: the Agent creates a minimal Draft, resolves the Requirements Stage context once, reads any returned Plugin contribution, and asks the first clarification round. Full validation, future Stage resolution, detailed Control application, design, and verification planning happen only when needed and are completed before Build Readiness.
+
+You do not select Plugin Agents separately. Before each Stage, the main Agent resolves applicable Controls, Project Baselines and Defaults, relevant Knowledge, and enabled Capabilities. For example, the UX Domain supplies both mandatory experience Controls and an optional UX Plugin.
 
 ## Answer requirement questions by choosing options
 
@@ -56,11 +58,11 @@ Requirements summary
   -> UX and failure states
   -> data and safety boundaries
   -> success criteria and verification approach
-  -> applicable standards and exceptions
+  -> mandatory Controls, Project Baselines, Defaults, and exceptions
   -> proposed build
 ```
 
-Review it and explicitly approve the named Requirements document and Build Readiness. This is the one Phase 1 approval gate before construction. A material requirement change invalidates the approval and requires a new review.
+Review it and explicitly approve the named Requirements Artifact and Build Readiness. This is the one POC approval checkpoint before construction. A material requirement or Control-disposition change invalidates the approval and requires a new review.
 
 ## Follow progress or resume later
 
@@ -74,10 +76,10 @@ Use conversational intents:
 
 The Agent reports the active Stage, what changed, blocking questions, and the next action. Do not run the PDLC Runner manually; that is internal Agent/maintainer machinery.
 
-## What Phase 1 does and does not do
+## What the current v2 POC does and does not do
 
-Phase 1 can guide a POC through requirements, lightweight design, Build Readiness, implementation, and evidence collection. It does not yet execute formal Commit, Verify, or Decide transitions, nor does it integrate JIRA, XRAY, CI/CD, deployment, or production release.
+The v2 POC can guide work through Requirements, context resolution, lightweight design, Build Readiness, implementation, and evidence collection. It does not yet execute formal Commit, Verify, or Decide transitions, nor does it integrate JIRA, XRAY, CI/CD, deployment, or production release.
 
 ## Next
 
-Continue with [03. Build a Lean PDLC Plugin](03-BUILD-A-COPILOT-PLUGIN.md) if your team wants to package specialized Agents and Skills into the POC flow.
+Continue with [03. Build a Domain Plugin](03-BUILD-A-COPILOT-PLUGIN.md) if your team wants to package specialized Agents and Skills into a Delivery Flow.

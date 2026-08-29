@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/project-default.schema.json",
+  "title": "Project Default Profile",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "domain",
+    "version",
+    "appliesTo",
+    "defaults"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "domain": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "appliesTo": {
+      "type": "object"
+    },
+    "defaults": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}

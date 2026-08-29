@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "poc-requirements",
+  "owner": "product-governance-team",
+  "version": "1.1.0",
+  "artifactType": "product-management.requirements",
+  "profiles": {
+    "minimal": {
+      "minimumAnsweredQuestions": 3,
+      "requiredTopics": [
+        "productContext",
+        "functionalBehavior",
+        "dataIntegrations",
+        "scopeSuccess"
+      ]
+    },
+    "standard": {
+      "minimumAnsweredQuestions": 8,
+      "requiredTopics": [
+        "productContext",
+        "functionalBehavior",
+        "userScenarios",
+        "uxInteraction",
+        "qualityAttributes",
+        "dataIntegrations",
+        "scopeSuccess"
+      ]
+    },
+    "comprehensive": {
+      "minimumAnsweredQuestions": 15,
+      "requiredTopics": [
+        "productContext",
+        "functionalBehavior",
+        "userScenarios",
+        "uxInteraction",
+        "qualityAttributes",
+        "dataIntegrations",
+        "scopeSuccess"
+      ]
+    }
+  },
+  "questionRules": {
+    "maxQuestionsPerRound": 3,
+    "requireOtherOption": true,
+    "analyzeContradictions": true,
+    "requireFinalDocumentReview": true,
+    "allowDocumentAnswers": true,
+    "questionDocumentPattern": ".pdlc/questions/{recordId}-requirements.md",
+    "answerTag": "[Answer]:"
+  }
+}

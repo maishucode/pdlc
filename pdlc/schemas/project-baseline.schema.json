@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/project-baseline.schema.json",
+  "title": "Project Baseline",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "domain",
+    "status",
+    "approvedBy",
+    "approvedAt",
+    "decisions",
+    "references"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "domain": {
+      "type": "string"
+    },
+    "status": {
+      "const": "approved"
+    },
+    "approvedBy": {
+      "type": "string"
+    },
+    "approvedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "decisions": {
+      "type": "object",
+      "minProperties": 1
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

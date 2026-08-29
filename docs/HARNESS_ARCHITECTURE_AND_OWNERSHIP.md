@@ -1,536 +1,344 @@
-# Lean PDLC Harness Architecture and Ownership
+# Harness Architecture and Ownership
 
 ## 1. Purpose
 
-This document explains the enterprise architecture of the Lean PDLC Harness, the responsibility of each layer, the organizational owner of each shared folder, and the boundary between Harness maintenance and delivery execution.
+The Harness coordinates product delivery while keeping three concerns separate:
 
-It is the primary presentation document for the Harness. It describes the target architecture and clearly identifies which capabilities are executable today and which are reserved for later phases.
+1. **Delivery Model** — what work happens and in what order.
+2. **Domain Model** — who owns the artifacts, mandatory rules, knowledge, and capabilities used by that work.
+3. **Execution State** — what this delivery resolved, decided, approved, and evidenced.
 
-## 2. Executive summary
+This separation lets the platform stay small while allowing expert teams and project teams to contribute independently.
 
-The Harness is based on one separation-of-concerns rule:
+## 2. Core concepts
 
-> Professional functions define standards, PDLC Governance defines lifecycle policy, Harness Engineering implements deterministic controls, Developer Experience exposes portable Agent entry points, and delivery teams execute workflows and provide evidence.
+### Stage
 
-The design avoids two common failure modes:
+A Stage is a canonical reusable work unit. It defines stable intent, role slots, requirements, outputs, and optional input/output Artifact types. It does not define sequence and is not automatically a human checkpoint.
 
-- Platform-specific workflow copies that drift between Codex and GitHub Copilot.
-- A large script that mixes conversation, governance policy, project commands, integrations, and workflow state.
+### Delivery Flow
 
-The Harness therefore uses a shared declarative policy layer, a small portable Agent guidance layer, and a deterministic TypeScript Runner.
+A Delivery Flow is the single lifecycle composition concept. It contains:
 
-## 3. Architecture at a glance
+- ordered Stage references;
+- required or conditional inclusion;
+- activation tags;
+- statuses and terminal outcomes for executable Flows;
+- checkpoints;
+- Flow constraints;
+- role-assignment and timebox behavior;
+- Artifact profiles and required Capabilities.
+
+There is no separate Workflow or User Journey model.
+
+### Domain
+
+A Domain is an ownership and organization boundary, such as Product Management, UX, Security, Solution Architecture, or Data Platform. A Domain may own any combination of:
+
+- Artifact Definitions;
+- Controls;
+- Knowledge;
+- Plugins;
+- Integration Adapters.
+
+A Domain does not need content in every category. UX can own Controls, guidance, Defaults, and a Plugin. Data Platform can initially own only a Databricks KB.
+
+### Artifact Definition
+
+An Artifact Definition is the governed contract for a deliverable such as Requirements or Story. The owning Domain defines format, schema, profiles, templates, and examples. Stages consume and produce Artifact type references rather than copying templates.
+
+### Control
+
+A Control is mandatory. Each policy declares applicability, version, owner Domain, rules, enforcement type, evidence, exception approvers, and any locked standard default. An applicable Control must be satisfied or formally excepted.
+
+### Knowledge
+
+Knowledge is useful context but is not mandatory by itself:
+
+- Guidance — recommended practices;
+- Default — automatic, normally overrideable decisions;
+- Reference — examples and reference implementations;
+- KB — concrete organizational or technical knowledge.
+
+If knowledge must become enforceable, the owning team creates a Control that references or requires it.
+
+### Plugin
+
+A Plugin contributes Stage-aware agent behavior and Skills. It declares owner Domain, supported Delivery Flows, permissions, Stage bindings, and approval boundaries. A Plugin extends the Harness; it does not own Flow state or governance decisions.
+
+### Integration Adapter
+
+An Integration Adapter encapsulates authenticated access to an external system and declares network, credential, and external-write permissions. It remains distinct from Plugin because connection concerns and orchestration concerns evolve differently. A Plugin may invoke an Adapter.
+
+### Project Overlay
+
+The Project Overlay adds project-specific context under `.pdlc/project/domains/<domain>/`:
+
+- `baseline.json` — approved facts that later Stages should not ask again;
+- `controls/` — cumulative project-specific mandatory rules;
+- `defaults/` — project preferences that can override shared Defaults;
+- `knowledge/` — project-local guidance and references.
+
+Project content cannot weaken or replace enterprise Controls.
+
+### Delivery Record
+
+The Delivery Record is the execution truth. It stores Flow state, role assignment, Requirements approval hash, risk and technology context, resolved Controls/Baselines/Defaults/Knowledge/Capabilities, exceptions, evidence, and outcome.
+
+## 3. Resolution lifecycle
+
+Before every Stage, the Runner resolves context using the selected Flow, active Stage, risk triggers, technologies, and domains:
 
 ```text
-Delivery user or Agent
-        |
-        v
-1. Harness Adapters
-   Codex / GitHub Copilot discovery, capability, and approval mapping
-        |
-        v
-2. Portable Guidance
-   Natural-language orchestration and requirements clarification
-        |
-        v
-   +---------------------------------------------------------------+
-   | 3. Delivery Model                                             |
-   | Canonical Stages -> User Journey -> Workflow checkpoints      |
-   |                                                               |
-   | 4. Role Definitions             5. Policy Inputs              |
-   | Product / Developer / QA        Principle Packs and defaults  |
-   +---------------------------------------------------------------+
-        |
-        v
-6. TypeScript Runner and Core
-   Schema validation, policy resolution, readiness, state, and audit
-        |
-        +-----------------------------+
-        |                             |
-        v                             v
-Runtime Delivery Data          7. Integration Adapters
-Records, requirements,         JIRA, XRAY, CI/CD, ITSM,
-evidence, and audit            deployment, and health evidence
+Flow + Stage + delivery context
+  -> enterprise Controls + project Controls
+  -> Project Baselines
+  -> locked Control defaults + project Defaults + Domain Defaults
+  -> relevant Domain Knowledge + project Knowledge
+  -> eligible Plugins and Integration Adapters
+  -> Stage execution
 ```
 
-The main execution chain is Adapter → Guidance → resolved Delivery Model → Runner. Roles, Principle Packs, and standards are governed inputs to that chain, not extra conversational phases. Runtime state is a separate data plane:
+Resolution is a system operation, not a Stage. This is why the old applicability step is absent from v2.
 
-```text
-.pdlc/
-  records/        Delivery Records and controlled workflow state
-  requirements/   Reviewed requirements and build contracts
-  questions/      Optional document-mode clarification input
-  evidence/       Test, build, security, browser, and approval evidence
-  audit/          Append-only material workflow events
-  project/        Project-owned defaults; not enterprise Harness policy
-```
+Default precedence is:
 
-### 3.1 Responsibility summary
+1. locked Control default;
+2. Project Default;
+3. Domain Default.
 
-| Responsibility | Accountable owner | Main source of truth |
-|---|---|---|
-| Lifecycle vocabulary and reusable Stage semantics | PDLC Governance | `pdlc/stages/` |
-| POC, Implementation, and PDLC composition | PDLC Governance | `pdlc/journeys/` |
-| Status, checkpoints, constraints, and delivery defaults | PDLC Governance | `pdlc/workflows/` |
-| Requirements clarification quality and templates | Product Governance | `pdlc/workflows/*/requirements-policy.json`, `pdlc/templates/` |
-| Business Architecture, Solution Architecture, AI, UX, Quality, Security, and Operations policy | Each named professional function | `pdlc/principles/<area>/` |
-| Deterministic validation, readiness, state, and audit | Harness Engineering | `pdlc/cli.ts`, `pdlc/core/`, `pdlc/schemas/` |
-| Codex and GitHub Copilot experience | Developer Experience | `AGENTS.md`, `.agents/`, `.github/`, optional `.codex/` |
-| JIRA, XRAY, CI/CD, deployment, and ITSM implementation | Relevant enterprise platform team | `pdlc/integrations/` implementations |
-| Project-specific preferences | Project team | `.pdlc/project/standards/` |
-| Delivery execution and evidence | Assigned Product, Developer, and QA role holders | `.pdlc/` runtime artifacts |
+Controls are cumulative. Project Controls never replace enterprise Controls.
 
-### 3.2 Two distinct kinds of ownership
+## 4. End-to-End Control Chain
 
-The Harness distinguishes organizational maintenance ownership from delivery execution accountability:
+The Harness control model is a chain of distinct authorities. They are evaluated together, but they must not be collapsed into one generic policy type because they have different owners, override rules, and enforcement mechanisms.
 
-| Ownership type | Question answered | Example |
-|---|---|---|
-| Harness or policy owner | Who defines and approves the reusable rule? | UX Governance owns the UX Principle Pack. |
-| Delivery role holder | Who performs or accepts this work for one delivery? | The assigned Developer applies the UX rules during implementation. |
+### 4.1 Control terminology
 
-Professional policy owners do not need to participate in every delivery. Their versioned policy is automatically applied. Direct involvement is needed only for policy changes, exceptions, or escalated risk.
-
-See [Canonical Stages, User Journeys, and Principle Mapping](STAGE_AND_JOURNEY_MODEL.md) for all 30 Stages, the three Journey compositions, and the procedure for changing them.
-
-## 4. Layer responsibilities
-
-### 4.1 Harness Adapters
-
-Harness Adapters make the shared Harness discoverable and usable on a particular Agent platform.
-
-They may:
-
-- Expose `/pdlc`, a custom Agent, a Skill, or an equivalent natural-language entry point.
-- Declare platform capabilities.
-- Map command approval behavior.
-- Validate that the platform can find the shared Skill and repository instructions.
-
-They must not:
-
-- Define or copy Stages, User Journeys, workflows, gates, Principle Packs, or Delivery Record state.
-- weaken a Core validation rule.
-- create a platform-specific workflow branch.
-
-Primary locations:
-
-- `.github/` for GitHub Copilot.
-- `.codex/` when an optional Codex-specific adapter is required.
-- `pdlc/harnesses/` for platform-neutral adapter contracts and validation.
-
-### 4.2 Portable Guidance
-
-Portable Guidance is the conversational orchestration layer used by every supported Agent platform.
-
-It is responsible for:
-
-- Selecting or resuming a workflow.
-- Reading current delivery state.
-- Asking product clarification questions in controlled batches.
-- Loading applicable roles, principles, standards, and templates.
-- Preparing requirements and checkpoint summaries.
-- Calling the internal Runner only for readiness checks or implemented state transitions.
-
-It is not the authority for controlled workflow state. The Runner remains authoritative.
-
-Primary locations:
-
-- `AGENTS.md`
-- `.agents/skills/lean-pdlc/`
-
-### 4.3 Delivery Model: Stages, Journeys, and Workflows
-
-The Delivery Model describes the lifecycle without binding it to an Agent platform. It has three deliberately separate parts:
-
-- The canonical Stage Catalog defines reusable work intent, role slots, requirements, and outputs.
-- User Journeys compose ordered Stage references and activate contextual Stages through tags.
-- Executable Workflows reference a Journey and define statuses, delivery defaults, constraints, and a small number of controlled checkpoints.
-
-Primary locations:
-
-- `pdlc/stages/`
-- `pdlc/journeys/`
-- `pdlc/workflows/`
-
-The POC Journey and Workflow are executable in Phase 1. Implementation and end-to-end PDLC Journey compositions are defined as planned models, but their Workflow state engines and integrations remain unavailable.
-
-### 4.4 Role Definitions
-
-Role definitions describe logical accountability during a delivery:
-
-- Product owns the problem, requirements, scope, success criteria, and outcome decision.
-- Developer owns the smallest suitable design, implementation, and technical evidence.
-- QA owns testability, verification quality, evidence challenge, and sign-off criteria.
-
-A person may fill multiple role slots unless a risk or governance rule requires separation of duties.
-
-These delivery role slots are different from the organizational teams that maintain the Harness.
-
-Primary location: `pdlc/roles/`.
-
-### 4.5 Principle Packs and Standard Defaults
-
-Professional departments define reusable policy in independently owned Principle Pack folders.
-
-A pack declares:
-
-- Its owner and semantic version.
-- Applicability by workflow, stage, risk, technology, or domain.
-- Enforcement as required, risk-based, advisory, or not applicable.
-- Concrete requirements and optional automatic standard defaults.
-
-Standards resolve in this order:
-
-1. Locked enterprise constraints from Principle Packs.
-2. Project defaults from `.pdlc/project/standards/`.
-3. Overrideable enterprise defaults from Principle Packs.
-4. Generic Harness defaults from `pdlc/defaults/harness/`.
-
-A project may replace a recommendation but may not weaken a locked enterprise constraint.
-
-Primary locations:
-
-- `pdlc/principles/`
-- `pdlc/defaults/harness/`
-- `.pdlc/project/standards/`
-
-### 4.6 TypeScript Runner and Core
-
-The Runner is a deterministic internal Harness API, not an end-user interface.
-
-It owns:
-
-- Schema validation.
-- Stage, Journey, Workflow, Principle Pack, and Standard Profile cross-reference validation.
-- Conditional Journey resolution from delivery-context tags.
-- Requirements and Build Readiness checks.
-- Standard resolution and locked-constraint conflict detection.
-- Controlled state transitions when implemented.
-- Optimistic revision control and file locking.
-- Content hashes and approval binding.
-- Append-only audit events.
-- Portability and entry-point validation.
-
-The Runner must not execute arbitrary project scripts, install dependencies, deploy applications, or embed platform-specific logic.
-
-Primary locations:
-
-- `pdlc/cli.ts`
-- `pdlc/core/`
-- `pdlc/schemas/`
-- `pdlc/tests/`
-
-### 4.7 Integration Adapters
-
-Integration Adapters isolate external enterprise systems from the Core.
-
-The Core depends on stable contracts for:
-
-- Work items such as JIRA stories.
-- Test management such as XRAY.
-- Build, deployment, and runtime evidence.
-- Release or ITSM controls.
-
-Harness Engineering owns the contracts. The platform team for each external system should own its concrete adapter implementation.
-
-Primary location: `pdlc/integrations/`.
-
-No external integration is active in the Phase 1 POC workflow.
-
-## 5. Organizational ownership model
-
-### 5.1 PDLC Governance
-
-PDLC Governance decides what the lifecycle requires.
-
-Owns:
-
-- Canonical Stage semantics and User Journey composition.
-- Workflow status and checkpoint policy.
-- Role model and separation-of-duty policy.
-- Workflow constraints and delivery defaults.
-- Lifecycle terminology and progression rules.
-- Approval of major schema semantics that affect governance.
-
-Primary folders:
-
-- `pdlc/stages/`
-- `pdlc/journeys/`
-- `pdlc/workflows/`
-- `pdlc/roles/`
-- Governance sections of `docs/`
-
-### 5.2 Product Governance
-
-Product Governance owns requirement-quality policy.
-
-Owns:
-
-- Clarification depth and required coverage topics.
-- Minimum traceable product decisions.
-- Question batching and document-mode rules.
-- Requirements and questionnaire templates.
-- Product readiness expectations.
-
-Primary folders:
-
-- `pdlc/workflows/*/requirements-policy.json`
-- `pdlc/templates/`
-
-### 5.3 Harness Engineering
-
-Harness Engineering implements and operates the deterministic engine.
-
-Owns:
-
-- CLI and Core TypeScript.
-- Schemas and validation behavior.
-- Atomic persistence, revision control, locking, hashing, and audit.
-- Harness tests and portability tests.
-- Shared adapter and integration contracts.
-
-Primary folders:
-
-- `pdlc/cli.ts`
-- `pdlc/core/`
-- `pdlc/schemas/`
-- `pdlc/tests/`
-- `pdlc/harnesses/`
-- `pdlc/integrations/contract.ts`
-
-### 5.4 Developer Experience and AI Coding Platform
-
-Developer Experience owns platform discovery and interaction ergonomics.
-
-Owns:
-
-- Shared Skill packaging and repository instructions with Governance review.
-- GitHub Copilot and optional Codex adapter configuration.
-- Platform capability and approval-policy mapping.
-- Cross-platform conformance validation.
-
-Primary folders:
-
-- `AGENTS.md`
-- `.agents/`
-- `.github/`
-- `.codex/` when present
-- `pdlc/harnesses/`
-
-### 5.5 Professional governance functions
-
-Professional functions own their Principle Packs, not the complete workflow.
-
-| Area | Organizational owner | Folder | Current status |
-|---|---|---|---|
-| Business Architecture | Business Architecture Team | `pdlc/principles/business-architecture/` | Reserved; pack not yet defined |
-| Solution Architecture | Solution Architecture Team | `pdlc/principles/solution-architecture/` | Mock baseline implemented |
-| AI SDLC/PDLC Governance | AI Governance Team | `pdlc/principles/ai-governance/` | Reserved; pack not yet defined |
-| UX Standards | UX Governance Team | `pdlc/principles/ux/` | Mock baseline implemented |
-| Quality | QA Governance Team | `pdlc/principles/quality/` | Reserved; pack not yet defined |
-| Security | Security Team | `pdlc/principles/security/` | Baseline implemented |
-| Operations | Platform Operations Team | `pdlc/principles/operations/` | Reserved; pack not yet defined |
-
-Professional owners do not need to join every delivery. Their approved constraints are loaded and enforced automatically. They become directly involved when policy changes, exceptions, or risk escalation require owner review.
-
-### 5.6 Enterprise integration teams
-
-Integration ownership is split:
-
-| Asset | Primary owner |
+| Term | Meaning |
 |---|---|
-| Generic adapter interfaces | Harness Engineering |
-| JIRA implementation | Atlassian or Work Management Platform Team |
-| XRAY implementation | QA Tooling Team |
-| CI/CD evidence implementation | DevOps or Delivery Platform Team |
-| Deployment and health implementation | Platform Operations Team |
-| Release or ITSM implementation | Release Governance or Service Management Team |
+| Harness Invariant | A non-configurable integrity or safety rule enforced by Core code or schema |
+| Delivery Flow Control | A rule intrinsic to how one Delivery Flow operates |
+| Stage Completion Contract | The stable conditions and outputs that define completion of a canonical Stage |
+| Domain Control | A mandatory professional or enterprise rule owned by an expert Domain |
+| Project Control | A mandatory project-specific addition in the Project Overlay |
+| Baseline / Default | Resolved delivery context; not a Control by itself, but it must not conflict with one |
+| Control Exception | A governed authorization to deviate from one applicable Control; never an implicit override |
 
-### 5.7 Delivery execution roles
+`Control` means mandatory. Guidance, Defaults, References, KB, and Plugin advice do not become mandatory unless a Control or Flow explicitly requires them.
 
-These are logical delivery accountabilities rather than required headcount. One person may fill all three in a low-risk POC; formal workflows may require separation at selected checkpoints.
-
-| Runtime role | Accountable delivery work | Typical Stage coverage |
-|---|---|---|
-| Product | Problem, user, hypothesis, scope, requirements, acceptance criteria, success measures, approval, and outcome decision | Discover, Define, and Outcome |
-| Developer | Technology classification, solution design, implementation, developer verification, technical evidence, deployment support | Design, Build, Verify, and Release |
-| QA | Testability, test strategy, test cases, execution evidence, acceptance evaluation, and sign-off | Define, Design, Verify, and Release |
-
-Release tollgates are controlled decisions, not a permanent fourth delivery role. Operations, Security, or Release Governance may be attached as approvers when policy or risk requires it.
-
-## 6. Directory ownership matrix
-
-| Path | Primary owner | Required reviewers | Responsibility |
-|---|---|---|---|
-| `AGENTS.md` | Harness Governance | Developer Experience, Harness Engineering | Always-on repository control boundaries |
-| `.agents/skills/lean-pdlc/` | Harness Governance | Harness Engineering, Developer Experience | Canonical portable Agent behavior |
-| `.github/` | Developer Experience | Harness Governance | GitHub Copilot thin adapter |
-| `.codex/` | Developer Experience | Harness Governance | Optional Codex thin adapter |
-| `pdlc/cli.ts` | Harness Engineering | PDLC Governance for behavior changes | Single Runner entry point |
-| `pdlc/core/` | Harness Engineering | Security or Governance when relevant | Deterministic engine |
-| `pdlc/stages/` | PDLC Governance | Product, Engineering, QA governance | Canonical reusable Stage semantics |
-| `pdlc/journeys/` | PDLC Governance | Product, Engineering, QA governance | User Journey composition and conditions |
-| `pdlc/workflows/` | PDLC Governance | Product, Engineering, QA governance | Executable status, defaults, constraints, and checkpoints |
-| `pdlc/roles/` | PDLC Governance | Product, Engineering, QA leadership | Logical delivery accountability |
-| `pdlc/principles/<area>/` | Named professional function | Harness Engineering for schema compatibility | Enterprise professional policy |
-| `pdlc/defaults/harness/` | Harness Product Team | Harness Engineering | Generic overrideable defaults |
-| `pdlc/templates/` | Product Governance | PDLC Governance, QA Governance | Requirements and question artifacts |
-| `pdlc/schemas/` | Harness Engineering | PDLC Governance | Machine contracts |
-| `pdlc/harnesses/` | Developer Experience | Harness Engineering | Platform adapter contracts and validation |
-| `pdlc/integrations/` | Harness Engineering | Relevant integration platform team | External-system contracts and adapters |
-| `pdlc/tests/` | Harness Engineering | Component owners for changed policy | Harness regression and conformance tests |
-| `docs/` | Harness Product Team | PDLC Governance, Harness Engineering | Architecture, operating model, and roadmap |
-| `.pdlc/` | Delivery team and Runner | Role owner at a checkpoint | Runtime delivery data; not Harness source |
-
-Actual GitHub team handles must be configured in `.github/CODEOWNERS` by the adopting enterprise. This repository provides `.github/CODEOWNERS.template` but does not invent deployable organization handles.
-
-## 7. Canonical repository structure
+### 4.2 The complete chain
 
 ```text
-AGENTS.md
-.agents/
-  skills/lean-pdlc/                 Canonical portable guidance
-.github/
-  copilot-instructions.md           Thin Copilot discovery layer
-  agents/lean-pdlc.agent.md         Optional Copilot custom Agent
-  prompts/pdlc.prompt.md            Optional Copilot IDE entry point
-  workflows/copilot-setup-steps.yml Copilot cloud-agent environment setup
-pdlc/
-  README.md                         Shared Harness source map
-  cli.ts                            Single internal Runner
-  core/                             Deterministic platform-neutral engine
-  stages/catalog.json               Canonical 30-Stage catalog
-  journeys/
-    poc.json                        Active POC composition
-    implementation.json             Planned Implementation composition
-    pdlc.json                        Planned end-to-end composition
-  workflows/
-    poc/                            Executable Phase 1 workflow
-    implementation/                 Reserved, not executable
-    pdlc/                           Reserved, not executable
-  roles/                            Product, Developer, and QA role slots
-  principles/
-    ownership.json                  Professional ownership registry
-    business-architecture/          Reserved
-    solution-architecture/          Existing mock baseline
-    ai-governance/                  Reserved
-    ux/                             Existing mock baseline
-    quality/                        Reserved
-    security/                       Existing baseline
-    operations/                     Reserved
-  defaults/harness/                 Generic overrideable Harness defaults
-  templates/                        Shared requirements artifacts
-  schemas/                          Machine-readable contracts
-  harnesses/                        Platform adapter contracts
-  integrations/                     External-system contracts
-  tests/                            Harness regression tests
-.pdlc/                              Runtime delivery state and evidence
-docs/                               Architecture and roadmap
+1. Harness Invariants
+   Schema integrity, registered references, content hashes,
+   state mutation boundaries, permission boundaries, audit rules
+                |
+                v
+2. Delivery Flow Controls
+   Status model, checkpoints, constraints, role/timebox behavior,
+   Artifact profiles, required Capabilities, Flow-local controls
+                |
+                v
+3. Stage Completion Contract
+   Canonical Stage intent, role slots, requirements, outputs,
+   input/output Artifact types
+                |
+                v
+4. Enterprise Domain Controls
+   Mandatory rules selected by Flow, Stage, risk, technology,
+   and delivery-domain context
+                |
+                v
+5. Project Controls
+   Additional mandatory rules from the Project Overlay;
+   cumulative with enterprise Controls
+                |
+                v
+6. Baseline and Default Conflict Resolution
+   Apply approved Project Baselines and resolved Defaults;
+   reject conflicts with locked or applicable Controls
+                |
+                v
+7. Effective Control Set
+   Control rules + enforcement mode + required evidence
+   + exception approvers + provenance
+                |
+                v
+8. Stage Execution and Enforcement
+   Agent and Runner apply automatic checks, collect evidence,
+   request approval, or stop for a governed exception
+                |
+                v
+9. Evidence, Exception, Checkpoint, and Audit
+   Persist applications and references in the Delivery Record;
+   evaluate Checkpoints and append audit events
 ```
 
-## 8. Change governance
+The effective obligations for one Stage are therefore:
 
-### Stage or User Journey change
+```text
+Harness Invariants
++ Delivery Flow Controls
++ Stage Completion Contract
++ applicable Enterprise Domain Controls
++ applicable Project Controls
+```
 
-1. PDLC Governance proposes the lifecycle change.
-2. Product, Engineering, and QA governance review affected Stage requirements, roles, and Journey sequence.
-3. Professional owners review Principle Pack mappings to changed Stage ids.
-4. Regression and cross-platform conformance tests pass.
-5. The Stage Catalog version changes when reusable Stage behavior changes.
+### 4.3 Authority and override rules
 
-See `docs/STAGE_AND_JOURNEY_MODEL.md` for add, edit, reorder, deprecate, and mapping procedures.
+| Layer | Primary owner | Ordinary project override? | Exception path |
+|---|---|---:|---|
+| Harness Invariant | Harness Engineering, with relevant governance review | No | Change the versioned Harness contract; no delivery-local bypass |
+| Delivery Flow Control | PDLC Governance / Flow owner | No | Change the Flow or use a different approved Flow |
+| Stage Completion Contract | PDLC Governance | No | Change the canonical Stage definition through governed review |
+| Enterprise Domain Control | Domain policy approver | No | Use the Control's declared exception approver and evidence process |
+| Project Control | Project governance for the owning Domain | No | Use the project's governed exception or change process |
+| Project Baseline | Project approver | No conversational override | Approve a new baseline revision |
+| Project or Domain Default | Project or Domain maintainer | Yes, when not Control-locked | Record the replacement and rationale |
 
-### Executable Workflow change
+Controls compose cumulatively. A Project Control may strengthen or specialize an enterprise Control, but it cannot remove or weaken it. A Default never outranks a Control. A Project Baseline that conflicts with an applicable Control is a configuration error, not a question for the delivery user.
 
-1. PDLC Governance proposes a status, checkpoint, default, or constraint change.
-2. Harness Engineering updates deterministic validation and transition logic.
-3. Product, Engineering, and QA governance review changed control meaning.
-4. Atomicity, audit, regression, and portability tests pass.
+### 4.4 Applicability and assembly
 
-### Principle Pack change
+Domain and Project Controls may declare applicability across:
 
-1. The named professional owner changes only its pack.
-2. Requirements remain concrete and verifiable.
-3. Applicability and enforcement metadata are reviewed.
-4. The semantic version is increased for behavioral change.
-5. Harness validation confirms schema compatibility.
+- Delivery Flow;
+- Stage;
+- risk trigger;
+- technology;
+- delivery-domain tag.
 
-Locked enterprise constraints cannot be replaced by a project profile.
+Different dimensions are combined with `AND`; multiple values inside one dimension are combined with `OR`. Domain `defaultApplicability` supplies a dimension only when the asset does not declare it explicitly.
 
-### Core change
+Before every Stage, the Runner must:
 
-1. Harness Engineering implements the change.
-2. Existing workflow behavior remains deterministic.
-3. Atomicity, audit, and portability tests pass.
-4. Governance reviews any change to gate meaning or controlled state.
+1. Validate Harness invariants and load the explicitly registered Delivery Flow.
+2. Resolve required and conditional Stages from the delivery context.
+3. Load the Flow's intrinsic controls and the current Stage Completion Contract.
+4. Select applicable enterprise Domain Controls.
+5. Add applicable Project Controls without replacing enterprise Controls.
+6. Resolve Project Baselines and Defaults and reject Control conflicts.
+7. Produce one provenance-rich effective Control set.
+8. Return Controls separately from Knowledge and Capabilities.
+9. Require the Agent or Runner to satisfy, evidence, approve, or formally except each applicable obligation at the appropriate point.
+10. Persist Control applications, exception references, evidence, Checkpoint decisions, content hashes, and audit events.
 
-### Platform adapter change
+Context resolution is a system operation before each Stage; it is not itself a Stage.
 
-1. Developer Experience updates only discovery, capability, or approval mapping.
-2. Shared workflow and policy are not copied into the adapter.
-3. Portability validation and a shared fixture conformance test pass.
+### 4.5 Enforcement modes and failure behavior
 
-## 9. Audit model
+A Domain or Project Control rule declares one of these enforcement modes:
 
-The Harness audits material workflow decisions, not every Agent action.
+| Mode | Expected behavior |
+|---|---|
+| `automatic` | The Runner or deterministic validator evaluates the rule |
+| `evidence` | Delivery supplies traceable evidence and the relevant Stage or Checkpoint evaluates it |
+| `approval` | An authorized role or policy owner explicitly approves the rule's disposition |
 
-Appropriate events include:
+If an applicable Control cannot be satisfied:
 
-- Workflow creation.
-- Build Readiness approval or rejection.
-- Checkpoint transition approval or rejection.
-- Risk escalation.
-- Principle exception approval.
-- Kill, pivot, or productize decisions.
+1. stop the affected Stage or Checkpoint;
+2. identify the exact Control and rule;
+3. identify missing evidence or the declared exception approver;
+4. record an approved exception reference if one is granted;
+5. never convert the failure into an ordinary Default override.
 
-Audit does not store full chat transcripts, internal reasoning, routine file reads, or every tool call. This keeps the Harness fast while preserving evidence for consequential decisions.
+Harness Invariants do not use the delivery-level Control exception mechanism. Failing an invariant blocks execution until the Harness definition, state, or referenced asset is corrected.
 
-## 10. Current implementation status
+### 4.6 Provenance and review surface
 
-### Implemented
+Control reviewers should be able to trace every effective obligation to its source:
 
-- Shared `AGENTS.md` and Lean PDLC Skill.
-- GitHub Copilot thin entry points.
-- Canonical 30-Stage catalog with requirements, roles, and outputs.
-- Active 22-Stage POC Journey and planned Implementation and end-to-end PDLC Journey compositions.
-- Executable POC workflow referencing the POC Journey.
-- Principle Pack-to-Stage mapping and reverse mapping validation.
-- Product, Developer, and QA logical roles.
-- Adaptive requirements policy and templates.
-- UX, Solution Architecture, and Security Principle Pack baselines.
-- Layered enterprise, project, and Harness defaults.
-- Build Readiness approval bound to a requirements content hash.
-- Platform-neutral TypeScript Core, schemas, locks, audit foundation, and tests.
-- Adapter contracts and portability validation.
+| Review concern | Source of truth |
+|---|---|
+| Harness integrity and non-bypassable rules | `pdlc/core/`, `pdlc/schemas/`, and tests |
+| Flow lifecycle and intrinsic controls | `pdlc/delivery-flows/<flow>/flow.json` and `controls/` |
+| Stage completion semantics | `pdlc/stages/catalog.json` |
+| Enterprise professional Controls | `pdlc/domains/<domain>/controls/` |
+| Project Controls and Baselines | `.pdlc/project/domains/<domain>/` |
+| Effective applications and exceptions | Delivery Record `resolution.controls` |
+| Evidence and controlled decisions | Delivery Record evidence, Checkpoint data, and append-only audit events |
 
-### Structurally reserved but not executable
+The final Requirements Artifact or readiness summary must disclose applicable Controls, Baselines, Defaults, exceptions, and provenance. Automatic resolution must not become hidden control application.
 
-- Implementation Workflow engine; its 21-Stage Journey composition is defined.
-- End-to-end PDLC Workflow engine; its 30-Stage Journey composition is defined.
-- Business Architecture, AI Governance, Quality, and Operations Principle Packs.
-- JIRA, XRAY, CI/CD, deployment, and ITSM implementations.
+### 4.7 Current v2 enforcement status
 
-### Not yet implemented
+The v2 implementation currently provides:
 
-- Commit, Verify, and Decide checkpoint transitions.
-- Risk-driven separation of duties.
-- Production release and operational validation.
-- Enterprise GitHub team bindings in CODEOWNERS.
+- schema and reference invariants;
+- explicit Delivery Flow registration;
+- executable POC constraints and Build Readiness;
+- Stage Completion Contracts;
+- enterprise and Project Control resolution;
+- locked-Control versus Default conflict detection;
+- Requirements content-hash approval binding;
+- Delivery Record and audit infrastructure;
+- Plugin and Integration Adapter permission metadata.
 
-The repository includes a logical CODEOWNERS template. It must be populated with real organization handles and renamed before GitHub can enforce review routing.
+Formal `commit`, `verify`, and `decide` state transitions, generalized per-rule evidence evaluation, and production/release integration remain planned. Their absence must not be represented as a passed control.
 
-Reserved folders intentionally contain no executable definitions. Their owners must provide approved policy before activation.
+## 5. Roles and collaboration
 
-## 11. Presentation summary
+Product owns product intent, Requirements, scope, business rules, acceptance conditions, and approval. Developer owns solution design, implementation, developer verification, and technical evidence. QA owns verification strategy, independent evidence, and acceptance findings. One person may fill multiple slots unless an applicable Control requires separation of duties.
 
-The Lean PDLC Harness is not a large automation script and not a platform-specific prompt collection. It is a portable governance and delivery system with:
+Expert teams contribute through Domain ownership rather than attending every delivery:
 
-- Natural-language interaction for delivery users.
-- Declarative workflows and professional standards.
-- Deterministic TypeScript control for material decisions.
-- Low-frequency human checkpoints.
-- Explicit ownership by governance and professional functions.
-- Shared behavior across Codex and GitHub Copilot.
-- Evidence-linked state instead of document-heavy ceremony.
+| Team | Typical ownership |
+|---|---|
+| Product Management | Requirements and Story Artifacts, product-quality Controls, authoring guidance |
+| UX | Experience Controls, guidance, reference UI, UX Plugin |
+| Solution Architecture | Architecture Controls, design guidance and references |
+| Security | Security Controls and verification guidance |
+| Data Platform | Platform KB, references, and Integration Adapters |
+| Harness Engineering | Core registries, schemas, Runner, resolution, tests |
+| PDLC Governance | Stage Catalog and Delivery Flow Catalog/definitions |
 
-Its operating model allows one person to execute multiple delivery roles while preserving enterprise standards through centrally owned, versioned, and automatically applied policy.
+Ownership metadata explains responsibility. CODEOWNERS enforces review routing. Runtime resolution uses `ownerDomain`, not team names.
+
+## 6. Folder contract
+
+```text
+pdlc/domains/<domain>/
+  domain.json
+  artifacts/<artifact>/
+    artifact.json
+    schema.json
+    templates/
+    examples/
+  controls/*.policy.json
+  knowledge/
+    guidance/*.json + content
+    defaults/*.json
+    references/*.json + content
+    kb/*.json + content
+  capabilities/
+    plugins/<plugin>/plugin.json
+    adapters/<adapter>/adapter.json
+```
+
+Only create categories that the Domain actually owns.
+
+## 7. Governance Model
+
+Domain, Owner/Approver/Maintainer, and Contribution Mode are metadata and repository governance, not another runtime layer.
+
+- `domain.json` declares owners, policy approvers, maintainers, and a contribution mode for Artifacts, Controls, Knowledge, and Capabilities. Each category is `restricted`, `reviewed`, or `open`.
+- CODEOWNERS maps folders to review teams.
+- Asset validators require `ownerDomain` consistency.
+- Controls declare exception approvers.
+- Plugin and Adapter manifests declare permissions.
+
+This gives clear accountability without creating a separate governance folder hierarchy.
+
+## 8. Safety properties
+
+- Only explicitly cataloged Delivery Flows are loadable.
+- A Flow references canonical Stage ids and cannot redefine Stage semantics.
+- Stage Artifact references must resolve to one Domain-owned definition.
+- An asset's `ownerDomain` must match its folder.
+- A Project Overlay may reference only known Domains.
+- Locked Control defaults cannot be overridden by project or Domain Defaults.
+- Plugin contributions retain permission and approval boundaries.
+- Requirements approval is content-hash bound.
+- Controlled state changes go through the Runner and audit log.

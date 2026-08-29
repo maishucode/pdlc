@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "POC-EXAMPLE",
-  "workflow": "poc",
+  "deliveryFlow": "poc",
   "status": "DRAFT",
   "title": "Validate a bounded product idea",
   "revision": 0,
@@ -22,8 +22,9 @@
     "timebox": "1 working day"
   },
   "requirements": {
+    "artifactType": "product-management.requirements",
     "documentRef": ".pdlc/requirements/POC-EXAMPLE.md",
-    "depth": "minimal",
+    "profile": "minimal",
     "status": "draft",
     "clarification": {
       "questionsAnswered": 0,
@@ -52,10 +53,20 @@
     "level": "low",
     "triggers": []
   },
-  "principles": {
-    "applicable": ["solution-architecture@1.0.0"],
-    "exceptions": [],
-    "applications": []
+  "resolution": {
+    "controls": {
+      "applicable": [
+        "product-management.requirements-quality@1.0.0",
+        "security.credential-boundary@1.0.0",
+        "solution-architecture.reversible-delivery@1.0.0"
+      ],
+      "exceptions": [],
+      "applications": []
+    },
+    "baselines": [],
+    "defaults": [],
+    "knowledge": [],
+    "capabilities": []
   },
   "design": {
     "summary": "",

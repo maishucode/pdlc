@@ -11,10 +11,10 @@ There is no required release build, `dist/` directory, server, hook, or backgrou
 ```text
 Your product repository
 ├── AGENTS.md                         Shared PDLC boundaries
-├── .agents/skills/lean-pdlc/         Main workflow Skill
+├── .agents/skills/lean-pdlc/         Main Delivery Flow Skill
 ├── .github/                          Copilot adapter and prompt
-├── pdlc/                             Stages, workflow policy, templates, Runner
-└── plugins/                          Optional Stage contributions
+├── pdlc/                             Stages, Flows, Domains, schemas, and Runner
+└── .pdlc/project/domains/            Optional Project Overlay
 ```
 
 ## Put Lean PDLC in a project
@@ -40,10 +40,9 @@ AGENTS.md
 .github/prompts/pdlc.prompt.md
 .github/workflows/copilot-setup-steps.yml
 pdlc/
-plugins/
 ```
 
-Then commit them with the product. This follows AI DLC v2's core composition idea in a smaller POC shape: Plugin definitions stay separate from core, and the selected Plugin set is composed when a Stage runs. Lean PDLC does not generate a separate workflow tree in Phase 1.
+Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Controls, Knowledge, and Capabilities before each Stage. Add project-specific context only under `.pdlc/project/domains/`.
 
 Maintainers may project all enabled Plugin Agents and Skills into VS Code-native directories with:
 

@@ -10,7 +10,7 @@ test("POC Stage entry automatically composes the UX Plugin", async () => {
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   assert.deepEqual(result.output, {
     ok: true,
-    workflow: "poc",
+    deliveryFlow: "poc",
     stage: {
       id: "ux-design",
       name: "UX design",
@@ -22,14 +22,20 @@ test("POC Stage entry automatically composes the UX Plugin", async () => {
     },
     contributions: [{
       plugin: "lean-pdlc-ux",
+      ownerDomain: "ux",
       version: "0.3.0",
+      permissions: {
+        filesystem: "write",
+        network: false,
+        externalWrites: false,
+      },
       agent: {
         id: "lean-pdlc-ux",
-        path: "plugins/lean-pdlc-ux/agents/lean-pdlc-ux.agent.md",
+        path: "pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/agents/lean-pdlc-ux.agent.md",
       },
       skills: [{
         name: "lean-pdlc-ux-spec",
-        path: "plugins/lean-pdlc-ux/skills/lean-pdlc-ux-spec/SKILL.md",
+        path: "pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/skills/lean-pdlc-ux-spec/SKILL.md",
       }],
       mode: "draft",
       handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",

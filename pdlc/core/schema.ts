@@ -1,101 +1,44 @@
 import {
-  ENFORCEMENT_LEVELS,
+  CONTROL_DISPOSITIONS,
+  CONTRIBUTION_MODES,
+  CONTROL_ENFORCEMENT_TYPES,
   COVERAGE_STATUSES,
-  JOURNEY_STAGE_INCLUSIONS,
-  JOURNEY_STATUSES,
+  DELIVERY_FLOW_STAGE_INCLUSIONS,
+  DELIVERY_FLOW_STATUSES,
+  KNOWLEDGE_KINDS,
+  PLUGIN_GUIDANCE_MODES,
   POC_STATUSES,
-  PRINCIPLE_DISPOSITIONS,
   REQUIREMENTS_COVERAGE_TOPICS,
   REQUIREMENTS_DEPTHS,
   REQUIREMENTS_STATUSES,
   RISK_LEVELS,
   ROLE_SLOTS,
-  STANDARD_DEFAULT_POLICIES,
-  STANDARD_PROFILE_LAYERS,
   STAGE_PHASES,
-  WORKFLOW_IDS,
+  type Applicability,
+  type ArtifactDefinition,
   type AuditEvent,
-  type EvidenceRef,
-  type JourneyDefinition,
+  type ControlPolicy,
+  type DeliveryFlowCatalog,
+  type DeliveryFlowDefinition,
+  type DomainManifest,
+  type IntegrationAdapterManifest,
+  type KnowledgeAsset,
+  type PluginManifest,
   type PocDeliveryRecord,
-  type PrinciplePack,
-  type RequirementsPolicy,
-  type StandardProfile,
+  type ProjectBaseline,
+  type ProjectDefaultProfile,
+  type RequirementsFlowControl,
   type StageCatalog,
   type ValidationIssue,
   type ValidationResult,
-  type WorkflowDefinition,
 } from "./types.ts";
 
 type JsonObject = Record<string, unknown>;
+const ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 function isObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function hasExactKeys(
-  value: JsonObject,
-  allowed: readonly string[],
-  path: string,
-  issues: ValidationIssue[],
-): void {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) {
-      issues.push({ code: "UNKNOWN_FIELD", path: `${path}.${key}`, message: "Unknown field" });
-    }
-  }
-}
-
-function requireObject(
-  value: unknown,
-  path: string,
-  issues: ValidationIssue[],
-): JsonObject | undefined {
-  if (!isObject(value)) {
-    issues.push({ code: "EXPECTED_OBJECT", path, message: "Expected an object" });
-    return undefined;
-  }
-  return value;
-}
-
-function requireString(
-  value: unknown,
-  path: string,
-  issues: ValidationIssue[],
-  allowEmpty = false,
-): value is string {
-  if (typeof value !== "string" || (!allowEmpty && value.trim().length === 0)) {
-    issues.push({ code: "EXPECTED_STRING", path, message: allowEmpty ? "Expected a string" : "Expected a non-empty string" });
-    return false;
-  }
-  return true;
-}
-
-function requireStringArray(
-  value: unknown,
-  path: string,
-  issues: ValidationIssue[],
-  minItems = 0,
-): value is string[] {
-  if (!Array.isArray(value)) {
-    issues.push({ code: "EXPECTED_ARRAY", path, message: "Expected an array" });
-    return false;
-  }
-  if (value.length < minItems) {
-    issues.push({ code: "TOO_FEW_ITEMS", path, message: `Expected at least ${minItems} item(s)` });
-  }
-  value.forEach((item, index) => requireString(item, `${path}[${index}]`, issues));
-  if (new Set(value).size !== value.length) {
-    issues.push({ code: "DUPLICATE_ITEM", path, message: "Array items must be unique" });
-  }
-  return true;
-}
-
-function requireIsoDate(value: unknown, path: string, issues: ValidationIssue[]): void {
-  if (!requireString(value, path, issues)) return;
-  if (Number.isNaN(Date.parse(value))) {
-    issues.push({ code: "INVALID_DATE_TIME", path, message: "Expected an ISO 8601 date-time" });
-  }
 }
 
 function result<T>(value: unknown, issues: ValidationIssue[]): ValidationResult<T> {
@@ -104,469 +47,624 @@ function result<T>(value: unknown, issues: ValidationIssue[]): ValidationResult<
     : { ok: false, issues };
 }
 
+function issue(issues: ValidationIssue[], code: string, path: string, message: string): void {
+  issues.push({ code, path, message });
+}
+
+function object(value: unknown, path: string, issues: ValidationIssue[]): JsonObject | undefined {
+  if (!isObject(value)) {
+    issue(issues, "EXPECTED_OBJECT", path, "Expected an object");
+    return undefined;
+  }
+  return value;
+}
+
+function exact(value: JsonObject, allowed: readonly string[], path: string, issues: ValidationIssue[]): void {
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) issue(issues, "UNKNOWN_FIELD", `${path}.${key}`, "Unknown field");
+  }
+}
+
+function string(value: unknown, path: string, issues: ValidationIssue[], allowEmpty = false): value is string {
+  if (typeof value !== "string" || (!allowEmpty && value.trim().length === 0)) {
+    issue(issues, "EXPECTED_STRING", path, allowEmpty ? "Expected a string" : "Expected a non-empty string");
+    return false;
+  }
+  return true;
+}
+
+function id(value: unknown, path: string, issues: ValidationIssue[]): value is string {
+  if (!string(value, path, issues)) return false;
+  if (!ID_PATTERN.test(value)) issue(issues, "INVALID_ID", path, "Expected a lowercase kebab-case or domain-qualified id");
+  return true;
+}
+
+function version(value: unknown, path: string, issues: ValidationIssue[]): void {
+  if (string(value, path, issues) && !VERSION_PATTERN.test(value)) {
+    issue(issues, "INVALID_VERSION", path, "Expected semantic version x.y.z");
+  }
+}
+
+function stringArray(value: unknown, path: string, issues: ValidationIssue[], minItems = 0): value is string[] {
+  if (!Array.isArray(value)) {
+    issue(issues, "EXPECTED_ARRAY", path, "Expected an array");
+    return false;
+  }
+  if (value.length < minItems) issue(issues, "TOO_FEW_ITEMS", path, `Expected at least ${minItems} item(s)`);
+  value.forEach((entry, index) => string(entry, `${path}[${index}]`, issues));
+  if (new Set(value).size !== value.length) issue(issues, "DUPLICATE_ITEM", path, "Array items must be unique");
+  return true;
+}
+
+function isoDate(value: unknown, path: string, issues: ValidationIssue[], allowEmpty = false): void {
+  if (!string(value, path, issues, allowEmpty) || (allowEmpty && value === "")) return;
+  if (Number.isNaN(Date.parse(value))) issue(issues, "INVALID_DATE_TIME", path, "Expected an ISO 8601 date-time");
+}
+
+function relativePath(value: unknown, path: string, issues: ValidationIssue[]): value is string {
+  if (!string(value, path, issues)) return false;
+  if (value.startsWith("/") || value.split(/[\\/]/).includes("..")) {
+    issue(issues, "UNSAFE_PATH", path, "Expected a safe relative path");
+  }
+  return true;
+}
+
+function applicability(value: unknown, path: string, issues: ValidationIssue[], optional = false): Applicability | undefined {
+  if (value === undefined && optional) return undefined;
+  const entry = object(value, path, issues);
+  if (!entry) return undefined;
+  exact(entry, ["deliveryFlows", "stages", "riskTriggers", "technologies", "domains"], path, issues);
+  for (const key of ["deliveryFlows", "stages", "riskTriggers", "technologies", "domains"] as const) {
+    if (entry[key] !== undefined) stringArray(entry[key], `${path}.${key}`, issues);
+  }
+  return entry as Applicability;
+}
+
 function validateEvidenceList(value: unknown, path: string, issues: ValidationIssue[]): void {
   if (!Array.isArray(value)) {
-    issues.push({ code: "EXPECTED_ARRAY", path, message: "Expected an evidence array" });
+    issue(issues, "EXPECTED_ARRAY", path, "Expected an evidence array");
     return;
   }
-  value.forEach((item, index) => {
+  value.forEach((entry, index) => {
     const itemPath = `${path}[${index}]`;
-    const evidence = requireObject(item, itemPath, issues);
+    const evidence = object(entry, itemPath, issues);
     if (!evidence) return;
-    hasExactKeys(evidence, ["kind", "ref", "description", "capturedAt"], itemPath, issues);
+    exact(evidence, ["kind", "ref", "description", "capturedAt"], itemPath, issues);
     if (!["file", "url", "ci", "demo"].includes(String(evidence.kind))) {
-      issues.push({ code: "INVALID_ENUM", path: `${itemPath}.kind`, message: "Unsupported evidence kind" });
+      issue(issues, "INVALID_ENUM", `${itemPath}.kind`, "Unsupported evidence kind");
     }
-    requireString(evidence.ref, `${itemPath}.ref`, issues);
-    requireString(evidence.description, `${itemPath}.description`, issues);
-    if (evidence.capturedAt !== undefined) requireIsoDate(evidence.capturedAt, `${itemPath}.capturedAt`, issues);
+    string(evidence.ref, `${itemPath}.ref`, issues);
+    string(evidence.description, `${itemPath}.description`, issues);
+    if (evidence.capturedAt !== undefined) isoDate(evidence.capturedAt, `${itemPath}.capturedAt`, issues);
   });
 }
 
 export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocDeliveryRecord> {
   const issues: ValidationIssue[] = [];
-  const record = requireObject(value, "$", issues);
+  const record = object(value, "$", issues);
   if (!record) return result(value, issues);
-
-  hasExactKeys(record, ["schemaVersion", "id", "workflow", "status", "title", "revision", "createdAt", "updatedAt", "assignments", "idea", "requirements", "scope", "risk", "principles", "design", "evidence", "decision"], "$", issues);
-  if (record.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  if (!requireString(record.id, "$.id", issues) || !/^POC-[A-Z0-9][A-Z0-9-]*$/.test(record.id)) {
-    issues.push({ code: "INVALID_RECORD_ID", path: "$.id", message: "Expected POC- followed by uppercase letters, digits, or hyphens" });
+  exact(record, ["schemaVersion", "id", "deliveryFlow", "status", "title", "revision", "createdAt", "updatedAt", "assignments", "idea", "requirements", "scope", "risk", "resolution", "design", "evidence", "decision"], "$", issues);
+  if (record.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
+  if (!string(record.id, "$.id", issues) || !/^POC-[A-Z0-9][A-Z0-9-]*$/.test(record.id)) {
+    issue(issues, "INVALID_RECORD_ID", "$.id", "Expected POC- followed by uppercase letters, digits, or hyphens");
   }
-  if (record.workflow !== "poc") issues.push({ code: "INVALID_WORKFLOW", path: "$.workflow", message: "Expected poc" });
-  if (!POC_STATUSES.includes(record.status as never)) issues.push({ code: "INVALID_STATUS", path: "$.status", message: "Unsupported POC status" });
+  if (record.deliveryFlow !== "poc") issue(issues, "INVALID_DELIVERY_FLOW", "$.deliveryFlow", "Expected poc");
+  if (!POC_STATUSES.includes(record.status as never)) issue(issues, "INVALID_STATUS", "$.status", "Unsupported POC status");
+  string(record.title, "$.title", issues);
+  if (!Number.isInteger(record.revision) || Number(record.revision) < 0) issue(issues, "INVALID_REVISION", "$.revision", "Expected a non-negative integer");
+  isoDate(record.createdAt, "$.createdAt", issues);
+  isoDate(record.updatedAt, "$.updatedAt", issues);
+
   const requirementsApproved = isObject(record.requirements) && record.requirements.status === "approved";
-  requireString(record.title, "$.title", issues);
-  if (!Number.isInteger(record.revision) || Number(record.revision) < 0) issues.push({ code: "INVALID_REVISION", path: "$.revision", message: "Expected a non-negative integer" });
-  requireIsoDate(record.createdAt, "$.createdAt", issues);
-  requireIsoDate(record.updatedAt, "$.updatedAt", issues);
-
-  const assignments = requireObject(record.assignments, "$.assignments", issues);
+  const assignments = object(record.assignments, "$.assignments", issues);
   if (assignments) {
-    hasExactKeys(assignments, ROLE_SLOTS, "$.assignments", issues);
-    ROLE_SLOTS.forEach((role) => requireString(assignments[role], `$.assignments.${role}`, issues, !requirementsApproved));
+    exact(assignments, ROLE_SLOTS, "$.assignments", issues);
+    ROLE_SLOTS.forEach((role) => string(assignments[role], `$.assignments.${role}`, issues, !requirementsApproved));
   }
 
-  const idea = requireObject(record.idea, "$.idea", issues);
+  const idea = object(record.idea, "$.idea", issues);
   if (idea) {
-    hasExactKeys(idea, ["problem", "hypothesis", "expectedOutcome", "successCriteria", "timebox"], "$.idea", issues);
-    requireString(idea.problem, "$.idea.problem", issues, !requirementsApproved);
-    requireString(idea.hypothesis, "$.idea.hypothesis", issues, !requirementsApproved);
-    requireString(idea.expectedOutcome, "$.idea.expectedOutcome", issues, !requirementsApproved);
-    requireStringArray(idea.successCriteria, "$.idea.successCriteria", issues, requirementsApproved ? 1 : 0);
-    requireString(idea.timebox, "$.idea.timebox", issues, !requirementsApproved);
+    exact(idea, ["problem", "hypothesis", "expectedOutcome", "successCriteria", "timebox"], "$.idea", issues);
+    for (const key of ["problem", "hypothesis", "expectedOutcome", "timebox"] as const) string(idea[key], `$.idea.${key}`, issues, !requirementsApproved);
+    stringArray(idea.successCriteria, "$.idea.successCriteria", issues, requirementsApproved ? 1 : 0);
   }
 
-  const requirements = requireObject(record.requirements, "$.requirements", issues);
+  const requirements = object(record.requirements, "$.requirements", issues);
   if (requirements) {
-    hasExactKeys(requirements, ["documentRef", "depth", "status", "clarification", "approvedBy", "approvedAt", "approvedContentHash"], "$.requirements", issues);
-    if (requireString(requirements.documentRef, "$.requirements.documentRef", issues) && !requirements.documentRef.endsWith(".md")) {
-      issues.push({ code: "INVALID_REQUIREMENTS_REF", path: "$.requirements.documentRef", message: "Requirements document must be a Markdown file" });
-    }
-    if (!REQUIREMENTS_DEPTHS.includes(requirements.depth as never)) issues.push({ code: "INVALID_REQUIREMENTS_DEPTH", path: "$.requirements.depth", message: "Unsupported requirements depth" });
-    if (!REQUIREMENTS_STATUSES.includes(requirements.status as never)) issues.push({ code: "INVALID_REQUIREMENTS_STATUS", path: "$.requirements.status", message: "Unsupported requirements status" });
-    const clarification = requireObject(requirements.clarification, "$.requirements.clarification", issues);
+    exact(requirements, ["artifactType", "documentRef", "profile", "status", "clarification", "approvedBy", "approvedAt", "approvedContentHash"], "$.requirements", issues);
+    if (requirements.artifactType !== "product-management.requirements") issue(issues, "INVALID_ARTIFACT_TYPE", "$.requirements.artifactType", "Expected product-management.requirements");
+    if (string(requirements.documentRef, "$.requirements.documentRef", issues) && !requirements.documentRef.endsWith(".md")) issue(issues, "INVALID_REQUIREMENTS_REF", "$.requirements.documentRef", "Requirements document must be Markdown");
+    if (!REQUIREMENTS_DEPTHS.includes(requirements.profile as never)) issue(issues, "INVALID_REQUIREMENTS_PROFILE", "$.requirements.profile", "Unsupported requirements profile");
+    if (!REQUIREMENTS_STATUSES.includes(requirements.status as never)) issue(issues, "INVALID_REQUIREMENTS_STATUS", "$.requirements.status", "Unsupported requirements status");
+    const clarification = object(requirements.clarification, "$.requirements.clarification", issues);
     if (clarification) {
-      hasExactKeys(clarification, ["questionsAnswered", "coverage", "openQuestions", "contradictions"], "$.requirements.clarification", issues);
-      if (!Number.isInteger(clarification.questionsAnswered) || Number(clarification.questionsAnswered) < 0) {
-        issues.push({ code: "INVALID_QUESTION_COUNT", path: "$.requirements.clarification.questionsAnswered", message: "Expected a non-negative integer" });
-      }
-      const coverage = requireObject(clarification.coverage, "$.requirements.clarification.coverage", issues);
+      exact(clarification, ["questionsAnswered", "coverage", "openQuestions", "contradictions"], "$.requirements.clarification", issues);
+      if (!Number.isInteger(clarification.questionsAnswered) || Number(clarification.questionsAnswered) < 0) issue(issues, "INVALID_QUESTION_COUNT", "$.requirements.clarification.questionsAnswered", "Expected a non-negative integer");
+      const coverage = object(clarification.coverage, "$.requirements.clarification.coverage", issues);
       if (coverage) {
-        hasExactKeys(coverage, REQUIREMENTS_COVERAGE_TOPICS, "$.requirements.clarification.coverage", issues);
+        exact(coverage, REQUIREMENTS_COVERAGE_TOPICS, "$.requirements.clarification.coverage", issues);
         REQUIREMENTS_COVERAGE_TOPICS.forEach((topic) => {
-          if (!COVERAGE_STATUSES.includes(coverage[topic] as never)) {
-            issues.push({ code: "INVALID_COVERAGE_STATUS", path: `$.requirements.clarification.coverage.${topic}`, message: "Expected pending or complete" });
-          }
+          if (!COVERAGE_STATUSES.includes(coverage[topic] as never)) issue(issues, "INVALID_COVERAGE_STATUS", `$.requirements.clarification.coverage.${topic}`, "Expected pending or complete");
         });
       }
-      requireStringArray(clarification.openQuestions, "$.requirements.clarification.openQuestions", issues);
-      requireStringArray(clarification.contradictions, "$.requirements.clarification.contradictions", issues);
+      stringArray(clarification.openQuestions, "$.requirements.clarification.openQuestions", issues);
+      stringArray(clarification.contradictions, "$.requirements.clarification.contradictions", issues);
     }
-    requireString(requirements.approvedBy, "$.requirements.approvedBy", issues, true);
-    requireString(requirements.approvedAt, "$.requirements.approvedAt", issues, true);
-    requireString(requirements.approvedContentHash, "$.requirements.approvedContentHash", issues, true);
+    string(requirements.approvedBy, "$.requirements.approvedBy", issues, true);
+    isoDate(requirements.approvedAt, "$.requirements.approvedAt", issues, true);
+    string(requirements.approvedContentHash, "$.requirements.approvedContentHash", issues, true);
     if (requirements.status === "approved") {
-      requireString(requirements.approvedBy, "$.requirements.approvedBy", issues);
-      requireIsoDate(requirements.approvedAt, "$.requirements.approvedAt", issues);
-      if (typeof requirements.approvedContentHash !== "string" || !/^[a-f0-9]{64}$/.test(requirements.approvedContentHash)) {
-        issues.push({ code: "INVALID_REQUIREMENTS_HASH", path: "$.requirements.approvedContentHash", message: "Expected a SHA-256 hex digest" });
-      }
+      string(requirements.approvedBy, "$.requirements.approvedBy", issues);
+      isoDate(requirements.approvedAt, "$.requirements.approvedAt", issues);
+      if (typeof requirements.approvedContentHash !== "string" || !/^[a-f0-9]{64}$/.test(requirements.approvedContentHash)) issue(issues, "INVALID_REQUIREMENTS_HASH", "$.requirements.approvedContentHash", "Expected a SHA-256 digest");
     } else if (requirements.approvedBy !== "" || requirements.approvedAt !== "" || requirements.approvedContentHash !== "") {
-      issues.push({ code: "DRAFT_REQUIREMENTS_HAVE_APPROVAL", path: "$.requirements", message: "Draft requirements cannot contain approval metadata" });
+      issue(issues, "DRAFT_REQUIREMENTS_HAVE_APPROVAL", "$.requirements", "Draft requirements cannot contain approval metadata");
     }
   }
 
-  const scope = requireObject(record.scope, "$.scope", issues);
+  const scope = object(record.scope, "$.scope", issues);
   if (scope) {
-    hasExactKeys(scope, ["inScope", "outOfScope", "productionUse"], "$.scope", issues);
-    requireStringArray(scope.inScope, "$.scope.inScope", issues, requirementsApproved ? 1 : 0);
-    requireStringArray(scope.outOfScope, "$.scope.outOfScope", issues, requirementsApproved ? 1 : 0);
-    if (scope.productionUse !== false) issues.push({ code: "POC_PRODUCTION_FORBIDDEN", path: "$.scope.productionUse", message: "POC productionUse must be false" });
+    exact(scope, ["inScope", "outOfScope", "productionUse"], "$.scope", issues);
+    stringArray(scope.inScope, "$.scope.inScope", issues);
+    stringArray(scope.outOfScope, "$.scope.outOfScope", issues);
+    if (scope.productionUse !== false) issue(issues, "POC_PRODUCTION_FORBIDDEN", "$.scope.productionUse", "POC production use must remain false");
   }
 
-  const risk = requireObject(record.risk, "$.risk", issues);
+  const risk = object(record.risk, "$.risk", issues);
   if (risk) {
-    hasExactKeys(risk, ["level", "triggers"], "$.risk", issues);
-    if (!RISK_LEVELS.includes(risk.level as never)) issues.push({ code: "INVALID_RISK", path: "$.risk.level", message: "Unsupported risk level" });
-    requireStringArray(risk.triggers, "$.risk.triggers", issues);
+    exact(risk, ["level", "triggers"], "$.risk", issues);
+    if (!RISK_LEVELS.includes(risk.level as never)) issue(issues, "INVALID_RISK_LEVEL", "$.risk.level", "Unsupported risk level");
+    stringArray(risk.triggers, "$.risk.triggers", issues);
   }
 
-  const principles = requireObject(record.principles, "$.principles", issues);
-  if (principles) {
-    hasExactKeys(principles, ["applicable", "exceptions", "applications"], "$.principles", issues);
-    requireStringArray(principles.applicable, "$.principles.applicable", issues);
-    requireStringArray(principles.exceptions, "$.principles.exceptions", issues);
-    if (!Array.isArray(principles.applications)) {
-      issues.push({ code: "EXPECTED_ARRAY", path: "$.principles.applications", message: "Expected an applications array" });
-    } else {
-      principles.applications.forEach((entry, index) => {
-        const path = `$.principles.applications[${index}]`;
-        const application = requireObject(entry, path, issues);
+  const resolution = object(record.resolution, "$.resolution", issues);
+  if (resolution) {
+    exact(resolution, ["controls", "baselines", "defaults", "knowledge", "capabilities"], "$.resolution", issues);
+    const controls = object(resolution.controls, "$.resolution.controls", issues);
+    if (controls) {
+      exact(controls, ["applicable", "exceptions", "applications"], "$.resolution.controls", issues);
+      stringArray(controls.applicable, "$.resolution.controls.applicable", issues);
+      stringArray(controls.exceptions, "$.resolution.controls.exceptions", issues);
+      if (!Array.isArray(controls.applications)) issue(issues, "EXPECTED_ARRAY", "$.resolution.controls.applications", "Expected applications array");
+      else controls.applications.forEach((entry, index) => {
+        const path = `$.resolution.controls.applications[${index}]`;
+        const application = object(entry, path, issues);
         if (!application) return;
-        hasExactKeys(application, ["pack", "disposition", "notes"], path, issues);
-        requireString(application.pack, `${path}.pack`, issues);
-        if (!PRINCIPLE_DISPOSITIONS.includes(application.disposition as never)) issues.push({ code: "INVALID_PRINCIPLE_DISPOSITION", path: `${path}.disposition`, message: "Unsupported principle disposition" });
-        requireString(application.notes, `${path}.notes`, issues);
+        exact(application, ["control", "disposition", "notes"], path, issues);
+        string(application.control, `${path}.control`, issues);
+        if (!CONTROL_DISPOSITIONS.includes(application.disposition as never)) issue(issues, "INVALID_CONTROL_DISPOSITION", `${path}.disposition`, "Expected satisfied or exception");
+        string(application.notes, `${path}.notes`, issues);
       });
     }
+    for (const key of ["baselines", "defaults", "knowledge", "capabilities"] as const) stringArray(resolution[key], `$.resolution.${key}`, issues);
   }
 
-  const design = requireObject(record.design, "$.design", issues);
+  const design = object(record.design, "$.design", issues);
   if (design) {
-    hasExactKeys(design, ["summary", "decisions", "technologies", "domains"], "$.design", issues);
-    requireString(design.summary, "$.design.summary", issues, true);
-    requireStringArray(design.decisions, "$.design.decisions", issues);
-    requireStringArray(design.technologies, "$.design.technologies", issues);
-    requireStringArray(design.domains, "$.design.domains", issues);
+    exact(design, ["summary", "decisions", "technologies", "domains"], "$.design", issues);
+    string(design.summary, "$.design.summary", issues, !requirementsApproved);
+    stringArray(design.decisions, "$.design.decisions", issues);
+    stringArray(design.technologies, "$.design.technologies", issues);
+    stringArray(design.domains, "$.design.domains", issues);
   }
 
-  const evidence = requireObject(record.evidence, "$.evidence", issues);
+  const evidence = object(record.evidence, "$.evidence", issues);
   if (evidence) {
-    hasExactKeys(evidence, ["tests", "build", "security", "demo"], "$.evidence", issues);
-    (["tests", "build", "security", "demo"] as const).forEach((key) => validateEvidenceList(evidence[key], `$.evidence.${key}`, issues));
+    exact(evidence, ["tests", "build", "security", "demo"], "$.evidence", issues);
+    for (const key of ["tests", "build", "security", "demo"] as const) validateEvidenceList(evidence[key], `$.evidence.${key}`, issues);
   }
 
-  const decision = requireObject(record.decision, "$.decision", issues);
+  const decision = object(record.decision, "$.decision", issues);
   if (decision) {
-    hasExactKeys(decision, ["outcome", "rationale", "followUp"], "$.decision", issues);
-    if (!["", "kill", "pivot", "productize"].includes(String(decision.outcome))) issues.push({ code: "INVALID_OUTCOME", path: "$.decision.outcome", message: "Unsupported POC outcome" });
-    requireString(decision.rationale, "$.decision.rationale", issues, true);
-    requireString(decision.followUp, "$.decision.followUp", issues, true);
+    exact(decision, ["outcome", "rationale", "followUp"], "$.decision", issues);
+    if (!["", "kill", "pivot", "productize"].includes(String(decision.outcome))) issue(issues, "INVALID_OUTCOME", "$.decision.outcome", "Unsupported outcome");
+    string(decision.rationale, "$.decision.rationale", issues, true);
+    string(decision.followUp, "$.decision.followUp", issues, true);
   }
-
   return result<PocDeliveryRecord>(value, issues);
 }
 
-export function validatePrinciplePack(value: unknown): ValidationResult<PrinciplePack> {
+export function validateRequirementsFlowControl(value: unknown): ValidationResult<RequirementsFlowControl> {
   const issues: ValidationIssue[] = [];
-  const pack = requireObject(value, "$", issues);
-  if (!pack) return result(value, issues);
-  hasExactKeys(pack, ["schemaVersion", "id", "name", "owner", "version", "appliesTo", "enforcement", "principles"], "$", issues);
-  if (pack.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  requireString(pack.id, "$.id", issues);
-  requireString(pack.name, "$.name", issues);
-  requireString(pack.owner, "$.owner", issues);
-  if (!requireString(pack.version, "$.version", issues) || !/^\d+\.\d+\.\d+$/.test(pack.version)) issues.push({ code: "INVALID_VERSION", path: "$.version", message: "Expected semantic version x.y.z" });
-  const appliesTo = requireObject(pack.appliesTo, "$.appliesTo", issues);
-  if (appliesTo) {
-    hasExactKeys(appliesTo, ["workflows", "stages", "riskTriggers", "technologies", "domains"], "$.appliesTo", issues);
-    requireStringArray(appliesTo.workflows, "$.appliesTo.workflows", issues, 1);
-    if (Array.isArray(appliesTo.workflows)) appliesTo.workflows.forEach((id, index) => { if (!WORKFLOW_IDS.includes(id as never)) issues.push({ code: "INVALID_WORKFLOW", path: `$.appliesTo.workflows[${index}]`, message: "Unsupported workflow" }); });
-    requireStringArray(appliesTo.stages, "$.appliesTo.stages", issues, 1);
-    for (const key of ["riskTriggers", "technologies", "domains"] as const) if (appliesTo[key] !== undefined) requireStringArray(appliesTo[key], `$.appliesTo.${key}`, issues);
-  }
-  const enforcement = requireObject(pack.enforcement, "$.enforcement", issues);
-  if (enforcement) {
-    hasExactKeys(enforcement, WORKFLOW_IDS, "$.enforcement", issues);
-    WORKFLOW_IDS.forEach((id) => { if (!ENFORCEMENT_LEVELS.includes(enforcement[id] as never)) issues.push({ code: "INVALID_ENFORCEMENT", path: `$.enforcement.${id}`, message: "Unsupported enforcement level" }); });
-  }
-  if (!Array.isArray(pack.principles) || pack.principles.length === 0) {
-    issues.push({ code: "EXPECTED_PRINCIPLES", path: "$.principles", message: "Expected at least one principle" });
-  } else {
-    pack.principles.forEach((entry, index) => {
-      const principle = requireObject(entry, `$.principles[${index}]`, issues);
-      if (!principle) return;
-      hasExactKeys(principle, ["id", "title", "requirement", "standardDefault"], `$.principles[${index}]`, issues);
-      requireString(principle.id, `$.principles[${index}].id`, issues);
-      requireString(principle.title, `$.principles[${index}].title`, issues);
-      requireString(principle.requirement, `$.principles[${index}].requirement`, issues);
-      if (principle.standardDefault !== undefined) {
-        const defaultPath = `$.principles[${index}].standardDefault`;
-        const standardDefault = requireObject(principle.standardDefault, defaultPath, issues);
-        if (standardDefault) {
-          hasExactKeys(standardDefault, ["key", "topic", "policy"], defaultPath, issues);
-          if (requireString(standardDefault.key, `${defaultPath}.key`, issues)
-            && !/^[a-z][a-z0-9.-]*$/.test(standardDefault.key)) {
-            issues.push({ code: "INVALID_STANDARD_KEY", path: `${defaultPath}.key`, message: "Expected a lowercase dotted standard key" });
-          }
-          if (!REQUIREMENTS_COVERAGE_TOPICS.includes(standardDefault.topic as never)) {
-            issues.push({ code: "INVALID_COVERAGE_TOPIC", path: `${defaultPath}.topic`, message: "Unsupported requirements coverage topic" });
-          }
-          if (!STANDARD_DEFAULT_POLICIES.includes(standardDefault.policy as never)) {
-            issues.push({ code: "INVALID_STANDARD_POLICY", path: `${defaultPath}.policy`, message: "Expected constraint or default" });
-          }
-        }
-      }
+  const control = object(value, "$", issues);
+  if (!control) return result(value, issues);
+  exact(control, ["schemaVersion", "id", "owner", "version", "artifactType", "profiles", "questionRules"], "$", issues);
+  if (control.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(control.id, "$.id", issues);
+  string(control.owner, "$.owner", issues);
+  version(control.version, "$.version", issues);
+  if (control.artifactType !== "product-management.requirements") issue(issues, "INVALID_ARTIFACT_TYPE", "$.artifactType", "Expected product-management.requirements");
+  const profiles = object(control.profiles, "$.profiles", issues);
+  if (profiles) {
+    exact(profiles, REQUIREMENTS_DEPTHS, "$.profiles", issues);
+    REQUIREMENTS_DEPTHS.forEach((profile) => {
+      const path = `$.profiles.${profile}`;
+      const entry = object(profiles[profile], path, issues);
+      if (!entry) return;
+      exact(entry, ["minimumAnsweredQuestions", "requiredTopics"], path, issues);
+      if (!Number.isInteger(entry.minimumAnsweredQuestions) || Number(entry.minimumAnsweredQuestions) < 0) issue(issues, "INVALID_QUESTION_COUNT", `${path}.minimumAnsweredQuestions`, "Expected a non-negative integer");
+      if (stringArray(entry.requiredTopics, `${path}.requiredTopics`, issues, 1)) entry.requiredTopics.forEach((topic, index) => {
+        if (!REQUIREMENTS_COVERAGE_TOPICS.includes(topic as never)) issue(issues, "INVALID_COVERAGE_TOPIC", `${path}.requiredTopics[${index}]`, "Unsupported coverage topic");
+      });
     });
   }
-  return result<PrinciplePack>(value, issues);
-}
-
-export function validateStandardProfile(value: unknown): ValidationResult<StandardProfile> {
-  const issues: ValidationIssue[] = [];
-  const profile = requireObject(value, "$", issues);
-  if (!profile) return result(value, issues);
-
-  hasExactKeys(profile, ["schemaVersion", "id", "name", "owner", "version", "layer", "appliesTo", "defaults"], "$", issues);
-  if (profile.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  requireString(profile.id, "$.id", issues);
-  requireString(profile.name, "$.name", issues);
-  requireString(profile.owner, "$.owner", issues);
-  if (!requireString(profile.version, "$.version", issues) || !/^\d+\.\d+\.\d+$/.test(profile.version)) {
-    issues.push({ code: "INVALID_VERSION", path: "$.version", message: "Expected semantic version x.y.z" });
+  const rules = object(control.questionRules, "$.questionRules", issues);
+  if (rules) {
+    exact(rules, ["maxQuestionsPerRound", "requireOtherOption", "analyzeContradictions", "requireFinalDocumentReview", "allowDocumentAnswers", "questionDocumentPattern", "answerTag"], "$.questionRules", issues);
+    if (!Number.isInteger(rules.maxQuestionsPerRound) || Number(rules.maxQuestionsPerRound) < 1 || Number(rules.maxQuestionsPerRound) > 3) issue(issues, "INVALID_QUESTION_LIMIT", "$.questionRules.maxQuestionsPerRound", "Expected an integer from 1 to 3");
+    for (const key of ["requireOtherOption", "analyzeContradictions", "requireFinalDocumentReview", "allowDocumentAnswers"] as const) if (typeof rules[key] !== "boolean") issue(issues, "EXPECTED_BOOLEAN", `$.questionRules.${key}`, "Expected a boolean");
+    relativePath(rules.questionDocumentPattern, "$.questionRules.questionDocumentPattern", issues);
+    if (rules.answerTag !== "[Answer]:") issue(issues, "INVALID_ANSWER_TAG", "$.questionRules.answerTag", "Expected [Answer]:");
   }
-  if (!STANDARD_PROFILE_LAYERS.includes(profile.layer as never)) {
-    issues.push({ code: "INVALID_STANDARD_LAYER", path: "$.layer", message: "Expected harness or project" });
-  }
-
-  const appliesTo = requireObject(profile.appliesTo, "$.appliesTo", issues);
-  if (appliesTo) {
-    hasExactKeys(appliesTo, ["workflows", "stages", "technologies", "domains"], "$.appliesTo", issues);
-    requireStringArray(appliesTo.workflows, "$.appliesTo.workflows", issues, 1);
-    if (Array.isArray(appliesTo.workflows)) appliesTo.workflows.forEach((id, index) => {
-      if (!WORKFLOW_IDS.includes(id as never)) issues.push({ code: "INVALID_WORKFLOW", path: `$.appliesTo.workflows[${index}]`, message: "Unsupported workflow" });
-    });
-    requireStringArray(appliesTo.stages, "$.appliesTo.stages", issues, 1);
-    for (const key of ["technologies", "domains"] as const) {
-      if (appliesTo[key] !== undefined) requireStringArray(appliesTo[key], `$.appliesTo.${key}`, issues);
-    }
-  }
-
-  if (!Array.isArray(profile.defaults)) {
-    issues.push({ code: "EXPECTED_ARRAY", path: "$.defaults", message: "Expected a defaults array" });
-  } else {
-    const keys = new Set<string>();
-    profile.defaults.forEach((entry, index) => {
-      const entryPath = `$.defaults[${index}]`;
-      const standard = requireObject(entry, entryPath, issues);
-      if (!standard) return;
-      hasExactKeys(standard, ["key", "title", "topic", "statement", "rationale", "principleRefs"], entryPath, issues);
-      if (requireString(standard.key, `${entryPath}.key`, issues)) {
-        if (!/^[a-z][a-z0-9.-]*$/.test(String(standard.key))) {
-          issues.push({ code: "INVALID_STANDARD_KEY", path: `${entryPath}.key`, message: "Expected a lowercase dotted standard key" });
-        }
-        if (keys.has(String(standard.key))) {
-          issues.push({ code: "DUPLICATE_STANDARD_KEY", path: `${entryPath}.key`, message: "A profile may define each standard key once" });
-        }
-        keys.add(String(standard.key));
-      }
-      requireString(standard.title, `${entryPath}.title`, issues);
-      if (!REQUIREMENTS_COVERAGE_TOPICS.includes(standard.topic as never)) {
-        issues.push({ code: "INVALID_COVERAGE_TOPIC", path: `${entryPath}.topic`, message: "Unsupported requirements coverage topic" });
-      }
-      requireString(standard.statement, `${entryPath}.statement`, issues);
-      requireString(standard.rationale, `${entryPath}.rationale`, issues);
-      requireStringArray(standard.principleRefs, `${entryPath}.principleRefs`, issues);
-    });
-  }
-
-  return result<StandardProfile>(value, issues);
-}
-
-export function validateRequirementsPolicy(value: unknown): ValidationResult<RequirementsPolicy> {
-  const issues: ValidationIssue[] = [];
-  const policy = requireObject(value, "$", issues);
-  if (!policy) return result(value, issues);
-  hasExactKeys(policy, ["schemaVersion", "id", "owner", "version", "depths", "questionRules"], "$", issues);
-  if (policy.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  requireString(policy.id, "$.id", issues);
-  requireString(policy.owner, "$.owner", issues);
-  if (!requireString(policy.version, "$.version", issues) || !/^\d+\.\d+\.\d+$/.test(policy.version)) {
-    issues.push({ code: "INVALID_VERSION", path: "$.version", message: "Expected semantic version x.y.z" });
-  }
-  const depths = requireObject(policy.depths, "$.depths", issues);
-  if (depths) {
-    hasExactKeys(depths, REQUIREMENTS_DEPTHS, "$.depths", issues);
-    REQUIREMENTS_DEPTHS.forEach((depth) => {
-      const depthPolicy = requireObject(depths[depth], `$.depths.${depth}`, issues);
-      if (!depthPolicy) return;
-      hasExactKeys(depthPolicy, ["minimumAnsweredQuestions", "requiredTopics"], `$.depths.${depth}`, issues);
-      if (!Number.isInteger(depthPolicy.minimumAnsweredQuestions) || Number(depthPolicy.minimumAnsweredQuestions) < 1) {
-        issues.push({ code: "INVALID_QUESTION_COUNT", path: `$.depths.${depth}.minimumAnsweredQuestions`, message: "Expected a positive integer" });
-      }
-      if (requireStringArray(depthPolicy.requiredTopics, `$.depths.${depth}.requiredTopics`, issues, 1)) {
-        depthPolicy.requiredTopics.forEach((topic, index) => {
-          if (!REQUIREMENTS_COVERAGE_TOPICS.includes(topic as never)) {
-            issues.push({ code: "INVALID_COVERAGE_TOPIC", path: `$.depths.${depth}.requiredTopics[${index}]`, message: "Unsupported requirements coverage topic" });
-          }
-        });
-      }
-    });
-  }
-  const questionRules = requireObject(policy.questionRules, "$.questionRules", issues);
-  if (questionRules) {
-    hasExactKeys(questionRules, ["maxQuestionsPerRound", "requireOtherOption", "analyzeContradictions", "requireFinalDocumentReview", "allowDocumentAnswers", "questionDocumentPattern", "answerTag"], "$.questionRules", issues);
-    if (!Number.isInteger(questionRules.maxQuestionsPerRound) || Number(questionRules.maxQuestionsPerRound) < 1 || Number(questionRules.maxQuestionsPerRound) > 3) {
-      issues.push({ code: "INVALID_QUESTION_LIMIT", path: "$.questionRules.maxQuestionsPerRound", message: "Expected an integer from 1 to 3" });
-    }
-    for (const key of ["requireOtherOption", "analyzeContradictions", "requireFinalDocumentReview", "allowDocumentAnswers"] as const) {
-      if (typeof questionRules[key] !== "boolean") issues.push({ code: "EXPECTED_BOOLEAN", path: `$.questionRules.${key}`, message: "Expected a boolean" });
-    }
-    if (questionRules.allowDocumentAnswers !== true) {
-      issues.push({ code: "DOCUMENT_ANSWERS_DISABLED", path: "$.questionRules.allowDocumentAnswers", message: "POC requirements must support document answer mode" });
-    }
-    if (requireString(questionRules.questionDocumentPattern, "$.questionRules.questionDocumentPattern", issues)
-      && (!questionRules.questionDocumentPattern.startsWith(".pdlc/questions/") || !questionRules.questionDocumentPattern.includes("{recordId}") || !questionRules.questionDocumentPattern.endsWith(".md"))) {
-      issues.push({ code: "INVALID_QUESTION_DOCUMENT_PATTERN", path: "$.questionRules.questionDocumentPattern", message: "Expected a .pdlc/questions Markdown pattern containing {recordId}" });
-    }
-    if (questionRules.answerTag !== "[Answer]:") {
-      issues.push({ code: "INVALID_ANSWER_TAG", path: "$.questionRules.answerTag", message: "Expected [Answer]:" });
-    }
-  }
-  return result<RequirementsPolicy>(value, issues);
+  return result<RequirementsFlowControl>(value, issues);
 }
 
 export function validateStageCatalog(value: unknown): ValidationResult<StageCatalog> {
   const issues: ValidationIssue[] = [];
-  const catalog = requireObject(value, "$", issues);
+  const catalog = object(value, "$", issues);
   if (!catalog) return result(value, issues);
-  hasExactKeys(catalog, ["schemaVersion", "catalogVersion", "owner", "stages"], "$", issues);
-  if (catalog.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  if (!requireString(catalog.catalogVersion, "$.catalogVersion", issues) || !/^\d+\.\d+\.\d+$/.test(String(catalog.catalogVersion))) {
-    issues.push({ code: "INVALID_VERSION", path: "$.catalogVersion", message: "Expected semantic version x.y.z" });
-  }
-  requireString(catalog.owner, "$.owner", issues);
-  if (!Array.isArray(catalog.stages) || catalog.stages.length === 0) {
-    issues.push({ code: "EXPECTED_STAGES", path: "$.stages", message: "Expected at least one canonical Stage" });
-  } else {
-    const stageIds: string[] = [];
+  exact(catalog, ["schemaVersion", "catalogVersion", "owner", "stages"], "$", issues);
+  if (catalog.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
+  version(catalog.catalogVersion, "$.catalogVersion", issues);
+  string(catalog.owner, "$.owner", issues);
+  if (!Array.isArray(catalog.stages) || catalog.stages.length === 0) issue(issues, "EXPECTED_STAGES", "$.stages", "Expected at least one canonical Stage");
+  else {
+    const ids: string[] = [];
     catalog.stages.forEach((entry, index) => {
       const path = `$.stages[${index}]`;
-      const stage = requireObject(entry, path, issues);
+      const stage = object(entry, path, issues);
       if (!stage) return;
-      hasExactKeys(stage, ["id", "name", "description", "phase", "roleSlots", "requirements", "outputs"], path, issues);
-      if (requireString(stage.id, `${path}.id`, issues)) {
-        stageIds.push(String(stage.id));
-        if (!/^[a-z][a-z0-9-]*$/.test(String(stage.id))) {
-          issues.push({ code: "INVALID_STAGE_ID", path: `${path}.id`, message: "Expected a lowercase kebab-case Stage id" });
-        }
-      }
-      requireString(stage.name, `${path}.name`, issues);
-      requireString(stage.description, `${path}.description`, issues);
-      if (!STAGE_PHASES.includes(stage.phase as never)) issues.push({ code: "INVALID_STAGE_PHASE", path: `${path}.phase`, message: "Unsupported Stage phase" });
-      requireStringArray(stage.roleSlots, `${path}.roleSlots`, issues, 1);
-      if (Array.isArray(stage.roleSlots)) stage.roleSlots.forEach((role, roleIndex) => {
-        if (!ROLE_SLOTS.includes(role as never)) issues.push({ code: "INVALID_ROLE", path: `${path}.roleSlots[${roleIndex}]`, message: "Unsupported role slot" });
+      exact(stage, ["id", "name", "description", "phase", "roleSlots", "requirements", "outputs", "inputArtifacts", "outputArtifacts"], path, issues);
+      if (id(stage.id, `${path}.id`, issues)) ids.push(stage.id);
+      string(stage.name, `${path}.name`, issues);
+      string(stage.description, `${path}.description`, issues);
+      if (!STAGE_PHASES.includes(stage.phase as never)) issue(issues, "INVALID_STAGE_PHASE", `${path}.phase`, "Unsupported Stage phase");
+      if (stringArray(stage.roleSlots, `${path}.roleSlots`, issues, 1)) stage.roleSlots.forEach((role, roleIndex) => {
+        if (!ROLE_SLOTS.includes(role as never)) issue(issues, "INVALID_ROLE", `${path}.roleSlots[${roleIndex}]`, "Unsupported role slot");
       });
-      requireStringArray(stage.requirements, `${path}.requirements`, issues, 1);
-      requireStringArray(stage.outputs, `${path}.outputs`, issues, 1);
+      stringArray(stage.requirements, `${path}.requirements`, issues, 1);
+      stringArray(stage.outputs, `${path}.outputs`, issues, 1);
+      if (stage.inputArtifacts !== undefined) stringArray(stage.inputArtifacts, `${path}.inputArtifacts`, issues);
+      if (stage.outputArtifacts !== undefined) stringArray(stage.outputArtifacts, `${path}.outputArtifacts`, issues);
     });
-    if (new Set(stageIds).size !== stageIds.length) issues.push({ code: "DUPLICATE_STAGE", path: "$.stages", message: "Canonical Stage ids must be unique" });
+    if (new Set(ids).size !== ids.length) issue(issues, "DUPLICATE_STAGE", "$.stages", "Canonical Stage ids must be unique");
   }
   return result<StageCatalog>(value, issues);
 }
 
-export function validateJourneyDefinition(value: unknown): ValidationResult<JourneyDefinition> {
+export function validateDeliveryFlowCatalog(value: unknown): ValidationResult<DeliveryFlowCatalog> {
   const issues: ValidationIssue[] = [];
-  const journey = requireObject(value, "$", issues);
-  if (!journey) return result(value, issues);
-  hasExactKeys(journey, ["schemaVersion", "id", "name", "description", "status", "stageSequence"], "$", issues);
-  if (journey.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  for (const field of ["id", "name", "description"] as const) requireString(journey[field], `$.${field}`, issues);
-  if (!WORKFLOW_IDS.includes(journey.id as never)) issues.push({ code: "INVALID_JOURNEY", path: "$.id", message: "Unsupported User Journey" });
-  if (!JOURNEY_STATUSES.includes(journey.status as never)) issues.push({ code: "INVALID_JOURNEY_STATUS", path: "$.status", message: "Expected active or planned" });
-  if (!Array.isArray(journey.stageSequence) || journey.stageSequence.length === 0) {
-    issues.push({ code: "EXPECTED_STAGE_SEQUENCE", path: "$.stageSequence", message: "Expected at least one Stage reference" });
-  } else {
-    const stageIds: string[] = [];
-    journey.stageSequence.forEach((entry, index) => {
-      const path = `$.stageSequence[${index}]`;
-      const reference = requireObject(entry, path, issues);
-      if (!reference) return;
-      hasExactKeys(reference, ["stageId", "inclusion", "activationTags"], path, issues);
-      if (requireString(reference.stageId, `${path}.stageId`, issues)) stageIds.push(String(reference.stageId));
-      if (!JOURNEY_STAGE_INCLUSIONS.includes(reference.inclusion as never)) {
-        issues.push({ code: "INVALID_STAGE_INCLUSION", path: `${path}.inclusion`, message: "Expected required or conditional" });
-      }
-      if (reference.inclusion === "conditional") {
-        requireStringArray(reference.activationTags, `${path}.activationTags`, issues, 1);
-      } else if (reference.activationTags !== undefined) {
-        issues.push({ code: "UNEXPECTED_ACTIVATION_TAGS", path: `${path}.activationTags`, message: "Required Stages must not define activation tags" });
-      }
+  const catalog = object(value, "$", issues);
+  if (!catalog) return result(value, issues);
+  exact(catalog, ["schemaVersion", "owner", "flows"], "$", issues);
+  if (catalog.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  string(catalog.owner, "$.owner", issues);
+  if (!Array.isArray(catalog.flows) || catalog.flows.length === 0) issue(issues, "EXPECTED_DELIVERY_FLOWS", "$.flows", "Expected at least one registered Delivery Flow");
+  else {
+    const ids: string[] = [];
+    const definitions: string[] = [];
+    catalog.flows.forEach((entry, index) => {
+      const path = `$.flows[${index}]`;
+      const flow = object(entry, path, issues);
+      if (!flow) return;
+      exact(flow, ["id", "definition"], path, issues);
+      if (id(flow.id, `${path}.id`, issues)) ids.push(flow.id);
+      if (relativePath(flow.definition, `${path}.definition`, issues)) definitions.push(flow.definition);
     });
-    if (new Set(stageIds).size !== stageIds.length) issues.push({ code: "DUPLICATE_STAGE_REF", path: "$.stageSequence", message: "A User Journey may reference each Stage once" });
+    if (new Set(ids).size !== ids.length) issue(issues, "DUPLICATE_DELIVERY_FLOW", "$.flows", "Delivery Flow ids must be unique");
+    if (new Set(definitions).size !== definitions.length) issue(issues, "DUPLICATE_DELIVERY_FLOW_DEFINITION", "$.flows", "Delivery Flow definition paths must be unique");
   }
-  return result<JourneyDefinition>(value, issues);
+  return result<DeliveryFlowCatalog>(value, issues);
 }
 
-export function validateWorkflowDefinition(value: unknown): ValidationResult<WorkflowDefinition> {
+export function validateDeliveryFlowDefinition(value: unknown): ValidationResult<DeliveryFlowDefinition> {
   const issues: ValidationIssue[] = [];
-  const workflow = requireObject(value, "$", issues);
-  if (!workflow) return result(value, issues);
-  hasExactKeys(workflow, ["schemaVersion", "id", "name", "description", "journeyId", "initialStatus", "terminalStatuses", "checkpoints", "deliveryDefaults", "constraints"], "$", issues);
-  if (workflow.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  for (const field of ["id", "name", "description", "initialStatus"] as const) requireString(workflow[field], `$.${field}`, issues);
-  if (!WORKFLOW_IDS.includes(workflow.id as never)) issues.push({ code: "INVALID_WORKFLOW", path: "$.id", message: "Unsupported workflow" });
-  if (!WORKFLOW_IDS.includes(workflow.journeyId as never)) issues.push({ code: "INVALID_JOURNEY", path: "$.journeyId", message: "Unsupported User Journey" });
-  requireStringArray(workflow.terminalStatuses, "$.terminalStatuses", issues, 1);
-
-  if (!Array.isArray(workflow.checkpoints) || workflow.checkpoints.length === 0) {
-    issues.push({ code: "EXPECTED_CHECKPOINTS", path: "$.checkpoints", message: "Expected at least one checkpoint" });
-  } else {
-    const checkpointIds: string[] = [];
-    workflow.checkpoints.forEach((entry, index) => {
-      const path = `$.checkpoints[${index}]`;
-      const checkpoint = requireObject(entry, path, issues);
+  const flow = object(value, "$", issues);
+  if (!flow) return result(value, issues);
+  exact(flow, ["schemaVersion", "id", "name", "description", "status", "stageSequence", "controls"], "$", issues);
+  if (flow.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
+  id(flow.id, "$.id", issues);
+  string(flow.name, "$.name", issues);
+  string(flow.description, "$.description", issues);
+  if (!DELIVERY_FLOW_STATUSES.includes(flow.status as never)) issue(issues, "INVALID_DELIVERY_FLOW_STATUS", "$.status", "Expected active, planned, or deprecated");
+  if (!Array.isArray(flow.stageSequence) || flow.stageSequence.length === 0) issue(issues, "EXPECTED_STAGE_SEQUENCE", "$.stageSequence", "Expected at least one Stage reference");
+  else {
+    const ids: string[] = [];
+    flow.stageSequence.forEach((entry, index) => {
+      const path = `$.stageSequence[${index}]`;
+      const reference = object(entry, path, issues);
+      if (!reference) return;
+      exact(reference, ["stageId", "inclusion", "activationTags"], path, issues);
+      if (id(reference.stageId, `${path}.stageId`, issues)) ids.push(reference.stageId);
+      if (!DELIVERY_FLOW_STAGE_INCLUSIONS.includes(reference.inclusion as never)) issue(issues, "INVALID_STAGE_INCLUSION", `${path}.inclusion`, "Expected required or conditional");
+      if (reference.inclusion === "conditional") stringArray(reference.activationTags, `${path}.activationTags`, issues, 1);
+      else if (reference.activationTags !== undefined) issue(issues, "UNEXPECTED_ACTIVATION_TAGS", `${path}.activationTags`, "Required Stages must not define activation tags");
+    });
+    if (new Set(ids).size !== ids.length) issue(issues, "DUPLICATE_STAGE_REF", "$.stageSequence", "A Delivery Flow may reference each Stage once");
+  }
+  if (flow.status !== "active") {
+    if (flow.controls !== undefined) issue(issues, "NON_ACTIVE_DELIVERY_FLOW_CONTROLS", "$.controls", "Only active Delivery Flows may declare executable controls");
+    return result<DeliveryFlowDefinition>(value, issues);
+  }
+  const controls = object(flow.controls, "$.controls", issues);
+  if (controls) {
+    exact(controls, ["initialStatus", "terminalStatuses", "checkpoints", "deliveryDefaults", "constraints", "artifactProfiles", "requiredCapabilities"], "$.controls", issues);
+    string(controls.initialStatus, "$.controls.initialStatus", issues);
+    stringArray(controls.terminalStatuses, "$.controls.terminalStatuses", issues, 1);
+    if (!Array.isArray(controls.checkpoints) || controls.checkpoints.length === 0) issue(issues, "EXPECTED_CHECKPOINTS", "$.controls.checkpoints", "Expected at least one checkpoint");
+    else controls.checkpoints.forEach((entry, index) => {
+      const path = `$.controls.checkpoints[${index}]`;
+      const checkpoint = object(entry, path, issues);
       if (!checkpoint) return;
-      hasExactKeys(checkpoint, ["id", "from", "to", "toByOutcome", "ownerRole"], path, issues);
-      if (requireString(checkpoint.id, `${path}.id`, issues)) checkpointIds.push(checkpoint.id);
-      requireStringArray(checkpoint.from, `${path}.from`, issues, 1);
-      if ((checkpoint.to === undefined) === (checkpoint.toByOutcome === undefined)) issues.push({ code: "INVALID_TRANSITION", path, message: "Define exactly one of to or toByOutcome" });
-      if (checkpoint.to !== undefined) requireString(checkpoint.to, `${path}.to`, issues);
+      exact(checkpoint, ["id", "from", "to", "toByOutcome", "ownerRole"], path, issues);
+      id(checkpoint.id, `${path}.id`, issues);
+      stringArray(checkpoint.from, `${path}.from`, issues, 1);
+      if ((checkpoint.to === undefined) === (checkpoint.toByOutcome === undefined)) issue(issues, "INVALID_TRANSITION", path, "Define exactly one of to or toByOutcome");
+      if (checkpoint.to !== undefined) string(checkpoint.to, `${path}.to`, issues);
       if (checkpoint.toByOutcome !== undefined) {
-        const outcomes = requireObject(checkpoint.toByOutcome, `${path}.toByOutcome`, issues);
-        if (outcomes) {
-          if (Object.keys(outcomes).length === 0) issues.push({ code: "EMPTY_OUTCOMES", path: `${path}.toByOutcome`, message: "Expected at least one outcome" });
-          Object.entries(outcomes).forEach(([outcome, status]) => requireString(status, `${path}.toByOutcome.${outcome}`, issues));
+        const outcomes = object(checkpoint.toByOutcome, `${path}.toByOutcome`, issues);
+        if (outcomes) Object.entries(outcomes).forEach(([key, status]) => string(status, `${path}.toByOutcome.${key}`, issues));
+      }
+      if (!ROLE_SLOTS.includes(checkpoint.ownerRole as never)) issue(issues, "INVALID_ROLE", `${path}.ownerRole`, "Unsupported role slot");
+    });
+    const deliveryDefaults = object(controls.deliveryDefaults, "$.controls.deliveryDefaults", issues);
+    if (deliveryDefaults) {
+      exact(deliveryDefaults, ["roleAssignmentMode", "timebox", "collectDuringRequirements"], "$.controls.deliveryDefaults", issues);
+      if (deliveryDefaults.roleAssignmentMode !== "approval-actor-all-roles") issue(issues, "INVALID_ROLE_ASSIGNMENT_MODE", "$.controls.deliveryDefaults.roleAssignmentMode", "Expected approval-actor-all-roles");
+      string(deliveryDefaults.timebox, "$.controls.deliveryDefaults.timebox", issues);
+      if (deliveryDefaults.collectDuringRequirements !== false) issue(issues, "INVALID_REQUIREMENTS_CONTROL", "$.controls.deliveryDefaults.collectDuringRequirements", "Expected false");
+    }
+    const constraints = object(controls.constraints, "$.controls.constraints", issues);
+    if (constraints) {
+      exact(constraints, ["productionUse", "externalIntegrations", "allowSinglePersonAllRoles"], "$.controls.constraints", issues);
+      if (typeof constraints.productionUse !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.controls.constraints.productionUse", "Expected a boolean");
+      stringArray(constraints.externalIntegrations, "$.controls.constraints.externalIntegrations", issues);
+      if (typeof constraints.allowSinglePersonAllRoles !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.controls.constraints.allowSinglePersonAllRoles", "Expected a boolean");
+    }
+    if (controls.artifactProfiles !== undefined) {
+      const profiles = object(controls.artifactProfiles, "$.controls.artifactProfiles", issues);
+      if (profiles) Object.entries(profiles).forEach(([key, profile]) => string(profile, `$.controls.artifactProfiles.${key}`, issues));
+    }
+    if (controls.requiredCapabilities !== undefined) stringArray(controls.requiredCapabilities, "$.controls.requiredCapabilities", issues);
+  }
+  return result<DeliveryFlowDefinition>(value, issues);
+}
+
+export function validateDomainManifest(value: unknown): ValidationResult<DomainManifest> {
+  const issues: ValidationIssue[] = [];
+  const domain = object(value, "$", issues);
+  if (!domain) return result(value, issues);
+  exact(domain, ["schemaVersion", "id", "name", "description", "owners", "policyApprovers", "maintainers", "contributionMode", "defaultApplicability"], "$", issues);
+  if (domain.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(domain.id, "$.id", issues);
+  string(domain.name, "$.name", issues);
+  string(domain.description, "$.description", issues);
+  stringArray(domain.owners, "$.owners", issues, 1);
+  stringArray(domain.policyApprovers, "$.policyApprovers", issues, 1);
+  stringArray(domain.maintainers, "$.maintainers", issues, 1);
+  const contributionMode = object(domain.contributionMode, "$.contributionMode", issues);
+  if (contributionMode) {
+    exact(contributionMode, ["artifacts", "controls", "knowledge", "capabilities"], "$.contributionMode", issues);
+    for (const key of ["artifacts", "controls", "knowledge", "capabilities"] as const) {
+      if (!CONTRIBUTION_MODES.includes(contributionMode[key] as never)) issue(issues, "INVALID_CONTRIBUTION_MODE", `$.contributionMode.${key}`, "Expected restricted, reviewed, or open");
+    }
+  }
+  applicability(domain.defaultApplicability, "$.defaultApplicability", issues, true);
+  return result<DomainManifest>(value, issues);
+}
+
+export function validateArtifactDefinition(value: unknown): ValidationResult<ArtifactDefinition> {
+  const issues: ValidationIssue[] = [];
+  const artifact = object(value, "$", issues);
+  if (!artifact) return result(value, issues);
+  exact(artifact, ["schemaVersion", "id", "name", "description", "ownerDomain", "version", "format", "schemaRef", "profiles", "defaultTemplate", "examples"], "$", issues);
+  if (artifact.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(artifact.id, "$.id", issues);
+  string(artifact.name, "$.name", issues);
+  string(artifact.description, "$.description", issues);
+  id(artifact.ownerDomain, "$.ownerDomain", issues);
+  version(artifact.version, "$.version", issues);
+  if (!["markdown", "json", "reference"].includes(String(artifact.format))) issue(issues, "INVALID_ARTIFACT_FORMAT", "$.format", "Unsupported Artifact format");
+  if (artifact.schemaRef !== undefined) relativePath(artifact.schemaRef, "$.schemaRef", issues);
+  stringArray(artifact.profiles, "$.profiles", issues, 1);
+  if (artifact.defaultTemplate !== undefined) relativePath(artifact.defaultTemplate, "$.defaultTemplate", issues);
+  if (artifact.examples !== undefined) stringArray(artifact.examples, "$.examples", issues);
+  return result<ArtifactDefinition>(value, issues);
+}
+
+export function validateControlPolicy(value: unknown): ValidationResult<ControlPolicy> {
+  const issues: ValidationIssue[] = [];
+  const policy = object(value, "$", issues);
+  if (!policy) return result(value, issues);
+  exact(policy, ["schemaVersion", "id", "title", "description", "ownerDomain", "version", "appliesTo", "rules"], "$", issues);
+  if (policy.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(policy.id, "$.id", issues);
+  string(policy.title, "$.title", issues);
+  string(policy.description, "$.description", issues);
+  id(policy.ownerDomain, "$.ownerDomain", issues);
+  version(policy.version, "$.version", issues);
+  applicability(policy.appliesTo, "$.appliesTo", issues);
+  if (!Array.isArray(policy.rules) || policy.rules.length === 0) issue(issues, "EXPECTED_CONTROL_RULES", "$.rules", "Expected at least one Control rule");
+  else {
+    const ids: string[] = [];
+    policy.rules.forEach((entry, index) => {
+      const path = `$.rules[${index}]`;
+      const rule = object(entry, path, issues);
+      if (!rule) return;
+      exact(rule, ["id", "statement", "enforcement", "requiredEvidence", "exceptionApprovers", "standardDefault"], path, issues);
+      if (id(rule.id, `${path}.id`, issues)) ids.push(rule.id);
+      string(rule.statement, `${path}.statement`, issues);
+      if (!CONTROL_ENFORCEMENT_TYPES.includes(rule.enforcement as never)) issue(issues, "INVALID_CONTROL_ENFORCEMENT", `${path}.enforcement`, "Expected automatic, evidence, or approval");
+      if (rule.requiredEvidence !== undefined) stringArray(rule.requiredEvidence, `${path}.requiredEvidence`, issues, 1);
+      if (rule.exceptionApprovers !== undefined) stringArray(rule.exceptionApprovers, `${path}.exceptionApprovers`, issues, 1);
+      if (rule.standardDefault !== undefined) {
+        const standard = object(rule.standardDefault, `${path}.standardDefault`, issues);
+        if (standard) {
+          exact(standard, ["key", "topic"], `${path}.standardDefault`, issues);
+          id(standard.key, `${path}.standardDefault.key`, issues);
+          if (!REQUIREMENTS_COVERAGE_TOPICS.includes(standard.topic as never)) issue(issues, "INVALID_COVERAGE_TOPIC", `${path}.standardDefault.topic`, "Unsupported coverage topic");
         }
       }
-      if (!ROLE_SLOTS.includes(checkpoint.ownerRole as never)) issues.push({ code: "INVALID_ROLE", path: `${path}.ownerRole`, message: "Unsupported role slot" });
     });
-    if (new Set(checkpointIds).size !== checkpointIds.length) issues.push({ code: "DUPLICATE_CHECKPOINT", path: "$.checkpoints", message: "Checkpoint ids must be unique" });
+    if (new Set(ids).size !== ids.length) issue(issues, "DUPLICATE_CONTROL_RULE", "$.rules", "Control rule ids must be unique");
   }
+  return result<ControlPolicy>(value, issues);
+}
 
-  const deliveryDefaults = requireObject(workflow.deliveryDefaults, "$.deliveryDefaults", issues);
-  if (deliveryDefaults) {
-    hasExactKeys(deliveryDefaults, ["roleAssignmentMode", "timebox", "collectDuringRequirements"], "$.deliveryDefaults", issues);
-    if (deliveryDefaults.roleAssignmentMode !== "approval-actor-all-roles") {
-      issues.push({ code: "INVALID_ROLE_ASSIGNMENT_MODE", path: "$.deliveryDefaults.roleAssignmentMode", message: "Expected approval-actor-all-roles" });
-    }
-    requireString(deliveryDefaults.timebox, "$.deliveryDefaults.timebox", issues);
-    if (deliveryDefaults.collectDuringRequirements !== false) {
-      issues.push({ code: "INVALID_REQUIREMENTS_CONTROL", path: "$.deliveryDefaults.collectDuringRequirements", message: "POC delivery controls must not be collected as product requirements" });
-    }
+function validateDefaultEntries(value: unknown, path: string, issues: ValidationIssue[]): void {
+  if (!Array.isArray(value) || value.length === 0) {
+    issue(issues, "EXPECTED_DEFAULTS", path, "Expected at least one default");
+    return;
   }
+  const keys: string[] = [];
+  value.forEach((entry, index) => {
+    const itemPath = `${path}[${index}]`;
+    const item = object(entry, itemPath, issues);
+    if (!item) return;
+    exact(item, ["key", "title", "topic", "statement", "rationale", "controlRefs"], itemPath, issues);
+    if (id(item.key, `${itemPath}.key`, issues)) keys.push(item.key);
+    string(item.title, `${itemPath}.title`, issues);
+    if (!REQUIREMENTS_COVERAGE_TOPICS.includes(item.topic as never)) issue(issues, "INVALID_COVERAGE_TOPIC", `${itemPath}.topic`, "Unsupported coverage topic");
+    string(item.statement, `${itemPath}.statement`, issues);
+    string(item.rationale, `${itemPath}.rationale`, issues);
+    stringArray(item.controlRefs, `${itemPath}.controlRefs`, issues);
+  });
+  if (new Set(keys).size !== keys.length) issue(issues, "DUPLICATE_STANDARD_KEY", path, "Default keys must be unique");
+}
 
-  const constraints = requireObject(workflow.constraints, "$.constraints", issues);
-  if (constraints) {
-    hasExactKeys(constraints, ["productionUse", "externalIntegrations", "allowSinglePersonAllRoles"], "$.constraints", issues);
-    if (typeof constraints.productionUse !== "boolean") issues.push({ code: "EXPECTED_BOOLEAN", path: "$.constraints.productionUse", message: "Expected a boolean" });
-    requireStringArray(constraints.externalIntegrations, "$.constraints.externalIntegrations", issues);
-    if (typeof constraints.allowSinglePersonAllRoles !== "boolean") issues.push({ code: "EXPECTED_BOOLEAN", path: "$.constraints.allowSinglePersonAllRoles", message: "Expected a boolean" });
+export function validateKnowledgeAsset(value: unknown): ValidationResult<KnowledgeAsset> {
+  const issues: ValidationIssue[] = [];
+  const asset = object(value, "$", issues);
+  if (!asset) return result(value, issues);
+  exact(asset, ["schemaVersion", "id", "title", "description", "ownerDomain", "version", "kind", "appliesTo", "contentRef", "defaults"], "$", issues);
+  if (asset.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(asset.id, "$.id", issues);
+  string(asset.title, "$.title", issues);
+  string(asset.description, "$.description", issues);
+  id(asset.ownerDomain, "$.ownerDomain", issues);
+  version(asset.version, "$.version", issues);
+  if (!KNOWLEDGE_KINDS.includes(asset.kind as never)) issue(issues, "INVALID_KNOWLEDGE_KIND", "$.kind", "Unsupported Knowledge kind");
+  applicability(asset.appliesTo, "$.appliesTo", issues);
+  if (asset.contentRef !== undefined) relativePath(asset.contentRef, "$.contentRef", issues);
+  if (asset.kind === "default") validateDefaultEntries(asset.defaults, "$.defaults", issues);
+  else if (asset.defaults !== undefined) issue(issues, "UNEXPECTED_DEFAULTS", "$.defaults", "Only default Knowledge may declare defaults");
+  if (asset.kind !== "default" && asset.contentRef === undefined) issue(issues, "KNOWLEDGE_CONTENT_MISSING", "$.contentRef", "Non-default Knowledge requires contentRef");
+  return result<KnowledgeAsset>(value, issues);
+}
+
+export function validatePluginManifest(value: unknown): ValidationResult<PluginManifest> {
+  const issues: ValidationIssue[] = [];
+  const manifest = object(value, "$", issues);
+  if (!manifest) return result(value, issues);
+  exact(manifest, ["schemaVersion", "kind", "id", "ownerDomain", "version", "description", "deliveryFlows", "defaultEnabled", "permissions", "contributes"], "$", issues);
+  if (manifest.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
+  if (manifest.kind !== "plugin") issue(issues, "INVALID_CAPABILITY_KIND", "$.kind", "Expected plugin");
+  id(manifest.id, "$.id", issues);
+  id(manifest.ownerDomain, "$.ownerDomain", issues);
+  version(manifest.version, "$.version", issues);
+  string(manifest.description, "$.description", issues);
+  stringArray(manifest.deliveryFlows, "$.deliveryFlows", issues, 1);
+  if (typeof manifest.defaultEnabled !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.defaultEnabled", "Expected a boolean");
+  const permissions = object(manifest.permissions, "$.permissions", issues);
+  if (permissions) {
+    exact(permissions, ["filesystem", "network", "externalWrites"], "$.permissions", issues);
+    if (!["read", "write"].includes(String(permissions.filesystem))) issue(issues, "INVALID_FILESYSTEM_PERMISSION", "$.permissions.filesystem", "Expected read or write");
+    if (typeof permissions.network !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.network", "Expected a boolean");
+    if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.externalWrites", "Expected a boolean");
   }
-  return result<WorkflowDefinition>(value, issues);
+  const contributes = object(manifest.contributes, "$.contributes", issues);
+  if (contributes) {
+    exact(contributes, ["stageBindings", "agents", "skills"], "$.contributes", issues);
+    for (const key of ["stageBindings", "agents", "skills"] as const) relativePath(contributes[key], `$.contributes.${key}`, issues);
+  }
+  return result<PluginManifest>(value, issues);
+}
+
+export function validateIntegrationAdapterManifest(value: unknown): ValidationResult<IntegrationAdapterManifest> {
+  const issues: ValidationIssue[] = [];
+  const manifest = object(value, "$", issues);
+  if (!manifest) return result(value, issues);
+  exact(manifest, ["schemaVersion", "kind", "id", "ownerDomain", "version", "description", "appliesTo", "permissions"], "$", issues);
+  if (manifest.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  if (manifest.kind !== "integration-adapter") issue(issues, "INVALID_CAPABILITY_KIND", "$.kind", "Expected integration-adapter");
+  id(manifest.id, "$.id", issues);
+  id(manifest.ownerDomain, "$.ownerDomain", issues);
+  version(manifest.version, "$.version", issues);
+  string(manifest.description, "$.description", issues);
+  applicability(manifest.appliesTo, "$.appliesTo", issues);
+  const permissions = object(manifest.permissions, "$.permissions", issues);
+  if (permissions) {
+    exact(permissions, ["network", "credentialRefs", "externalWrites"], "$.permissions", issues);
+    if (typeof permissions.network !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.network", "Expected a boolean");
+    stringArray(permissions.credentialRefs, "$.permissions.credentialRefs", issues);
+    if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.externalWrites", "Expected a boolean");
+  }
+  return result<IntegrationAdapterManifest>(value, issues);
+}
+
+export function validateProjectBaseline(value: unknown): ValidationResult<ProjectBaseline> {
+  const issues: ValidationIssue[] = [];
+  const baseline = object(value, "$", issues);
+  if (!baseline) return result(value, issues);
+  exact(baseline, ["schemaVersion", "domain", "status", "approvedBy", "approvedAt", "decisions", "references"], "$", issues);
+  if (baseline.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(baseline.domain, "$.domain", issues);
+  if (baseline.status !== "approved") issue(issues, "INVALID_BASELINE_STATUS", "$.status", "Expected approved");
+  string(baseline.approvedBy, "$.approvedBy", issues);
+  isoDate(baseline.approvedAt, "$.approvedAt", issues);
+  const decisions = object(baseline.decisions, "$.decisions", issues);
+  if (decisions && Object.keys(decisions).length === 0) issue(issues, "EMPTY_BASELINE", "$.decisions", "Expected at least one approved decision");
+  if (decisions) Object.entries(decisions).forEach(([key, decision]) => {
+    if (!["string", "number", "boolean"].includes(typeof decision)) issue(issues, "INVALID_BASELINE_VALUE", `$.decisions.${key}`, "Expected string, number, or boolean");
+  });
+  stringArray(baseline.references, "$.references", issues);
+  return result<ProjectBaseline>(value, issues);
+}
+
+export function validateProjectDefaultProfile(value: unknown): ValidationResult<ProjectDefaultProfile> {
+  const issues: ValidationIssue[] = [];
+  const profile = object(value, "$", issues);
+  if (!profile) return result(value, issues);
+  exact(profile, ["schemaVersion", "id", "domain", "version", "appliesTo", "defaults"], "$", issues);
+  if (profile.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(profile.id, "$.id", issues);
+  id(profile.domain, "$.domain", issues);
+  version(profile.version, "$.version", issues);
+  applicability(profile.appliesTo, "$.appliesTo", issues);
+  validateDefaultEntries(profile.defaults, "$.defaults", issues);
+  return result<ProjectDefaultProfile>(value, issues);
+}
+
+export function validatePluginStageBindings(value: unknown): ValidationResult<{ schemaVersion: 1; plugin: string; bindings: unknown[] }> {
+  const issues: ValidationIssue[] = [];
+  const descriptor = object(value, "$", issues);
+  if (!descriptor) return result(value, issues);
+  exact(descriptor, ["schemaVersion", "plugin", "bindings"], "$", issues);
+  if (descriptor.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  id(descriptor.plugin, "$.plugin", issues);
+  if (!Array.isArray(descriptor.bindings)) issue(issues, "EXPECTED_ARRAY", "$.bindings", "Expected bindings array");
+  else descriptor.bindings.forEach((entry, index) => {
+    const path = `$.bindings[${index}]`;
+    const binding = object(entry, path, issues);
+    if (!binding) return;
+    exact(binding, ["stage", "agent", "skills", "mode", "handoff", "approvalBoundary"], path, issues);
+    id(binding.stage, `${path}.stage`, issues);
+    id(binding.agent, `${path}.agent`, issues);
+    stringArray(binding.skills, `${path}.skills`, issues, 1);
+    if (!PLUGIN_GUIDANCE_MODES.includes(binding.mode as never)) issue(issues, "INVALID_PLUGIN_MODE", `${path}.mode`, "Unsupported Plugin mode");
+    string(binding.handoff, `${path}.handoff`, issues);
+    string(binding.approvalBoundary, `${path}.approvalBoundary`, issues);
+  });
+  return result(value, issues);
 }
 
 export function validateAuditEvent(value: unknown): ValidationResult<AuditEvent> {
   const issues: ValidationIssue[] = [];
-  const event = requireObject(value, "$", issues);
+  const event = object(value, "$", issues);
   if (!event) return result(value, issues);
-  if (event.schemaVersion !== 1) issues.push({ code: "UNSUPPORTED_SCHEMA", path: "$.schemaVersion", message: "Expected schemaVersion 1" });
-  for (const field of ["eventId", "recordId", "eventType", "actor", "recordHash"] as const) requireString(event[field], `$.${field}`, issues);
-  requireIsoDate(event.timestamp, "$.timestamp", issues);
-  if (typeof event.recordHash === "string" && !/^[a-f0-9]{64}$/.test(event.recordHash)) issues.push({ code: "INVALID_HASH", path: "$.recordHash", message: "Expected a SHA-256 hex digest" });
+  if (event.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  for (const field of ["eventId", "recordId", "eventType", "actor", "recordHash"] as const) string(event[field], `$.${field}`, issues);
+  isoDate(event.timestamp, "$.timestamp", issues);
+  if (typeof event.recordHash === "string" && !/^[a-f0-9]{64}$/.test(event.recordHash)) issue(issues, "INVALID_HASH", "$.recordHash", "Expected a SHA-256 digest");
   return result<AuditEvent>(value, issues);
 }
-
-export type { EvidenceRef };

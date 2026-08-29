@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "solution-architecture",
+  "name": "Solution Architecture",
+  "description": "Owns architecture boundaries, technical decision quality, and reusable solution guidance.",
+  "owners": ["solution-architecture-leadership"],
+  "policyApprovers": ["architecture-governance"],
+  "maintainers": ["solution-architecture-team"],
+  "contributionMode": {
+    "artifacts": "reviewed",
+    "controls": "restricted",
+    "knowledge": "open",
+    "capabilities": "reviewed"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/artifacts/product-management.requirements.schema.json",
+  "title": "Requirements Artifact Metadata",
+  "type": "object",
+  "required": ["artifactType", "profile", "documentRef", "status"],
+  "properties": {
+    "artifactType": { "const": "product-management.requirements" },
+    "profile": { "enum": ["minimal", "standard", "comprehensive"] },
+    "documentRef": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["draft", "approved"] }
+  },
+  "additionalProperties": true
+}

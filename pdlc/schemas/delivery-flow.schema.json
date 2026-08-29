@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/delivery-flow.schema.json",
+  "title": "Delivery Flow Definition",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "description",
+    "status",
+    "stageSequence"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "planned",
+        "deprecated"
+      ]
+    },
+    "stageSequence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "stageId",
+          "inclusion"
+        ],
+        "properties": {
+          "stageId": {
+            "type": "string"
+          },
+          "inclusion": {
+            "enum": [
+              "required",
+              "conditional"
+            ]
+          },
+          "activationTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "controls": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}

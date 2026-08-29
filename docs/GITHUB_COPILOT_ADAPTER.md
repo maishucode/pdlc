@@ -2,9 +2,9 @@
 
 ## 1. Purpose
 
-This guide explains how the Lean PDLC Harness is exposed through GitHub Copilot and how to verify that Copilot can complete the Phase 1 POC workflow.
+This guide explains how the Lean PDLC Harness is exposed through GitHub Copilot and how to verify that Copilot can complete the Phase 1 POC Delivery Flow.
 
-The adapter is intentionally thin. It does not copy Stage, User Journey, workflow, role, Principle Pack, schema, gate, or state logic. Every Copilot surface uses the same shared sources as other supported Agent platforms.
+The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Domain Control, Knowledge, role, schema, checkpoint, or state logic. Every Copilot surface uses the same shared sources as other supported Agent platforms.
 
 ## 2. Adapter components
 
@@ -16,23 +16,23 @@ The adapter is intentionally thin. It does not copy Stage, User Journey, workflo
 | Custom Agent | `.github/agents/lean-pdlc.agent.md` | Manually selectable Lean PDLC persona and least-required tool set |
 | Prompt File | `.github/prompts/pdlc.prompt.md` | `/pdlc` convenience entry point in supported IDEs |
 | Cloud setup workflow | `.github/workflows/copilot-setup-steps.yml` | Installs Bun and validates the Harness in the Copilot cloud-agent environment |
-| Adapter validation | `pdlc/harnesses/validate-entrypoints.ts` | Detects missing, legacy, oversized, or drifted adapter files |
+| Adapter validation | `pdlc/platform-adapters/validate-entrypoints.ts` | Detects missing, legacy, oversized, or drifted adapter files |
 
 ## 3. Why each component exists
 
 ### Repository instructions
 
-`.github/copilot-instructions.md` provides the small set of controls that apply to every Copilot interaction in the repository. It points to the shared Skill rather than reproducing the complete workflow.
+`.github/copilot-instructions.md` provides the small set of controls that apply to every Copilot interaction in the repository. It points to the shared Skill rather than reproducing the complete Delivery Flow.
 
 ### Shared Agent Skill
 
-`.agents/skills/lean-pdlc/` is the canonical workflow guidance. GitHub supports `.agents/skills/<skill-name>/SKILL.md` as a project Skill location. Copilot loads a relevant Skill when the request matches its description.
+`.agents/skills/lean-pdlc/` is the canonical Delivery Flow guidance. GitHub supports `.agents/skills/<skill-name>/SKILL.md` as a project Skill location. Copilot loads a relevant Skill when the request matches its description.
 
 ### Custom Agent
 
 The Lean PDLC custom Agent uses the current `.agent.md` filename convention and declares only the `read`, `edit`, `search`, and `execute` tool aliases required for a POC.
 
-It is user-invocable but has automatic model invocation disabled. This prevents normal coding conversations from unexpectedly switching into a governed PDLC workflow. Users select it deliberately.
+It is user-invocable but has automatic model invocation disabled. This prevents normal coding conversations from unexpectedly switching into a governed PDLC Delivery Flow. Users select it deliberately.
 
 ### Prompt File
 
@@ -46,7 +46,7 @@ Copilot cloud agent works in an ephemeral GitHub Actions environment. The setup 
 2. Installs the repository-aligned Bun version.
 3. Confirms Bun is available.
 4. Runs the Harness regression tests.
-5. Validates schemas, the canonical Stage Catalog, User Journeys, workflows, Principle mappings, standards, portability, and Copilot entry points.
+5. Validates schemas, the canonical Stage Catalog, explicit Delivery Flow registration, Domain assets and references, Project Overlay resolution, portability, and Copilot entry points.
 
 The setup workflow must be present on the default branch before Copilot cloud agent will use it.
 
@@ -71,7 +71,7 @@ Feature availability can depend on organization policy and the installed Copilot
 /pdlc poc validate whether AI can categorize synthetic customer feedback
 ```
 
-Text after `/pdlc` is passed as workflow intent and context. If no intent is supplied, the prompt explains `poc`, `resume`, `status`, and `help`.
+Text after `/pdlc` is passed as Delivery Flow intent and context. If no intent is supplied, the prompt explains `poc`, `resume`, `status`, and `help`.
 
 Alternatively, select **Lean PDLC** from the custom Agent picker and enter:
 
@@ -143,7 +143,7 @@ Before a pilot, confirm that:
 - Bun execution is permitted by corporate endpoint or runner policy.
 - No production, regulated, JIRA, XRAY, or deployment access is granted to the POC Agent.
 
-No secrets or MCP servers are required for the Phase 1 POC workflow.
+No secrets or MCP servers are required for the Phase 1 POC Delivery Flow.
 
 ## 9. Conformance verification
 
@@ -189,7 +189,7 @@ Validation confirms:
 
 ## 10. Known Phase 1 limitations
 
-- Only the POC workflow is executable.
+- Only the POC Delivery Flow is executable.
 - Prompt Files are IDE-only and remain a preview feature.
 - Custom Agent support in some IDEs is still preview-dependent.
 - Commit, Verify, and Decide transitions are not implemented.

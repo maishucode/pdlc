@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/plugin.schema.json",
+  "title": "Plugin Manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "ownerDomain",
+    "version",
+    "description",
+    "deliveryFlows",
+    "defaultEnabled",
+    "permissions",
+    "contributes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "kind": {
+      "const": "plugin"
+    },
+    "id": {
+      "type": "string"
+    },
+    "ownerDomain": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "deliveryFlows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "defaultEnabled": {
+      "type": "boolean"
+    },
+    "permissions": {
+      "type": "object"
+    },
+    "contributes": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": false
+}
