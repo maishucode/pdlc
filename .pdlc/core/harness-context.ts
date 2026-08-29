@@ -1,9 +1,10 @@
 import { join } from "node:path";
-import { createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./context-receipt.ts";
+import { contextReceiptEvidenceEntries, createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./context-receipt.ts";
 import { DeliveryFlowRegistry } from "./delivery-flow-registry.ts";
 import { resolveDomainGuidance } from "./domain-guidance.ts";
 import { DomainRegistry } from "./domain-registry.ts";
 import { resolveDomainContext } from "./domain-resolver.ts";
+import { assessEvidenceIntegrity } from "./evidence.ts";
 import { PdlcError } from "./errors.ts";
 import { IntegrationRegistry } from "./integration-registry.ts";
 import { ProjectOverlay } from "./project-overlay.ts";
@@ -110,13 +111,19 @@ export class HarnessContext {
     const uniqueStages = [...new Set(stages)];
     const materials = await Promise.all(uniqueStages.map((stageId) => this.resolveStage(stageId, record)));
     const applications = new Map(record.resolution.contextApplications.map((entry) => [entry.stage, entry]));
-    return uniqueStages.flatMap((stage, index) => {
+    const issueGroups = await Promise.all(uniqueStages.map(async (stage, index) => {
       const application = applications.get(stage);
       if (!application) return [{ code: "STAGE_CONTEXT_APPLICATION_MISSING", path: "$.resolution.contextApplications", message: `Stage context has not been applied: ${stage}` }];
       if (application.schemaVersion === 1) return [{ code: "LEGACY_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.schemaVersion`, message: `Stage context must be re-executed with an Agent capability receipt: ${stage}` }];
-      return validateReceiptAgainstSnapshot(application, materials[index]!.snapshot).map((issue) => issue.code === "STALE_CONTEXT_RECEIPT"
+      const receiptIssues = validateReceiptAgainstSnapshot(application, materials[index]!.snapshot).map((issue) => issue.code === "STALE_CONTEXT_RECEIPT"
         ? { code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets or activation inputs changed after the Stage context was applied: ${stage}` }
         : { ...issue, path: `$.resolution.contextApplications.${stage}${issue.path.slice(1)}` });
-    });
+      const evidenceIssues = await assessEvidenceIntegrity(this.projectRoot, [{
+        name: `stageContext.${stage}`,
+        entries: contextReceiptEvidenceEntries(application),
+      }]);
+      return [...receiptIssues, ...evidenceIssues];
+    }));
+    return issueGroups.flat();
   }
 }

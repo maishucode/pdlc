@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { validateReceiptAgainstSnapshot } from "../core/context-receipt.ts";
+import { contextReceiptEvidenceEntries, validateReceiptAgainstSnapshot } from "../core/context-receipt.ts";
 import { persistRecordAndAudit } from "../core/controlled-mutation.ts";
 import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "../core/domain-guidance.ts";
 import { projectKnowledgeRefs } from "../core/domain-resolver.ts";
@@ -10,7 +10,7 @@ import { HarnessContext } from "../core/harness-context.ts";
 import { validateStageContextReceipt } from "../core/schema.ts";
 import { FileStateStore } from "../core/state.ts";
 import { buildRequiredAgentInvocations } from "../platform-adapters/github-copilot-agent-runtime.ts";
-import type { EvidenceRef, PocDeliveryRecord, StageContextReceipt } from "../core/types.ts";
+import type { PocDeliveryRecord, StageContextReceipt } from "../core/types.ts";
 import type { RunnerOptions } from "./types.ts";
 
 async function readRecord(options: RunnerOptions): Promise<PocDeliveryRecord> {
@@ -71,16 +71,8 @@ export async function applyStageContext(harnessRoot: string, options: RunnerOpti
   const issues = validateReceiptAgainstSnapshot(receipt, material.snapshot);
   if (issues.length > 0) throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt does not match the current resolved context", issues);
 
-  const contextEvidenceRefs = [...new Set([
-    ...receipt.knowledge.flatMap((entry) => entry.evidenceRefs),
-    ...receipt.domainContributions.flatMap((entry) => entry.evidenceRefs),
-    ...receipt.integrations.flatMap((entry) => entry.evidenceRefs),
-  ])];
-  const evidenceEntries: EvidenceRef[] = contextEvidenceRefs.map((ref) => ({
-    kind: /^https?:\/\//.test(ref) ? "url" : "file",
-    ref,
-    description: `Stage context evidence for ${stageId}`,
-  }));
+  const evidenceEntries = contextReceiptEvidenceEntries(receipt);
+  const contextEvidenceRefs = evidenceEntries.map(({ ref }) => ref);
   const evidenceIssues = await assessEvidenceIntegrity(options.root, [{ name: "stageContext", entries: evidenceEntries }]);
   if (evidenceIssues.length > 0) throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt evidence is invalid", evidenceIssues);
 

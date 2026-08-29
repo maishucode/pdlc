@@ -721,6 +721,29 @@ test("loads legacy Stage applications and requires capability re-execution", asy
   assert(details.some(({ code }) => code === "LEGACY_STAGE_CONTEXT_APPLICATION"), JSON.stringify(validation.output));
 });
 
+test("status and validate reject stored Agent receipts whose evidence was removed", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-removed-agent-evidence-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+  const evidenceRef = "pdlc/evidence/context/requirements-agent-result.md";
+  await mkdir(dirname(join(workspace, evidenceRef)), { recursive: true });
+  await writeFile(join(workspace, evidenceRef), "# UX Agent result\n");
+  await applyContextReceipt(workspace, "requirements-clarification", "pdlc-agent", [evidenceRef]);
+  await rm(join(workspace, evidenceRef));
+
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  const blockers = (status.output as { blockers: Array<{ code: string }> }).blockers;
+  assert(blockers.some(({ code }) => code === "EVIDENCE_UNREADABLE"), JSON.stringify(status.output));
+
+  const validation = await runCli(["validate", "--root", workspace], workspace);
+  assert.equal(validation.exitCode, 2);
+  const details = (validation.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(details.some(({ code }) => code === "EVIDENCE_UNREADABLE"), JSON.stringify(validation.output));
+});
+
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-context-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));

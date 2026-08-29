@@ -13,6 +13,7 @@ import type {
   ResolvedStandardDefault,
   StageDefinition,
   StageContextReceipt,
+  EvidenceRef,
   ValidationIssue,
 } from "./types.ts";
 
@@ -51,6 +52,19 @@ export interface StageContextSnapshot {
   domainContributions: HashedDomainContribution[];
   integrations: HashedIntegration[];
   contextHash: string;
+}
+
+export function contextReceiptEvidenceEntries(receipt: StageContextReceipt): EvidenceRef[] {
+  const refs = [...new Set([
+    ...receipt.knowledge.flatMap((entry) => entry.evidenceRefs),
+    ...receipt.domainContributions.flatMap((entry) => entry.evidenceRefs),
+    ...receipt.integrations.flatMap((entry) => entry.evidenceRefs),
+  ])];
+  return refs.map((ref) => ({
+    kind: /^https?:\/\//.test(ref) ? "url" : "file",
+    ref,
+    description: `Stage context evidence for ${receipt.stage}`,
+  }));
 }
 
 export async function createStageContextSnapshot(input: {
