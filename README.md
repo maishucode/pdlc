@@ -98,8 +98,6 @@ pdlc/
 
 The ownership rule is: `.pdlc/` is owned by the Harness and Runner; `pdlc/` is owned by the product project. Every shared professional asset lives under its owning Domain inside `.pdlc/domains/`.
 
-See [Domain Capability Authoring](.pdlc/domains/README.md) for a complete guide to adding a Domain role, Skill, capability, Stage Hook, execution result, and Receipt, with UX and Java examples.
-
 ## Current implementation
 
 The POC Delivery Flow is executable. Implementation and end-to-end PDLC Flows are registered and validated but remain planned until their checkpoint and integration behavior is implemented.
