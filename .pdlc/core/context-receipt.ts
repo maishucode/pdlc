@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { sha256 } from "./hash.ts";
+import { agentInvocationId } from "./agent-capability.ts";
 import type { ProjectOverlay } from "./project-overlay.ts";
 import type { ResolvedIntegration } from "./domain-resolver.ts";
 import type {
@@ -145,6 +146,9 @@ export function validateReceiptAgainstSnapshot(receipt: StageContextReceipt, sna
     if (!expected) return;
     if (entry.agent !== expected.agent) issues.push({ code: "CONTEXT_AGENT_MISMATCH", path: `$.domainContributions[${index}].agent`, message: `Expected Agent ${expected.agent}` });
     if (!sameStrings(entry.skills, expected.skills)) issues.push({ code: "CONTEXT_SKILLS_MISMATCH", path: `$.domainContributions[${index}].skills`, message: "Domain Skill set does not match the resolved Hook" });
+    if (entry.capability !== expected.capability) issues.push({ code: "CONTEXT_CAPABILITY_MISMATCH", path: `$.domainContributions[${index}].capability`, message: `Expected capability ${expected.capability}` });
+    const expectedInvocationId = agentInvocationId(snapshot.contextHash, expected);
+    if (entry.execution.invocationId !== expectedInvocationId) issues.push({ code: "CONTEXT_INVOCATION_MISMATCH", path: `$.domainContributions[${index}].execution.invocationId`, message: "Agent invocation does not belong to the current Stage context" });
   });
   const integrationMap = new Map(snapshot.integrations.map((entry) => [entry.ref, entry]));
   receipt.integrations.forEach((entry, index) => {

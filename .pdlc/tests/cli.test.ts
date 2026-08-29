@@ -16,7 +16,7 @@ interface ContextOutput {
   contextHash: string;
   controls: Array<{ ref: string }>;
   knowledge: Array<{ ref: string }>;
-  domainContributions: Array<{ domain: string; version: string; agent: { id: string }; skills: Array<{ name: string }> }>;
+  domainContributions: Array<{ domain: string; version: string; capability: string; agent: { id: string }; skills: Array<{ name: string }> }>;
   integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
   requiredAgentInvocations: Array<{
     invocationId: string;
@@ -37,18 +37,25 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
   assert.equal(context.exitCode, 0, JSON.stringify(context.output));
   const output = context.output as ContextOutput;
   const receipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage,
     contextHash: output.contextHash,
     policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref} while performing ${stage}.` })),
     knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs })),
-    domainContributions: output.domainContributions.map(({ domain, version, agent, skills }) => ({
+    domainContributions: output.domainContributions.map(({ domain, version, capability, agent, skills }) => ({
       ref: `${domain}@${version}:${agent.id}`,
+      capability,
       agent: agent.id,
       skills: skills.map(({ name }) => name),
       disposition: "used",
       notes: `Executed ${agent.id} guidance for ${stage}.`,
       evidenceRefs,
+      execution: {
+        invocationId: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.invocationId,
+        platform: "github-copilot",
+        status: "completed",
+        nativeExecutionRef: `test-agent-call:${stage}:${capability}`,
+      },
     })),
     integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs })),
   };
@@ -654,7 +661,7 @@ test("resolves Stage context without writing runtime state and rejects stale rec
   await store.setCurrentRecord(record.id);
   const output = result.output as ContextOutput;
   const receiptPath = "stale-receipt.json";
-  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 1, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], domainContributions: [], integrations: [] }));
+  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 2, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], domainContributions: [], integrations: [] }));
   const applied = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(applied.exitCode, 2);
   assert.equal((applied.output as { error: { code: string } }).error.code, "CONTEXT_RECEIPT_INVALID");
@@ -702,4 +709,54 @@ test("emits deterministic context-bound GitHub Copilot Agent invocation contract
   assert.equal(changed.exitCode, 0, JSON.stringify(changed.output));
   const changedInvocation = (changed.output as ContextOutput).requiredAgentInvocations[0]!;
   assert.notEqual(changedInvocation.invocationId, invocation.invocationId);
+});
+
+test("rejects completed Agent capability receipts with mismatched execution identity", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-agent-receipt-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+  const contextResult = await runCli(["context", "ux-design", "--root", workspace], workspace);
+  assert.equal(contextResult.exitCode, 0, JSON.stringify(contextResult.output));
+  const output = contextResult.output as ContextOutput;
+  const invocation = output.requiredAgentInvocations[0]!;
+  const receipt = {
+    schemaVersion: 2,
+    stage: "ux-design",
+    contextHash: output.contextHash,
+    policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref}.` })),
+    knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs: ["pdlc/evidence/context/ux-design.md"] })),
+    domainContributions: [{
+      ref: "ux@1.0.0:lean-pdlc-ux",
+      capability: invocation.capability,
+      agent: invocation.agent.id,
+      skills: invocation.skills.map(({ name }) => name),
+      disposition: "used",
+      notes: "Delegated through the native Copilot agent tool.",
+      evidenceRefs: ["pdlc/evidence/context/ux-design.md"],
+      execution: {
+        invocationId: invocation.invocationId.replace(/^./, invocation.invocationId.startsWith("a") ? "b" : "a"),
+        platform: "github-copilot",
+        status: "completed",
+        nativeExecutionRef: "copilot-tool-call:call-123",
+      },
+    }],
+    integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs: ["pdlc/evidence/context/ux-design.md"] })),
+  };
+  const receiptPath = "mismatched-agent-receipt.json";
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+
+  const applied = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(applied.exitCode, 2);
+  const details = (applied.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(details.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"), JSON.stringify(applied.output));
+
+  receipt.domainContributions[0]!.execution.invocationId = invocation.invocationId;
+  receipt.domainContributions[0]!.capability = "ux-wrong-capability";
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const capabilityMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(capabilityMismatch.exitCode, 2);
+  const capabilityDetails = (capabilityMismatch.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(capabilityDetails.some(({ code }) => code === "CONTEXT_CAPABILITY_MISMATCH"), JSON.stringify(capabilityMismatch.output));
 });

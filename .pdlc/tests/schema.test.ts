@@ -60,7 +60,7 @@ test("validates the canonical v2 Delivery Record", async () => {
 
 test("requires evidence when a Stage Context asset is declared used", () => {
   const result = validateStageContextReceipt({
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage: "requirements-clarification",
     contextHash: "a".repeat(64),
     policies: [],
@@ -70,6 +70,46 @@ test("requires evidence when a Stage Context asset is declared used", () => {
   });
   assert.equal(result.ok, false);
   if (!result.ok) assert(result.issues.some(({ code }) => code === "TOO_FEW_ITEMS"));
+});
+
+test("requires completed native execution metadata for Agent capability receipts", () => {
+  const completed = {
+    schemaVersion: 2,
+    stage: "ux-design",
+    contextHash: "a".repeat(64),
+    policies: [],
+    knowledge: [],
+    domainContributions: [{
+      ref: "ux@1.0.0:lean-pdlc-ux",
+      capability: "ux-design-spec",
+      agent: "lean-pdlc-ux",
+      skills: ["lean-pdlc-ux-spec"],
+      disposition: "used",
+      notes: "Delegated to the native UX Agent.",
+      evidenceRefs: ["pdlc/evidence/context/ux-design.md"],
+      execution: {
+        invocationId: "b".repeat(64),
+        platform: "github-copilot",
+        status: "completed",
+        nativeExecutionRef: "copilot-tool-call:call-123",
+      },
+    }],
+    integrations: [],
+  };
+  const valid = validateStageContextReceipt(completed);
+  assert.equal(valid.ok, true, JSON.stringify(valid.issues));
+
+  const skipped = structuredClone(completed);
+  skipped.domainContributions[0]!.disposition = "not-used";
+  const invalid = validateStageContextReceipt(skipped);
+  assert.equal(invalid.ok, false);
+  if (!invalid.ok) assert(invalid.issues.some(({ code }) => code === "REQUIRED_AGENT_CAPABILITY_SKIPPED"));
+
+  const missingExecution = structuredClone(completed) as typeof completed & { domainContributions: Array<{ execution?: unknown }> };
+  delete missingExecution.domainContributions[0]!.execution;
+  const missing = validateStageContextReceipt(missingExecution);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert(missing.issues.some(({ path }) => path.endsWith(".execution")));
 });
 
 test("rejects production use in a POC", async () => {

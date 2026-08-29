@@ -5,7 +5,7 @@
   "type": "object",
   "required": ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "domainContributions", "integrations"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "stage": { "type": "string", "minLength": 1 },
     "contextHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "policies": { "type": "array", "items": { "$ref": "#/$defs/policy" } },
@@ -48,11 +48,26 @@
         { "$ref": "#/$defs/assetFields" },
         {
           "type": "object",
-          "required": ["agent", "skills"],
+          "required": ["capability", "agent", "skills", "execution"],
           "properties": {
+            "capability": { "type": "string", "minLength": 1 },
             "agent": { "type": "string", "minLength": 1 },
-            "skills": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+            "skills": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+            "execution": {
+              "type": "object",
+              "required": ["invocationId", "platform", "status", "nativeExecutionRef"],
+              "properties": {
+                "invocationId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "platform": { "const": "github-copilot" },
+                "status": { "const": "completed" },
+                "nativeExecutionRef": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
           }
+        },
+        {
+          "properties": { "disposition": { "const": "used" } }
         },
         {
           "if": { "properties": { "disposition": { "const": "used" } } },

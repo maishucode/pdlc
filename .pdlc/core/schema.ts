@@ -154,7 +154,7 @@ function validateStageContextReceiptFields(value: unknown, path: string, issues:
   if (!receipt) return;
   const allowed = ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "domainContributions", "integrations", ...(stored ? ["actor", "appliedAt"] : [])];
   exact(receipt, allowed, path, issues);
-  if (receipt.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 1");
+  if (receipt.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 2");
   id(receipt.stage, `${path}.stage`, issues);
   if (typeof receipt.contextHash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.contextHash)) issue(issues, "INVALID_CONTEXT_HASH", `${path}.contextHash`, "Expected a SHA-256 digest");
   if (stored) {
@@ -191,7 +191,8 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
     const itemPath = `${path}[${index}]`;
     const item = object(entry, itemPath, issues);
     if (!item) return;
-    const allowed = ["ref", "disposition", "notes", "evidenceRefs", ...(hasSkills ? ["skills"] : []), ...(!integration && hasSkills ? ["agent"] : [])];
+    const domainContribution = !integration && hasSkills;
+    const allowed = ["ref", "disposition", "notes", "evidenceRefs", ...(hasSkills ? ["skills"] : []), ...(domainContribution ? ["capability", "agent", "execution"] : [])];
     exact(item, allowed, itemPath, issues);
     if (string(item.ref, `${itemPath}.ref`, issues)) refs.push(item.ref);
     if (!CONTEXT_USE_DISPOSITIONS.includes(item.disposition as never)) issue(issues, "INVALID_CONTEXT_DISPOSITION", `${itemPath}.disposition`, "Expected used or not-used");
@@ -199,7 +200,19 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
     const minimumEvidence = item.disposition === "used" ? 1 : 0;
     stringArray(item.evidenceRefs, `${itemPath}.evidenceRefs`, issues, minimumEvidence);
     if (hasSkills) stringArray(item.skills, `${itemPath}.skills`, issues);
-    if (!integration && hasSkills) string(item.agent, `${itemPath}.agent`, issues);
+    if (domainContribution) {
+      id(item.capability, `${itemPath}.capability`, issues);
+      string(item.agent, `${itemPath}.agent`, issues);
+      if (item.disposition !== "used") issue(issues, "REQUIRED_AGENT_CAPABILITY_SKIPPED", `${itemPath}.disposition`, "A required Agent capability must be executed");
+      const execution = object(item.execution, `${itemPath}.execution`, issues);
+      if (execution) {
+        exact(execution, ["invocationId", "platform", "status", "nativeExecutionRef"], `${itemPath}.execution`, issues);
+        if (typeof execution.invocationId !== "string" || !/^[a-f0-9]{64}$/.test(execution.invocationId)) issue(issues, "INVALID_INVOCATION_ID", `${itemPath}.execution.invocationId`, "Expected a context-bound SHA-256 invocation id");
+        if (execution.platform !== "github-copilot") issue(issues, "INVALID_AGENT_PLATFORM", `${itemPath}.execution.platform`, "Expected github-copilot");
+        if (execution.status !== "completed") issue(issues, "AGENT_CAPABILITY_INCOMPLETE", `${itemPath}.execution.status`, "Expected completed");
+        string(execution.nativeExecutionRef, `${itemPath}.execution.nativeExecutionRef`, issues);
+      }
+    }
   });
   if (new Set(refs).size !== refs.length) issue(issues, "DUPLICATE_CONTEXT_REF", path, "Context asset refs must be unique");
 }

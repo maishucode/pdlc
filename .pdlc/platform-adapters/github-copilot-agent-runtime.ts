@@ -1,12 +1,5 @@
-import { sha256 } from "../core/hash.ts";
+import { agentInvocationId } from "../core/agent-capability.ts";
 import type { DomainGuidanceContribution } from "../core/types.ts";
-
-export interface AgentInvocationIdentity {
-  ref: string;
-  capability: string;
-  agent: string;
-  skills: string[];
-}
 
 export interface RequiredAgentInvocationContract {
   invocationId: string;
@@ -19,17 +12,6 @@ export interface RequiredAgentInvocationContract {
   mode: DomainGuidanceContribution["mode"];
   handoff: string;
   approvalBoundary: string;
-}
-
-export function agentInvocationId(contextHash: string, identity: AgentInvocationIdentity): string {
-  return sha256({
-    schemaVersion: 1,
-    contextHash,
-    ref: identity.ref,
-    capability: identity.capability,
-    agent: identity.agent,
-    skills: [...identity.skills].sort(),
-  });
 }
 
 export function buildRequiredAgentInvocations(

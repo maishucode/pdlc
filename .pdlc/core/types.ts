@@ -106,8 +106,15 @@ export interface ContextAssetReceipt {
 }
 
 export interface ContextDomainContributionReceipt extends ContextAssetReceipt {
+  capability: string;
   agent: string;
   skills: string[];
+  execution: {
+    invocationId: string;
+    platform: "github-copilot";
+    status: "completed";
+    nativeExecutionRef: string;
+  };
 }
 
 export interface ContextIntegrationReceipt extends ContextAssetReceipt {
@@ -115,7 +122,7 @@ export interface ContextIntegrationReceipt extends ContextAssetReceipt {
 }
 
 export interface StageContextReceipt {
-  schemaVersion: 1;
+  schemaVersion: 2;
   stage: string;
   contextHash: string;
   policies: ContextPolicyReceipt[];
