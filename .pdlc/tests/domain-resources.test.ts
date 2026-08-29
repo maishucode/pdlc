@@ -43,6 +43,10 @@ test("requires the main POC entry point to compose Domain resources at every Sta
   assert.match(skill, /context <stage-id>/);
   assert.match(skill, /Never ask the end user to select a Domain Agent manually/);
   assert.match(agent, /Domain contributions extend this Agent; they do not replace it/);
+  const fastStart = skill.match(/## Fast start and just-in-time loading[\s\S]*?## Select the Delivery Flow/)?.[0] ?? "";
+  assert.match(fastStart, /requiredAgentInvocations/);
+  assert.match(fastStart, /native `agent` tool/);
+  assert.match(fastStart, /agent-capability-result/);
 });
 
 test("wires required Domain capabilities to the native Copilot agent tool", async () => {

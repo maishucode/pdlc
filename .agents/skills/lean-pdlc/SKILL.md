@@ -48,8 +48,9 @@ Before that first clarification round, do only this:
 2. create the Requirements shell and atomically initialize the minimal DRAFT Delivery Record, current pointer, and creation audit event through the Runner;
 3. classify only technology and domain tags evident from the user's prompt;
 4. enter `requirements-clarification` and make one read-only `context requirements-clarification` Runner call;
-5. read the Domain Agent and Skill files returned by that call; and
-6. ask the first focused clarification round immediately.
+5. read the Domain Agent and Skill files returned by that call;
+6. for every returned `requiredAgentInvocations` entry, invoke the exact Domain Agent once through the native `agent` tool, pass the full contract and bound Skill paths unchanged, and require the matching `agent-capability-result`; and
+7. use that delegated result to ask the first focused clarification round immediately. Delay receipt persistence, but never delay or emulate the required capability invocation.
 
 Delay all other work until it is required:
 
