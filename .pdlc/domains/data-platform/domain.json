@@ -2,14 +2,16 @@
   "schemaVersion": 1,
   "id": "data-platform",
   "name": "Data Platform",
-  "description": "Owns reusable knowledge and integration capability for enterprise data platforms.",
+  "description": "Owns reusable policies, knowledge, Skills, Agents, and Hooks for enterprise data platforms.",
   "owners": ["data-platform-leadership"],
   "policyApprovers": ["data-governance"],
   "maintainers": ["data-platform-engineering"],
   "contributionMode": {
     "artifacts": "reviewed",
-    "controls": "restricted",
+    "policies": "restricted",
     "knowledge": "reviewed",
-    "capabilities": "restricted"
+    "skills": "restricted",
+    "agents": "restricted",
+    "hooks": "restricted"
   }
 }

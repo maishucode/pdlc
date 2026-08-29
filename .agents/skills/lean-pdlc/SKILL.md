@@ -1,6 +1,6 @@
 ---
 name: lean-pdlc
-description: Guide lightweight, risk-based product delivery using canonical Stages, Delivery Flows, Domain-owned Controls and Knowledge, Project Overlays, capability Plugins, Delivery Records, and auditable evidence. Use when starting or continuing a POC, implementation, or end-to-end PDLC delivery.
+description: Guide lightweight, risk-based product delivery using canonical Stages, Delivery Flows, Domain-owned Policies, Knowledge, Skills, Agents and Hooks, top-level Integrations, Project Overlays, Delivery Records, and auditable evidence. Use when starting or continuing a POC, implementation, or end-to-end PDLC delivery.
 ---
 
 # Lean PDLC
@@ -30,7 +30,7 @@ After activation:
 3. If starting and the prompt already contains an idea, do not ask for it again. Create only the minimal incomplete DRAFT Record and Requirements shell needed to preserve that idea and its known technology tags. If the idea is absent, ask for it immediately and defer file creation. Leave unknown product fields empty rather than inventing success criteria or safety boundaries. Apply Delivery Flow-owned defaults without asking product-requirement questions about role assignment or timebox.
 4. Determine whether requirements need minimal, standard, or comprehensive depth. For a user-facing greenfield POC, default to standard depth.
 5. Resolve only conditional Stages implied by context already known. Do not resolve or prepare future Stages in anticipation. System-supplied context removes repetitive questions but never replaces confirmation of the user, problem, behavior, business rules, scenarios, scope, data decisions, or success measures. Every unresolved product question must offer 2–4 mutually exclusive, selectable options, plus `X) Other`. The user can answer by choosing an option letter and may add detail for `X) Other`; do not ask an open-ended question as the primary answer. Never exceed `questionRules.maxQuestionsPerRound` in chat.
-6. Before performing work for the current canonical Stage, internally invoke `bun .pdlc/cli.ts context <stage-id> --root <project-root>` exactly once for that Stage entry. Apply mandatory Controls, auto-apply Project Baselines and resolved Defaults, consult only relevant returned Knowledge, and read every returned Plugin Agent and Skill path. Preserve each Plugin's permissions and approval boundary. An empty capability list means continue with core behavior. Never ask the end user to select a Plugin Agent manually. `guidance <stage-id>` remains a compatibility view of Plugin-only contributions and is not an additional startup call.
+6. Before performing work for the current canonical Stage, internally invoke `bun .pdlc/cli.ts context <stage-id> --root <project-root>` exactly once for that Stage entry. Apply mandatory Policies as Controls, auto-apply Project Baselines and resolved Defaults, consult only relevant returned Knowledge, and read every returned Domain Agent, Domain Skill, and Integration Skill path. Preserve declared permissions and approval boundaries. Empty Domain contributions or Integrations mean continue with core behavior. Never ask the end user to select a Domain Agent manually. `guidance <stage-id>` remains a Domain-contribution compatibility view and is not an additional startup call.
 7. Maintain both the Delivery Record and `pdlc/requirements/<POC-ID>.md` behind the conversation; summarize material changes.
 8. Never create or modify application code, install application dependencies, or run an application build until the user explicitly approves the Requirements and Build Readiness summary.
 9. Never show Bun commands or ask the end user to execute the Runner. Invoke the internal Runner yourself only for Stage contribution resolution, validation, Build Readiness, or a checkpoint.
@@ -46,7 +46,7 @@ Before that first clarification round, do only this:
 2. create a minimal DRAFT Delivery Record and Requirements shell;
 3. classify only technology and domain tags evident from the user's prompt;
 4. enter `requirements-clarification` and make one read-only `context requirements-clarification` Runner call;
-5. read the Plugin Agent and Skill files returned by that call; and
+5. read the Domain Agent and Skill files returned by that call; and
 6. ask the first focused clarification round immediately.
 
 Delay all other work until it is required:
@@ -58,7 +58,7 @@ Delay all other work until it is required:
 - Do not inspect application files, install dependencies, choose a framework setup, or prepare implementation before Build Readiness.
 - Do not repeat stable Skill or reference reads already available in the current conversation unless the source changed or the needed detail was not loaded.
 
-Before final Requirements review and Build Readiness, perform the full reconciliation: resolve all applicable Controls, Project Baselines, Defaults, Knowledge, and Capabilities; complete provenance and application notes; validate the Harness and active Record; and present the complete Artifact. Fast start changes scheduling, never governance strength.
+Before final Requirements review and Build Readiness, perform the full reconciliation: resolve all applicable Policies/Controls, Project Baselines, Defaults, Knowledge, Domain contributions, and Integrations; complete provenance and application notes; validate the Harness and active Record; and present the complete Artifact. Fast start changes scheduling, never governance strength.
 
 ## Select the Delivery Flow
 
@@ -79,10 +79,10 @@ v2 currently executes only the POC path. Do not simulate unavailable Implementat
 6. Read [references/requirements-clarification.md](references/requirements-clarification.md) and `.pdlc/delivery-flows/poc/controls/requirements.json`. Create the draft from `.pdlc/domains/product-management/artifacts/requirements/templates/default.md`. For document mode, use the sibling `questions.md` template at the Flow Control's configured path, then stop until the user says it is complete.
 7. Classify the technology independently of framework names. For example, React/Vue/Angular browser apps imply `web-ui`; native or cross-platform mobile apps imply `mobile-ui`.
 8. Read [references/domain-context.md](references/domain-context.md), then use the current Stage's `context` result as the authoritative resolved view. Do not independently scan every Domain folder. Controls are mandatory. Guidance, References, and KB are advisory context. Defaults are auto-applied unless a higher-precedence source or locked Control prevents an override.
-9. Resolve project-specific context only from `pdlc/config/domains/<domain>/`: approved `baseline.json`, cumulative `controls/`, overrideable `defaults/`, and project `knowledge/`. Never let project content weaken an enterprise Control.
+9. Resolve project-specific context only from `pdlc/config/domains/<domain>/`: approved `baseline.json`, cumulative `policies/`, overrideable `defaults/`, and project `knowledge/`. Never let project content weaken an enterprise Policy/Control.
 10. Record applicable Control references in the Draft without delaying the first clarification round. Add concrete application notes incrementally when product behavior, design, and evidence make them meaningful, and complete them before final Requirements review. Keep user-confirmed product decisions as `RQ-xxx`; do not count automatic context as answered questions.
 11. Prepare the smallest reversible design and verification approach that satisfies the clarified Requirements, mandatory Controls, and approved Project Baselines.
-12. Present the complete Requirements Artifact and one Build Readiness summary containing behavior, edge cases, UX, quality attributes, scope, data, success measures, Controls and exceptions, Baselines, resolved Defaults, relevant Knowledge and Capabilities, deviations, open questions, and proposed build. Ask the user to explicitly approve the named document and Build Readiness, then stop.
+12. Present the complete Requirements Artifact and one Build Readiness summary containing behavior, edge cases, UX, quality attributes, scope, data, success measures, Policies/Controls and exceptions, Baselines, resolved Defaults, relevant Knowledge, Domain contributions and Integrations, deviations, open questions, and proposed build. Ask the user to explicitly approve the named document and Build Readiness, then stop.
 13. Only after explicit approval, internally invoke `bun .pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>`. The Runner must atomically bind approval metadata to the Requirements content hash, validate Build Readiness, update the Record, and append its audit event in that one process. Do not edit approval fields manually.
 14. If Build Readiness passes, implement exactly the approved scope. If Requirements, applicable Controls, Project Baselines, or resolved Defaults change materially, the content-hash mismatch blocks further build activity; update the draft content, present a new Build Readiness summary, and obtain approval again.
 15. Capture evidence as references, not pasted transcripts. Read [references/delivery-record.md](references/delivery-record.md) before updating a record.
@@ -101,7 +101,7 @@ v2 currently executes only the POC path. Do not simulate unavailable Implementat
 - Treat applicable Controls as blocking and Knowledge as advisory. A Control exception requires the declared approver and evidence path.
 - Never let a Project Overlay override a locked enterprise Control. An overrideable Default may be changed, but the Requirements must show the replacement and rationale.
 - Do not copy shared Delivery Flow content into Codex- or Copilot-specific files.
-- Do not redefine canonical Stage semantics inside a Delivery Flow, Domain asset, Plugin, or platform adapter. A Stage is not automatically a checkpoint.
+- Do not redefine canonical Stage semantics inside a Delivery Flow, Domain asset, Hook, Integration, or platform adapter. A Stage is not automatically a checkpoint.
 
 ## Use the Runner sparingly
 

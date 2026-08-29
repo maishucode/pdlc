@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/integration-catalog.schema.json",
+  "title": "Integration Catalog",
+  "type": "object",
+  "required": ["schemaVersion", "owner", "integrations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "owner": { "type": "string", "minLength": 1 },
+    "integrations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "definition"],
+        "properties": {
+          "id": { "type": "string" },
+          "definition": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -3,7 +3,7 @@
 Copy the `pdlc/config/domains/` shape into a product repository and keep only the Domains the project actually customizes.
 
 - `baseline.json` records approved facts that later Stages should not ask again.
-- `controls/` adds project-specific mandatory rules; it cannot weaken enterprise Controls.
+- `policies/` adds project-specific mandatory rules; it cannot weaken enterprise Policies.
 - `defaults/` supplies project preferences and approved implementation choices.
 - `knowledge/` stores project-local context and references.
 

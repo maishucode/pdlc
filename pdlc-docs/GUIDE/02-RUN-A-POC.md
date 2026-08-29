@@ -12,9 +12,9 @@ Use a short outcome-oriented request:
 
 The Agent opens a draft POC. It does not start coding yet.
 
-Startup uses a fast path: the Agent creates a minimal Draft, resolves the Requirements Stage context once, reads any returned Plugin contribution, and asks the first clarification round. Full validation, future Stage resolution, detailed Control application, design, and verification planning happen only when needed and are completed before Build Readiness.
+Startup uses a fast path: the Agent creates a minimal Draft, resolves the Requirements Stage context once, reads any returned Domain contribution, and asks the first clarification round. Full validation, future Stage resolution, detailed Control application, design, and verification planning happen only when needed and are completed before Build Readiness.
 
-You do not select Plugin Agents separately. Before each Stage, the main Agent resolves applicable Controls, Project Baselines and Defaults, relevant Knowledge, and enabled Capabilities. For example, the UX Domain supplies both mandatory experience Controls and an optional UX Plugin.
+You do not select Domain Agents separately. Before each Stage, the main Agent resolves applicable Policies/Controls, Project Baselines and Defaults, relevant Knowledge, Domain contributions, and Integrations. For example, the UX Domain supplies mandatory experience Policies plus Stage-bound Skills and an Agent.
 
 ## Answer requirement questions by choosing options
 
@@ -82,4 +82,4 @@ The v2 POC can guide work through Requirements, context resolution, lightweight 
 
 ## Next
 
-Continue with [03. Build a Domain Plugin](03-BUILD-A-COPILOT-PLUGIN.md) if your team wants to package specialized Agents and Skills into a Delivery Flow.
+Continue with [03. Add Domain Contributions](03-ADD-DOMAIN-CONTRIBUTIONS.md) if your team wants to bind specialized Agents and Skills into a Delivery Flow.

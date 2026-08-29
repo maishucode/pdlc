@@ -50,15 +50,15 @@ pdlc/
 pdlc-docs/
 ```
 
-Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Controls, Knowledge, and Capabilities before each Stage. Add project-specific context only under `pdlc/config/domains/`.
+Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Policies/Controls, Knowledge, Domain contributions, and Integrations before each Stage. Add project-specific context only under `pdlc/config/domains/`.
 
-Maintainers may project all enabled Plugin Agents and Skills into VS Code-native directories with:
+Maintainers may project all enabled Domain Agents and Skills into VS Code-native directories with:
 
 ```sh
-bun .pdlc/cli.ts plugin sync --root /absolute/path/to/product
+bun .pdlc/cli.ts domain sync --root /absolute/path/to/product
 ```
 
-This projection makes Plugin Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Plugin contributions automatically.
+This projection makes Domain Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Domain contributions automatically.
 
 ## Enable GitHub Copilot
 

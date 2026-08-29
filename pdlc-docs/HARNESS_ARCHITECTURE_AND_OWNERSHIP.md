@@ -5,7 +5,7 @@
 The Harness coordinates product delivery while keeping three concerns separate:
 
 1. **Delivery Model** — what work happens and in what order.
-2. **Domain Model** — who owns the artifacts, mandatory rules, knowledge, and capabilities used by that work.
+2. **Domain Model** — who owns the artifacts, mandatory Policies, knowledge, Skills, Agents, and Hooks used by that work.
 3. **Execution State** — what this delivery resolved, decided, approved, and evidenced.
 
 This separation lets the platform stay small while allowing expert teams and project teams to contribute independently.
@@ -27,7 +27,7 @@ A Delivery Flow is the single lifecycle composition concept. It contains:
 - checkpoints;
 - Flow constraints;
 - role-assignment and timebox behavior;
-- Artifact profiles and required Capabilities.
+- Artifact profiles and required Integrations.
 
 There is no separate Workflow or User Journey model.
 
@@ -36,20 +36,21 @@ There is no separate Workflow or User Journey model.
 A Domain is an ownership and organization boundary, such as Product Management, UX, Security, Solution Architecture, or Data Platform. A Domain may own any combination of:
 
 - Artifact Definitions;
-- Controls;
+- Policies;
 - Knowledge;
-- Plugins;
-- Integration Adapters.
+- Skills;
+- Agents;
+- Hooks.
 
-A Domain does not need content in every category. UX can own Controls, guidance, Defaults, and a Plugin. Data Platform can initially own only a Databricks KB.
+A Domain does not need content in every category. UX can own Policies, guidance, Defaults, Skills, an Agent, and Stage Hooks. Data Platform can initially own only a Databricks KB.
 
 ### Artifact Definition
 
 An Artifact Definition is the governed contract for a deliverable such as Requirements or Story. The owning Domain defines format, schema, profiles, templates, and examples. Stages consume and produce Artifact type references rather than copying templates.
 
-### Control
+### Policy and Control
 
-A Control is mandatory. Each policy declares applicability, version, owner Domain, rules, enforcement type, evidence, exception approvers, and any locked standard default. An applicable Control must be satisfied or formally excepted.
+A Policy is an authored mandatory rule stored under the owning Domain's `policies/` folder. When applicable to a delivery context, it enters the effective Control chain. Each Policy declares applicability, version, owner Domain, rules, enforcement type, evidence, exception approvers, and any locked standard default. An applicable Policy/Control must be satisfied or formally excepted.
 
 ### Knowledge
 
@@ -62,20 +63,22 @@ Knowledge is useful context but is not mandatory by itself:
 
 If knowledge must become enforceable, the owning team creates a Control that references or requires it.
 
-### Plugin
+### Skill, Agent, and Hook
 
-A Plugin contributes Stage-aware agent behavior and Skills. It declares owner Domain, supported Delivery Flows, permissions, Stage bindings, and approval boundaries. A Plugin extends the Harness; it does not own Flow state or governance decisions.
+A Skill defines reusable expert procedure. An Agent provides a Domain-owned execution persona or behavior. A Hook binds canonical Stages to Domain Agents and Skills while declaring Flow scope, permissions, handoff, and approval boundaries. These assets live directly under their Domain; there is no Plugin wrapper or `capabilities/` layer.
 
-### Integration Adapter
+### Integration
 
-An Integration Adapter encapsulates authenticated access to an external system and declares network, credential, and external-write permissions. It remains distinct from Plugin because connection concerns and orchestration concerns evolve differently. A Plugin may invoke an Adapter.
+An Integration is a top-level, explicitly cataloged package for an external system such as JIRA, Xray, or Databricks. It declares owners, maintainers, Flow/Stage applicability, network and credential requirements, and external-write permissions. It may bundle Skills under `.pdlc/integrations/<id>/skills/`; this lets existing system-specific Skills remain usable without making the Integration a Domain.
+
+To adopt an existing JIRA or Xray Skill, move the complete Skill directory, including any relative scripts and references, to `.pdlc/integrations/<id>/skills/<skill-id>/`, declare its id and relative path in `integration.json`, and register the Integration in `.pdlc/integrations/catalog.json`. Stage context then returns the canonical Skill path whenever the Integration applies. If an Agent platform needs direct Skill discovery, keep only a thin wrapper under its discovery directory (for example `.agents/skills/`) that points to the canonical Integration Skill; do not maintain a second implementation.
 
 ### Project Overlay
 
 The Project Configuration Overlay adds project-specific context under `pdlc/config/domains/<domain>/`:
 
 - `baseline.json` — approved facts that later Stages should not ask again;
-- `controls/` — cumulative project-specific mandatory rules;
+- `policies/` — cumulative project-specific mandatory rules;
 - `defaults/` — project preferences that can override shared Defaults;
 - `knowledge/` — project-local guidance and references.
 
@@ -83,7 +86,7 @@ Project content cannot weaken or replace enterprise Controls.
 
 ### Delivery Record
 
-The Delivery Record is the execution truth. It stores Flow state, role assignment, Requirements approval hash, risk and technology context, resolved Controls/Baselines/Defaults/Knowledge/Capabilities, exceptions, evidence, and outcome.
+The Delivery Record is the execution truth. It stores Flow state, role assignment, Requirements approval hash, risk and technology context, resolved Controls/Baselines/Defaults/Knowledge/Integrations, exceptions, evidence, and outcome.
 
 ## 3. Resolution lifecycle
 
@@ -91,11 +94,12 @@ Before every Stage, the Runner resolves context using the selected Flow, active 
 
 ```text
 Flow + Stage + delivery context
-  -> enterprise Controls + project Controls
+  -> enterprise Domain Policies + project Policies (effective Controls)
   -> Project Baselines
   -> locked Control defaults + project Defaults + Domain Defaults
   -> relevant Domain Knowledge + project Knowledge
-  -> eligible Plugins and Integration Adapters
+  -> eligible Domain Hooks, Agents, and Skills
+  -> eligible top-level Integrations and bundled Skills
   -> Stage execution
 ```
 
@@ -107,7 +111,7 @@ Default precedence is:
 2. Project Default;
 3. Domain Default.
 
-Controls are cumulative. Project Controls never replace enterprise Controls.
+Policies are cumulative. Project Policies never replace enterprise Policies in the effective Control set.
 
 ## 4. End-to-End Control Chain
 
@@ -120,12 +124,12 @@ The Harness control model is a chain of distinct authorities. They are evaluated
 | Harness Invariant | A non-configurable integrity or safety rule enforced by Core code or schema |
 | Delivery Flow Control | A rule intrinsic to how one Delivery Flow operates |
 | Stage Completion Contract | The stable conditions and outputs that define completion of a canonical Stage |
-| Domain Control | A mandatory professional or enterprise rule owned by an expert Domain |
-| Project Control | A mandatory project-specific addition in the Project Overlay |
+| Domain Policy | A mandatory professional or enterprise rule owned by an expert Domain and selected into the Control set when applicable |
+| Project Policy | A mandatory project-specific addition in the Project Overlay |
 | Baseline / Default | Resolved delivery context; not a Control by itself, but it must not conflict with one |
 | Control Exception | A governed authorization to deviate from one applicable Control; never an implicit override |
 
-`Control` means mandatory. Guidance, Defaults, References, KB, and Plugin advice do not become mandatory unless a Control or Flow explicitly requires them.
+`Control` means an effective mandatory obligation. Guidance, Defaults, References, KB, and Skill advice do not become mandatory unless a Policy or Flow explicitly requires them.
 
 ### 4.2 The complete chain
 
@@ -137,7 +141,7 @@ The Harness control model is a chain of distinct authorities. They are evaluated
                 v
 2. Delivery Flow Controls
    Status model, checkpoints, constraints, role/timebox behavior,
-   Artifact profiles, required Capabilities, Flow-local controls
+   Artifact profiles, required Integrations, Flow-local controls
                 |
                 v
 3. Stage Completion Contract
@@ -145,12 +149,12 @@ The Harness control model is a chain of distinct authorities. They are evaluated
    input/output Artifact types
                 |
                 v
-4. Enterprise Domain Controls
-   Mandatory rules selected by Flow, Stage, risk, technology,
+4. Enterprise Domain Policies
+   Mandatory rules selected into the Control set by Flow, Stage, risk, technology,
    and delivery-domain context
                 |
                 v
-5. Project Controls
+5. Project Policies
    Additional mandatory rules from the Project Overlay;
    cumulative with enterprise Controls
                 |
@@ -181,8 +185,8 @@ The effective obligations for one Stage are therefore:
 Harness Invariants
 + Delivery Flow Controls
 + Stage Completion Contract
-+ applicable Enterprise Domain Controls
-+ applicable Project Controls
++ applicable Enterprise Domain Policies
++ applicable Project Policies
 ```
 
 ### 4.3 Authority and override rules
@@ -192,16 +196,16 @@ Harness Invariants
 | Harness Invariant | Harness Engineering, with relevant governance review | No | Change the versioned Harness contract; no delivery-local bypass |
 | Delivery Flow Control | PDLC Governance / Flow owner | No | Change the Flow or use a different approved Flow |
 | Stage Completion Contract | PDLC Governance | No | Change the canonical Stage definition through governed review |
-| Enterprise Domain Control | Domain policy approver | No | Use the Control's declared exception approver and evidence process |
-| Project Control | Project governance for the owning Domain | No | Use the project's governed exception or change process |
+| Enterprise Domain Policy | Domain policy approver | No | Use the Policy's declared exception approver and evidence process |
+| Project Policy | Project governance for the owning Domain | No | Use the project's governed exception or change process |
 | Project Baseline | Project approver | No conversational override | Approve a new baseline revision |
 | Project or Domain Default | Project or Domain maintainer | Yes, when not Control-locked | Record the replacement and rationale |
 
-Controls compose cumulatively. A Project Control may strengthen or specialize an enterprise Control, but it cannot remove or weaken it. A Default never outranks a Control. A Project Baseline that conflicts with an applicable Control is a configuration error, not a question for the delivery user.
+Policies compose cumulatively into the effective Control set. A Project Policy may strengthen or specialize an enterprise Policy, but it cannot remove or weaken it. A Default never outranks a Control. A Project Baseline that conflicts with an applicable Policy is a configuration error, not a question for the delivery user.
 
 ### 4.4 Applicability and assembly
 
-Domain and Project Controls may declare applicability across:
+Domain and Project Policies may declare applicability across:
 
 - Delivery Flow;
 - Stage;
@@ -216,11 +220,11 @@ Before every Stage, the Runner must:
 1. Validate Harness invariants and load the explicitly registered Delivery Flow.
 2. Resolve required and conditional Stages from the delivery context.
 3. Load the Flow's intrinsic controls and the current Stage Completion Contract.
-4. Select applicable enterprise Domain Controls.
-5. Add applicable Project Controls without replacing enterprise Controls.
+4. Select applicable enterprise Domain Policies.
+5. Add applicable Project Policies without replacing enterprise Policies.
 6. Resolve Project Baselines and Defaults and reject Control conflicts.
 7. Produce one provenance-rich effective Control set.
-8. Return Controls separately from Knowledge and Capabilities.
+8. Return Controls separately from Knowledge, Domain contributions, and Integrations.
 9. Require the Agent or Runner to satisfy, evidence, approve, or formally except each applicable obligation at the appropriate point.
 10. Persist Control applications, exception references, evidence, Checkpoint decisions, content hashes, and audit events.
 
@@ -255,8 +259,8 @@ Control reviewers should be able to trace every effective obligation to its sour
 | Harness integrity and non-bypassable rules | `.pdlc/core/`, `.pdlc/schemas/`, and tests |
 | Flow lifecycle and intrinsic controls | `.pdlc/delivery-flows/<flow>/flow.json` and `controls/` |
 | Stage completion semantics | `.pdlc/stages/catalog.json` |
-| Enterprise professional Controls | `.pdlc/domains/<domain>/controls/` |
-| Project Controls and Baselines | `pdlc/config/domains/<domain>/` |
+| Enterprise professional Policies | `.pdlc/domains/<domain>/policies/` |
+| Project Policies and Baselines | `pdlc/config/domains/<domain>/` |
 | Effective applications and exceptions | Delivery Record `resolution.controls` |
 | Evidence and controlled decisions | Delivery Record evidence, Checkpoint data, and append-only audit events |
 
@@ -274,7 +278,7 @@ The v2 implementation currently provides:
 - locked-Control versus Default conflict detection;
 - Requirements content-hash approval binding;
 - Delivery Record and audit infrastructure;
-- Plugin and Integration Adapter permission metadata.
+- Domain Hook and Integration permission metadata.
 
 Formal `commit`, `verify`, and `decide` state transitions, generalized per-rule evidence evaluation, and production/release integration remain planned. Their absence must not be represented as a passed control.
 
@@ -286,15 +290,16 @@ Expert teams contribute through Domain ownership rather than attending every del
 
 | Team | Typical ownership |
 |---|---|
-| Product Management | Requirements and Story Artifacts, product-quality Controls, authoring guidance |
-| UX | Experience Controls, guidance, reference UI, UX Plugin |
-| Solution Architecture | Architecture Controls, design guidance and references |
-| Security | Security Controls and verification guidance |
-| Data Platform | Platform KB, references, and Integration Adapters |
+| Product Management | Requirements and Story Artifacts, product-quality Policies, authoring guidance |
+| UX | Experience Policies, guidance, reference UI, Skills, Agents, and Hooks |
+| Solution Architecture | Architecture Policies, design guidance and references |
+| Security | Security Policies and verification guidance |
+| Data Platform | Platform KB, references, and Domain expertise |
+| Integration Platform | Top-level external-system Integrations and their permission boundaries |
 | Harness Engineering | Core registries, schemas, Runner, resolution, tests |
 | PDLC Governance | Stage Catalog and Delivery Flow Catalog/definitions |
 
-Ownership metadata explains responsibility. CODEOWNERS enforces review routing. Runtime resolution uses `ownerDomain`, not team names.
+Ownership metadata explains responsibility. CODEOWNERS enforces review routing. Domain assets use `ownerDomain`; top-level Integrations declare their own `owners` and `maintainers`.
 
 ## 6. Folder contract
 
@@ -306,15 +311,21 @@ Ownership metadata explains responsibility. CODEOWNERS enforces review routing. 
     schema.json
     templates/
     examples/
-  controls/*.policy.json
+  policies/*.policy.json
   knowledge/
     guidance/*.json + content
     defaults/*.json
     references/*.json + content
     kb/*.json + content
-  capabilities/
-    plugins/<plugin>/plugin.json
-    adapters/<adapter>/adapter.json
+  skills/<skill>/SKILL.md
+  agents/<agent>.agent.md
+  hooks/*.json
+
+.pdlc/integrations/
+  catalog.json
+  <integration>/
+    integration.json
+    skills/<skill>/SKILL.md  # optional
 ```
 
 Only create categories that the Domain actually owns.
@@ -330,7 +341,7 @@ Harness-managed runtime state and project-owned delivery content use separate na
 pdlc/
   config/domains/<domain>/
     baseline.json
-    controls/
+    policies/
     defaults/
     knowledge/
   requirements/
@@ -351,7 +362,7 @@ Put each decision under the existing shared Domain that owns the subject. For ex
 ```text
 pdlc/config/domains/solution-architecture/
   baseline.json
-  controls/
+  policies/
     repository-boundaries.policy.json
   defaults/
     web-stack.json
@@ -366,7 +377,7 @@ The folder name must match a Domain registered under `.pdlc/domains/`. The Runne
 | Project need | Location | Runtime meaning |
 |---|---|---|
 | Record an approved fact or decision that later Stages should not ask again | `baseline.json` | Authoritative project context |
-| Add a mandatory project rule | `controls/*.policy.json` | Cumulative blocking Control |
+| Add a mandatory project rule | `policies/*.policy.json` | Cumulative blocking Control |
 | Preselect a recommended project choice | `defaults/*.json` | Automatically applied, normally overrideable Default |
 | Supply project-local explanation, reference, or technical context | `knowledge/` | Advisory Knowledge |
 
@@ -379,7 +390,7 @@ Examples:
 - The project's standard TypeScript web stack belongs in a Project Default.
 - A system landscape diagram or connection guide belongs in project Knowledge.
 
-Plugins and Integration Adapters are not project configuration. They remain under the owning shared Domain's `capabilities/` directory so their permissions, dependencies, and approval boundaries receive expert-team review.
+Domain Skills, Agents, and Hooks are shared expert assets, not project configuration. External-system connections remain under `.pdlc/integrations/`. Both receive explicit ownership and permission review.
 
 ### 7.3 Precedence and governance rules
 
@@ -401,7 +412,7 @@ locked Control decision
 ### 7.4 Configuration workflow
 
 1. Identify the Domain that owns the decision.
-2. Select `baseline`, `controls`, `defaults`, or `knowledge` based on the semantics above.
+2. Select `baseline`, `policies`, `defaults`, or `knowledge` based on the semantics above.
 3. Start from the [Project Configuration example](../.pdlc/examples/project-overlay/README.md) when a structured file is needed.
 4. Add the smallest configuration necessary and obtain the appropriate project or Domain-owner review.
 5. Ask the Harness Agent to validate the repository. The Agent runs the internal validation and reports unknown Domains, invalid schemas, owner mismatches, and locked-Control conflicts.
@@ -427,11 +438,11 @@ Do not place configuration in a runtime folder, and do not manually edit control
 
 Domain, Owner/Approver/Maintainer, and Contribution Mode are metadata and repository governance, not another runtime layer.
 
-- `domain.json` declares owners, policy approvers, maintainers, and a contribution mode for Artifacts, Controls, Knowledge, and Capabilities. Each category is `restricted`, `reviewed`, or `open`.
+- `domain.json` declares owners, policy approvers, maintainers, and a contribution mode for Artifacts, Policies, Knowledge, Skills, Agents, and Hooks. Each category is `restricted`, `reviewed`, or `open`.
 - CODEOWNERS maps folders to review teams.
 - Asset validators require `ownerDomain` consistency.
 - Controls declare exception approvers.
-- Plugin and Adapter manifests declare permissions.
+- Domain Hook descriptors and Integration manifests declare permissions.
 
 This gives clear accountability without creating a separate governance folder hierarchy.
 
@@ -443,6 +454,6 @@ This gives clear accountability without creating a separate governance folder hi
 - An asset's `ownerDomain` must match its folder.
 - A Project Configuration Overlay may reference only known Domains.
 - Locked Control defaults cannot be overridden by project or Domain Defaults.
-- Plugin contributions retain permission and approval boundaries.
+- Domain Hook contributions and Integrations retain permission and approval boundaries.
 - Requirements approval is content-hash bound.
 - Controlled state changes go through the Runner and audit log.

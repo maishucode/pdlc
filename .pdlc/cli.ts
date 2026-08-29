@@ -3,10 +3,11 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AuditLog } from "./core/audit.ts";
 import { DeliveryFlowRegistry } from "./core/delivery-flow-registry.ts";
+import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "./core/domain-guidance.ts";
 import { DomainRegistry } from "./core/domain-registry.ts";
 import { projectKnowledgeRefs, resolveDomainContext } from "./core/domain-resolver.ts";
 import { PdlcError } from "./core/errors.ts";
-import { agentPath, discoverPlugins, resolvePluginGuidance, skillPath } from "./core/plugin-guidance.ts";
+import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsFlowControl } from "./core/requirements.ts";
@@ -61,8 +62,9 @@ async function loadHarnessModel(projectRoot = HARNESS_ROOT) {
   const stages = await StageRegistry.load(join(HARNESS_ROOT, ".pdlc", "stages", "catalog.json"));
   const deliveryFlows = await DeliveryFlowRegistry.load(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "catalog.json"), stages);
   const domains = await DomainRegistry.load(join(HARNESS_ROOT, ".pdlc", "domains"));
+  const integrations = await IntegrationRegistry.load(join(HARNESS_ROOT, ".pdlc", "integrations", "catalog.json"));
   const project = await ProjectOverlay.load(projectRoot, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  return { stages, deliveryFlows, domains, project };
+  return { stages, deliveryFlows, domains, integrations, project };
 }
 
 function unknownStageReferences(stages: StageRegistry, sources: Array<{ source: string; stageIds?: string[] }>): ValidationIssue[] {
@@ -81,11 +83,11 @@ async function readRecord(options: CliOptions): Promise<PocDeliveryRecord> {
 async function readiness(options: CliOptions, target?: string): Promise<unknown> {
   if (target !== "build") throw new PdlcError("INVALID_ARGUMENT", "Readiness target must be 'build'");
   const original = await readRecord(options);
-  const { deliveryFlows, domains, project } = await loadHarnessModel(options.root);
+  const { deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
   const flow = deliveryFlows.getExecutable("poc");
   let record = original;
   const activeStages = deliveryFlows.resolve(flow.id, contextTags(record)).map(({ definition }) => definition.id);
-  const resolution = resolveDomainContext(domains, project, {
+  const resolution = resolveDomainContext(domains, integrations, project, {
     deliveryFlow: flow.id,
     stages: activeStages,
     riskTriggers: record.risk.triggers,
@@ -119,7 +121,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
         baselines: resolution.baselines.map(({ ref }) => ref),
         defaults: resolution.defaults.map(({ sourceRef, key }) => `${sourceRef}:${key}`),
         knowledge: resolution.knowledge.map(({ ref }) => ref),
-        capabilities: resolution.capabilities.map(({ ref }) => ref),
+        integrations: resolution.integrations.map(({ ref }) => ref),
       },
     };
   }
@@ -149,7 +151,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     projectBaselines: resolution.baselines.map(({ ref }) => ref),
     defaults: resolution.defaults.map(({ key, sourceRef, locked }) => ({ key, source: sourceRef, locked })),
     knowledge: [...resolution.knowledge.map(({ ref }) => ref), ...projectKnowledgeRefs(project, options.root)],
-    capabilities: resolution.capabilities.map(({ ref, kind }) => ({ ref, kind })),
+    integrations: resolution.integrations.map(({ ref, owners, permissions, skills }) => ({ ref, owners, permissions, skills: skills.map(({ id }) => id) })),
   };
 }
 
@@ -165,14 +167,14 @@ async function status(options: CliOptions): Promise<unknown> {
 
 async function stageContext(options: CliOptions, stageId?: string): Promise<unknown> {
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Context requires a canonical Stage id");
-  const { stages, domains, project } = await loadHarnessModel(options.root);
+  const { stages, domains, integrations, project } = await loadHarnessModel(options.root);
   stages.get(stageId);
   let record: PocDeliveryRecord | undefined;
   try { record = await readRecord(options); } catch (error) {
     if (!(error instanceof PdlcError) || error.code !== "CURRENT_RECORD_NOT_SET") throw error;
   }
   const deliveryFlow = record?.deliveryFlow ?? "poc";
-  const resolved = resolveDomainContext(domains, project, {
+  const resolved = resolveDomainContext(domains, integrations, project, {
     deliveryFlow,
     stages: [stageId],
     riskTriggers: record?.risk.triggers ?? [],
@@ -180,7 +182,7 @@ async function stageContext(options: CliOptions, stageId?: string): Promise<unkn
     domains: record?.design.domains ?? [],
   });
   if (resolved.issues.length > 0) throw new PdlcError("CONTEXT_RESOLUTION_FAILED", `Cannot resolve context for Stage ${stageId}`, resolved.issues);
-  const pluginGuidance = await resolvePluginGuidance(stages, domains, HARNESS_ROOT, stageId, deliveryFlow);
+  const domainGuidance = await resolveDomainGuidance(stages, domains, HARNESS_ROOT, stageId, deliveryFlow);
   return {
     ok: true,
     deliveryFlow,
@@ -189,32 +191,47 @@ async function stageContext(options: CliOptions, stageId?: string): Promise<unkn
     baselines: resolved.baselines.map(({ ref, baseline }) => ({ ref, decisions: baseline.decisions })),
     defaults: resolved.defaults,
     knowledge: [...resolved.knowledge.map(({ ref, asset, contentPath }) => ({ ref, kind: asset.kind, contentPath: contentPath ? relative(HARNESS_ROOT, contentPath) : undefined })), ...projectKnowledgeRefs(project, options.root).map((ref) => ({ ref, kind: "project" }))],
-    capabilities: pluginGuidance.contributions,
+    domainContributions: domainGuidance.contributions,
+    integrations: resolved.integrations.map(({ ref, owners, permissions, skills }) => ({
+      ref,
+      owners,
+      permissions,
+      skills: skills.map(({ id, path }) => ({ id, path: relative(HARNESS_ROOT, path) })),
+    })),
   };
 }
 
 async function guidance(options: CliOptions, stageId?: string): Promise<unknown> {
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Guidance requires a canonical Stage id");
   const { stages, domains } = await loadHarnessModel(options.root);
-  return { ok: true, ...await resolvePluginGuidance(stages, domains, HARNESS_ROOT, stageId) };
+  return { ok: true, ...await resolveDomainGuidance(stages, domains, HARNESS_ROOT, stageId) };
 }
 
-async function pluginList(): Promise<unknown> {
+async function domainList(): Promise<unknown> {
   const { stages, domains } = await loadHarnessModel();
-  const plugins = await discoverPlugins(stages, domains);
-  return { ok: true, plugins: plugins.map(({ manifest, bindings }) => ({ id: manifest.id, ownerDomain: manifest.ownerDomain, version: manifest.version, enabled: manifest.defaultEnabled, permissions: manifest.permissions, deliveryFlows: manifest.deliveryFlows, stages: bindings.map(({ stage }) => stage) })) };
+  const hooks = await discoverDomainHooks(stages, domains);
+  return { ok: true, domains: domains.list().map(({ manifest, artifacts, policies, knowledge, skills, agents, hooks: domainHooks }) => ({
+    id: manifest.id,
+    artifacts: artifacts.length,
+    policies: policies.length,
+    knowledge: knowledge.length,
+    skills: skills.map(({ id }) => id),
+    agents: agents.map(({ id }) => id),
+    hooks: domainHooks.length,
+    stages: hooks.filter(({ domain }) => domain === manifest.id).flatMap(({ bindings }) => bindings.map(({ stage }) => stage)),
+  })) };
 }
 
-async function pluginSync(options: CliOptions): Promise<unknown> {
+async function domainSync(options: CliOptions): Promise<unknown> {
   const { stages, domains } = await loadHarnessModel(options.root);
-  const plugins = (await discoverPlugins(stages, domains)).filter(({ manifest }) => manifest.defaultEnabled && manifest.deliveryFlows.includes("poc"));
-  const sources = new Map<string, { plugin: string; source: string; destination: string }>();
-  for (const { manifest, root, bindings } of plugins) for (const binding of bindings) {
+  const hooks = (await discoverDomainHooks(stages, domains)).filter(({ descriptor }) => descriptor.enabled && descriptor.deliveryFlows.includes("poc"));
+  const sources = new Map<string, { domain: string; source: string; destination: string }>();
+  for (const { domain, root, bindings } of hooks) for (const binding of bindings) {
     const agentDestination = join(".github", "agents", `${binding.agent}.agent.md`);
-    sources.set(agentDestination, { plugin: manifest.id, source: agentPath(root, manifest, binding.agent), destination: agentDestination });
+    sources.set(agentDestination, { domain, source: domainAgentPath(root, binding.agent), destination: agentDestination });
     for (const skill of binding.skills) {
       const skillDestination = join(".github", "skills", skill, "SKILL.md");
-      sources.set(skillDestination, { plugin: manifest.id, source: skillPath(root, manifest, skill), destination: skillDestination });
+      sources.set(skillDestination, { domain, source: domainSkillPath(root, skill), destination: skillDestination });
     }
   }
   const installed: string[] = [];
@@ -223,7 +240,7 @@ async function pluginSync(options: CliOptions): Promise<unknown> {
     const destination = join(options.root, item.destination);
     const sourceContent = await readFile(item.source, "utf8");
     try {
-      if (await readFile(destination, "utf8") !== sourceContent) throw new PdlcError("PLUGIN_FILE_CONFLICT", `Plugin '${item.plugin}' will not overwrite an existing file: ${relative(options.root, destination)}`);
+      if (await readFile(destination, "utf8") !== sourceContent) throw new PdlcError("DOMAIN_FILE_CONFLICT", `Domain '${item.domain}' will not overwrite an existing file: ${relative(options.root, destination)}`);
       unchanged.push(relative(options.root, destination));
     } catch (error) {
       if (error instanceof PdlcError) throw error;
@@ -232,12 +249,24 @@ async function pluginSync(options: CliOptions): Promise<unknown> {
       installed.push(relative(options.root, destination));
     }
   }
-  return { ok: true, plugins: plugins.map(({ manifest }) => manifest.id), target: options.root, installed, unchanged };
+  return { ok: true, domains: [...new Set(hooks.map(({ domain }) => domain))], target: options.root, installed, unchanged };
+}
+
+async function integrationList(): Promise<unknown> {
+  const { integrations } = await loadHarnessModel();
+  return { ok: true, integrations: integrations.list().map(({ manifest }) => ({
+    id: manifest.id,
+    version: manifest.version,
+    owners: manifest.owners,
+    maintainers: manifest.maintainers,
+    permissions: manifest.permissions,
+    skills: manifest.skills.map(({ id }) => id),
+  })) };
 }
 
 async function validate(options: CliOptions): Promise<unknown> {
   const checks: Record<string, unknown> = {};
-  const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "integration-adapter", "knowledge-metadata", "plugin", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "stage-catalog"];
+  const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "domain-stage-hooks", "integration-catalog", "integration", "knowledge-metadata", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "stage-catalog"];
   for (const schemaName of schemaNames) {
     const path = join(HARNESS_ROOT, ".pdlc", "schemas", `${schemaName}.schema.json`);
     const schema = JSON.parse(await readFile(path, "utf8")) as { $schema?: unknown; type?: unknown };
@@ -245,15 +274,16 @@ async function validate(options: CliOptions): Promise<unknown> {
   }
   checks.schemas = { ok: true, loaded: schemaNames };
 
-  const { stages, deliveryFlows, domains, project } = await loadHarnessModel(options.root);
+  const { stages, deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
   checks.deliveryModel = { ok: true, catalogVersion: stages.catalog.catalogVersion, canonicalStages: stages.list().length, catalog: deliveryFlows.catalog.flows, deliveryFlows: deliveryFlows.list().map(({ id, status, stageSequence }) => ({ id, status, stageCount: stageSequence.length })) };
-  checks.domains = { ok: true, loaded: domains.list().map(({ manifest, artifacts, controls, knowledge, plugins, adapters }) => ({ id: manifest.id, artifacts: artifacts.length, controls: controls.length, knowledge: knowledge.length, plugins: plugins.length, adapters: adapters.length })) };
+  checks.domains = { ok: true, loaded: domains.list().map(({ manifest, artifacts, policies, knowledge, skills, agents, hooks }) => ({ id: manifest.id, artifacts: artifacts.length, policies: policies.length, knowledge: knowledge.length, skills: skills.length, agents: agents.length, hooks: hooks.length })) };
+  checks.integrations = { ok: true, loaded: integrations.list().map(({ manifest }) => ({ ref: `${manifest.id}@${manifest.version}`, owners: manifest.owners, skills: manifest.skills.map(({ id }) => id) })) };
 
   const stageIssues = unknownStageReferences(stages, [
-    ...domains.controls().map(({ policy }) => ({ source: `control:${policy.id}@${policy.version}`, stageIds: policy.appliesTo.stages })),
+    ...domains.policies().map(({ policy }) => ({ source: `policy:${policy.id}@${policy.version}`, stageIds: policy.appliesTo.stages })),
     ...domains.knowledge().map(({ asset }) => ({ source: `knowledge:${asset.id}@${asset.version}`, stageIds: asset.appliesTo.stages })),
-    ...domains.adapters().map(({ manifest }) => ({ source: `adapter:${manifest.id}@${manifest.version}`, stageIds: manifest.appliesTo.stages })),
-    ...project.controls().map(({ policy }) => ({ source: `project-control:${policy.id}@${policy.version}`, stageIds: policy.appliesTo.stages })),
+    ...integrations.list().map(({ manifest }) => ({ source: `integration:${manifest.id}@${manifest.version}`, stageIds: manifest.appliesTo.stages })),
+    ...project.policies().map(({ policy }) => ({ source: `project-policy:${policy.id}@${policy.version}`, stageIds: policy.appliesTo.stages })),
     ...project.defaults().map(({ profile }) => ({ source: `project-default:${profile.id}@${profile.version}`, stageIds: profile.appliesTo.stages })),
   ]);
   const artifactIssues = stages.list().flatMap((stage) => [...(stage.inputArtifacts ?? []), ...(stage.outputArtifacts ?? [])].flatMap((artifact) => {
@@ -262,8 +292,8 @@ async function validate(options: CliOptions): Promise<unknown> {
   if (stageIssues.length + artifactIssues.length > 0) throw new PdlcError("VALIDATION_FAILED", "Domain assets reference unknown Stages or Artifacts", [...stageIssues, ...artifactIssues]);
   checks.references = { ok: true };
 
-  const plugins = await discoverPlugins(stages, domains);
-  checks.plugins = { ok: true, loaded: plugins.map(({ manifest, bindings }) => ({ ref: `${manifest.id}@${manifest.version}`, ownerDomain: manifest.ownerDomain, stages: bindings.map(({ stage }) => stage) })) };
+  const domainHooks = await discoverDomainHooks(stages, domains);
+  checks.domainHooks = { ok: true, loaded: domainHooks.map(({ domain, descriptor, bindings }) => ({ domain, version: descriptor.version, stages: bindings.map(({ stage }) => stage) })) };
   const requirementsControl = await loadRequirementsFlowControl(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
   checks.requirementsFlowControl = { ok: true, loaded: `${requirementsControl.id}@${requirementsControl.version}` };
 
@@ -272,8 +302,8 @@ async function validate(options: CliOptions): Promise<unknown> {
   checks.record = { ok: recordValidation.ok, source: recordSource, issues: recordValidation.issues };
   if (!recordValidation.ok) throw new PdlcError("VALIDATION_FAILED", `Invalid Delivery Record: ${recordSource}`, recordValidation.issues);
   const activeStages = deliveryFlows.resolve(recordValidation.value.deliveryFlow, contextTags(recordValidation.value)).map(({ definition }) => definition.id);
-  const resolution = resolveDomainContext(domains, project, { deliveryFlow: recordValidation.value.deliveryFlow, stages: activeStages, riskTriggers: recordValidation.value.risk.triggers, technologies: recordValidation.value.design.technologies, domains: recordValidation.value.design.domains });
-  checks.resolution = { ok: resolution.issues.length === 0, controls: resolution.controls.map(({ ref }) => ref), defaults: resolution.defaults.map(({ key, sourceRef }) => ({ key, sourceRef })), knowledge: resolution.knowledge.map(({ ref }) => ref), baselines: resolution.baselines.map(({ ref }) => ref), capabilities: resolution.capabilities.map(({ ref }) => ref), issues: resolution.issues };
+  const resolution = resolveDomainContext(domains, integrations, project, { deliveryFlow: recordValidation.value.deliveryFlow, stages: activeStages, riskTriggers: recordValidation.value.risk.triggers, technologies: recordValidation.value.design.technologies, domains: recordValidation.value.design.domains });
+  checks.resolution = { ok: resolution.issues.length === 0, controls: resolution.controls.map(({ ref }) => ref), defaults: resolution.defaults.map(({ key, sourceRef }) => ({ key, sourceRef })), knowledge: resolution.knowledge.map(({ ref }) => ref), baselines: resolution.baselines.map(({ ref }) => ref), integrations: resolution.integrations.map(({ ref }) => ref), issues: resolution.issues };
   if (resolution.issues.length > 0) throw new PdlcError("VALIDATION_FAILED", "Domain context contains unresolved conflicts", resolution.issues);
 
   const portability = await validateCorePortability(join(HARNESS_ROOT, ".pdlc", "core"));
@@ -288,15 +318,17 @@ async function validate(options: CliOptions): Promise<unknown> {
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "readiness build", "guidance <stage>", "plugin list", "plugin sync"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "readiness build", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "context") return { exitCode: 0, output: await stageContext(parsed.options, parsed.subcommand) };
     if (parsed.command === "readiness") return { exitCode: 0, output: await readiness(parsed.options, parsed.subcommand) };
     if (parsed.command === "guidance") return { exitCode: 0, output: await guidance(parsed.options, parsed.subcommand) };
-    if (parsed.command === "plugin" && parsed.subcommand === "list") return { exitCode: 0, output: await pluginList() };
-    if (parsed.command === "plugin" && parsed.subcommand === "sync") return { exitCode: 0, output: await pluginSync(parsed.options) };
-    if (parsed.command === "plugin") throw new PdlcError("INVALID_ARGUMENT", "Plugin command must be list or sync");
+    if (parsed.command === "domain" && parsed.subcommand === "list") return { exitCode: 0, output: await domainList() };
+    if (parsed.command === "domain" && parsed.subcommand === "sync") return { exitCode: 0, output: await domainSync(parsed.options) };
+    if (parsed.command === "domain") throw new PdlcError("INVALID_ARGUMENT", "Domain command must be list or sync");
+    if (parsed.command === "integration" && parsed.subcommand === "list") return { exitCode: 0, output: await integrationList() };
+    if (parsed.command === "integration") throw new PdlcError("INVALID_ARGUMENT", "Integration command must be list");
     if (parsed.command === "checkpoint") throw new PdlcError("CHECKPOINT_NOT_IMPLEMENTED", `Checkpoint '${parsed.subcommand ?? ""}' cannot change state yet`);
     throw new PdlcError("INVALID_ARGUMENT", `Unknown command: ${parsed.command}`);
   } catch (error) {

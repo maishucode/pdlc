@@ -2,15 +2,17 @@
   "schemaVersion": 1,
   "id": "ux",
   "name": "User Experience",
-  "description": "Owns interaction, visual, accessibility, and responsive experience standards and delivery capabilities.",
+  "description": "Owns interaction, visual, accessibility, responsive experience policies, knowledge, Skills, Agents, and Hooks.",
   "owners": ["ux-leadership"],
   "policyApprovers": ["ux-governance-team"],
   "maintainers": ["ux-practice-team"],
   "contributionMode": {
     "artifacts": "reviewed",
-    "controls": "restricted",
+    "policies": "restricted",
     "knowledge": "open",
-    "capabilities": "reviewed"
+    "skills": "reviewed",
+    "agents": "reviewed",
+    "hooks": "reviewed"
   },
   "defaultApplicability": { "technologies": ["web-ui", "mobile-ui"] }
 }

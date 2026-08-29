@@ -8,8 +8,10 @@
   "maintainers": ["product-management-practice"],
   "contributionMode": {
     "artifacts": "reviewed",
-    "controls": "restricted",
+    "policies": "restricted",
     "knowledge": "open",
-    "capabilities": "reviewed"
+    "skills": "reviewed",
+    "agents": "reviewed",
+    "hooks": "reviewed"
   }
 }

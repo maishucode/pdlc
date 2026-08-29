@@ -10,7 +10,7 @@ This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`
 - Ask no more product questions per message than the shared policy permits. Offer document mode when appropriate.
 - In requirements clarification, make every unresolved product question selectable: offer 2–4 mutually exclusive options plus `X) Other`; do not use an open-ended question as the primary answer.
 - Apply Delivery Flow-owned role assignment and timebox defaults without turning them into product questions.
-- Resolve Controls, Project Baselines and Defaults, Knowledge, and Capabilities before each Stage. Never allow a Project Overlay to weaken enterprise Controls.
+- Resolve Policies/Controls, Project Baselines and Defaults, Knowledge, Domain contributions, and Integrations before each Stage. Never allow a Project Overlay to weaken enterprise Policies.
 - Use the internal Runner only for validation, Build Readiness, or an implemented and explicitly confirmed checkpoint. Use ordinary project commands only after Build Readiness and only for the approved POC.
 - Minimize command executions and group safe, related project verification through existing package scripts where practical.
 - Do not copy Stage, Delivery Flow, Domain Control or Knowledge, role, checkpoint, schema, or state logic into `.github/` files.

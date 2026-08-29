@@ -89,7 +89,7 @@
         "baselines",
         "defaults",
         "knowledge",
-        "capabilities"
+        "integrations"
       ]
     },
     "design": {

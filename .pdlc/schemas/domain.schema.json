@@ -49,12 +49,14 @@
     },
     "contributionMode": {
       "type": "object",
-      "required": ["artifacts", "controls", "knowledge", "capabilities"],
+      "required": ["artifacts", "policies", "knowledge", "skills", "agents", "hooks"],
       "properties": {
         "artifacts": { "enum": ["restricted", "reviewed", "open"] },
-        "controls": { "enum": ["restricted", "reviewed", "open"] },
+        "policies": { "enum": ["restricted", "reviewed", "open"] },
         "knowledge": { "enum": ["restricted", "reviewed", "open"] },
-        "capabilities": { "enum": ["restricted", "reviewed", "open"] }
+        "skills": { "enum": ["restricted", "reviewed", "open"] },
+        "agents": { "enum": ["restricted", "reviewed", "open"] },
+        "hooks": { "enum": ["restricted", "reviewed", "open"] }
       },
       "additionalProperties": false
     },

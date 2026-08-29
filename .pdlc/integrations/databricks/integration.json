@@ -1,14 +1,17 @@
 {
   "schemaVersion": 1,
-  "kind": "integration-adapter",
+  "kind": "integration",
   "id": "databricks",
-  "ownerDomain": "data-platform",
   "version": "1.0.0",
   "description": "Declares the permission boundary for read-only Databricks connectivity through an approved connection profile.",
+  "owners": ["data-platform-leadership"],
+  "maintainers": ["data-platform-engineering"],
   "appliesTo": {
+    "deliveryFlows": ["implementation", "pdlc"],
     "stages": ["data-integration-boundaries", "solution-design", "implementation", "developer-verification"],
     "technologies": ["databricks"]
   },
+  "skills": [],
   "permissions": {
     "network": true,
     "credentialRefs": ["DATABRICKS_CONNECTION_PROFILE"],

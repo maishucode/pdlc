@@ -33,7 +33,7 @@ Conditional Stages use activation tags. For example, `ux-design` activates for U
 1. Add the reusable definition to `.pdlc/stages/catalog.json`.
 2. Give it a stable id, intent, phase, role slots, requirements, outputs, and Artifact references where applicable.
 3. Add it to each relevant Delivery Flow sequence.
-4. Ask each Domain owner whether existing Controls, Knowledge, Plugins, or Adapters apply to the new Stage.
+4. Ask each Domain owner whether existing Policies, Knowledge, Skills, Agents, or Hooks apply to the new Stage, and ask Integration owners whether any external system applies.
 5. Update tests and run Harness validation.
 
 Do not create a Stage solely to perform context resolution. The Runner resolves Domain context before every Stage.
@@ -43,7 +43,7 @@ Do not create a Stage solely to perform context resolution. The Runner resolves 
 1. Create `.pdlc/delivery-flows/<id>/flow.json`.
 2. Compose canonical Stage ids without redefining their semantics.
 3. Mark incomplete Flows `planned` and omit executable controls.
-4. When executable behavior is ready, add statuses, checkpoints, constraints, delivery defaults, Artifact profiles, and required Capabilities; mark it `active`.
+4. When executable behavior is ready, add statuses, checkpoints, constraints, delivery defaults, Artifact profiles, and required Integrations; mark it `active`.
 5. Register the definition explicitly in `.pdlc/delivery-flows/catalog.json`.
 6. Add validation and lifecycle tests.
 
@@ -56,7 +56,7 @@ A Flow change can alter delivery obligations even when Stage definitions are unc
 - Artifact profiles;
 - role/timebox behavior;
 - Control and Knowledge applicability;
-- Plugin and Adapter eligibility;
+- Domain Hook and Integration eligibility;
 - compatibility with active Delivery Records.
 
 ## Context is orthogonal to composition

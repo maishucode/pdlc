@@ -1,5 +1,6 @@
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 import { effectiveApplicability, type DomainRegistry } from "./domain-registry.ts";
+import type { IntegrationRegistry } from "./integration-registry.ts";
 import type { ProjectOverlay } from "./project-overlay.ts";
 import type {
   Applicability,
@@ -19,17 +20,19 @@ export interface DomainResolutionContext {
   domains?: string[];
 }
 
-export interface ResolvedCapability {
+export interface ResolvedIntegration {
   ref: string;
-  kind: "plugin" | "integration-adapter";
-  ownerDomain: string;
+  id: string;
+  owners: string[];
   root: string;
+  skills: Array<{ id: string; path: string }>;
+  permissions: { network: boolean; credentialRefs: string[]; externalWrites: boolean };
 }
 
 export interface ResolvedDomainContext {
   controls: ResolvedControl[];
   knowledge: ResolvedKnowledge[];
-  capabilities: ResolvedCapability[];
+  integrations: ResolvedIntegration[];
   baselines: ResolvedBaseline[];
   defaults: ResolvedStandardDefault[];
   issues: ValidationIssue[];
@@ -41,12 +44,13 @@ interface DefaultCandidate extends ResolvedStandardDefault {
 
 export function resolveDomainContext(
   registry: DomainRegistry,
+  integrations: IntegrationRegistry,
   project: ProjectOverlay,
   context: DomainResolutionContext,
 ): ResolvedDomainContext {
   const controls = resolveControls(registry, project, context);
   const knowledge = resolveKnowledge(registry, context);
-  const capabilities = resolveCapabilities(registry, context);
+  const resolvedIntegrations = resolveIntegrations(integrations, context);
   const baselines = project.baselines().map(({ domain, baseline }) => ({
     ref: `project:${domain}:baseline`,
     domain,
@@ -56,7 +60,7 @@ export function resolveDomainContext(
   return {
     controls,
     knowledge,
-    capabilities,
+    integrations: resolvedIntegrations,
     baselines,
     defaults: standardResolution.defaults,
     issues: standardResolution.issues,
@@ -76,7 +80,7 @@ function resolveControls(
   project: ProjectOverlay,
   context: DomainResolutionContext,
 ): ResolvedControl[] {
-  const enterprise = registry.list().flatMap((domain) => domain.controls.flatMap(({ policy }) => {
+  const enterprise = registry.list().flatMap((domain) => domain.policies.flatMap(({ policy }) => {
     const appliesTo = effectiveApplicability(domain.manifest, policy.appliesTo);
     if (!applicabilityMatches(appliesTo, context)) return [];
     return [{
@@ -87,7 +91,7 @@ function resolveControls(
       source: "enterprise" as const,
     }];
   }));
-  const projectControls = project.controls().flatMap(({ policy }) => {
+  const projectControls = project.policies().flatMap(({ policy }) => {
     if (!applicabilityMatches(policy.appliesTo, context)) return [];
     return [{
       ref: `project:${policy.id}@${policy.version}`,
@@ -114,16 +118,15 @@ function resolveKnowledge(registry: DomainRegistry, context: DomainResolutionCon
   })).sort((a, b) => a.ref.localeCompare(b.ref));
 }
 
-function resolveCapabilities(registry: DomainRegistry, context: DomainResolutionContext): ResolvedCapability[] {
-  const plugins = registry.plugins().flatMap(({ manifest, root }) =>
-    manifest.defaultEnabled && manifest.deliveryFlows.includes(context.deliveryFlow)
-      ? [{ ref: `${manifest.id}@${manifest.version}`, kind: "plugin" as const, ownerDomain: manifest.ownerDomain, root }]
-      : []);
-  const adapters = registry.adapters().flatMap(({ manifest, root }) =>
-    applicabilityMatches(manifest.appliesTo, context)
-      ? [{ ref: `${manifest.id}@${manifest.version}`, kind: "integration-adapter" as const, ownerDomain: manifest.ownerDomain, root }]
-      : []);
-  return [...plugins, ...adapters].sort((a, b) => a.ref.localeCompare(b.ref));
+function resolveIntegrations(registry: IntegrationRegistry, context: DomainResolutionContext): ResolvedIntegration[] {
+  return registry.list().flatMap(({ manifest, root }) => applicabilityMatches(manifest.appliesTo, context) ? [{
+    ref: `${manifest.id}@${manifest.version}`,
+    id: manifest.id,
+    owners: manifest.owners,
+    root,
+    skills: manifest.skills.map((skill) => ({ id: skill.id, path: join(root, skill.path, "SKILL.md") })),
+    permissions: manifest.permissions,
+  }] : []).sort((left, right) => left.ref.localeCompare(right.ref));
 }
 
 function resolveDefaults(

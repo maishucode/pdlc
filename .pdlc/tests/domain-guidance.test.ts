@@ -5,7 +5,7 @@ import { runCli } from "../cli.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 
-test("POC Stage entry automatically composes the UX Plugin", async () => {
+test("POC Stage entry automatically composes UX Domain guidance", async () => {
   const result = await runCli(["guidance", "ux-design"], projectRoot);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   assert.deepEqual(result.output, {
@@ -21,9 +21,8 @@ test("POC Stage entry automatically composes the UX Plugin", async () => {
       outputs: ["ux-design-decisions"],
     },
     contributions: [{
-      plugin: "lean-pdlc-ux",
-      ownerDomain: "ux",
-      version: "0.3.0",
+      domain: "ux",
+      version: "1.0.0",
       permissions: {
         filesystem: "write",
         network: false,
@@ -31,15 +30,15 @@ test("POC Stage entry automatically composes the UX Plugin", async () => {
       },
       agent: {
         id: "lean-pdlc-ux",
-        path: ".pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/agents/lean-pdlc-ux.agent.md",
+        path: ".pdlc/domains/ux/agents/lean-pdlc-ux.agent.md",
       },
       skills: [{
         name: "lean-pdlc-ux-spec",
-        path: ".pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/skills/lean-pdlc-ux-spec/SKILL.md",
+        path: ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md",
       }],
       mode: "draft",
       handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",
-      approvalBoundary: "The plugin drafts guidance only; product approval and PDLC state remain outside the plugin.",
+      approvalBoundary: "The Domain contribution drafts guidance only; product approval and PDLC state remain outside the Domain Agent.",
     }],
   });
 });
@@ -50,7 +49,7 @@ test("an unbound POC Stage continues with core behavior", async () => {
   assert.deepEqual((result.output as { contributions: unknown[] }).contributions, []);
 });
 
-test("requirements, build, and verification Stages resolve their Plugin-owned Skills", async () => {
+test("requirements, build, and verification Stages resolve their Domain-owned Skills", async () => {
   const expected: Record<string, string> = {
     "requirements-clarification": "lean-pdlc-ux-spec",
     implementation: "lean-pdlc-ux-react-ui-delivery",

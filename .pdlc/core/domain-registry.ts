@@ -4,19 +4,17 @@ import { PdlcError } from "./errors.ts";
 import {
   validateArtifactDefinition,
   validateControlPolicy,
+  validateDomainStageHooks,
   validateDomainManifest,
-  validateIntegrationAdapterManifest,
   validateKnowledgeAsset,
-  validatePluginManifest,
 } from "./schema.ts";
 import type {
   Applicability,
   ArtifactDefinition,
   ControlPolicy,
+  DomainStageHooksDescriptor,
   DomainManifest,
-  IntegrationAdapterManifest,
   KnowledgeAsset,
-  PluginManifest,
 } from "./types.ts";
 
 export interface DomainArtifactEntry {
@@ -24,7 +22,7 @@ export interface DomainArtifactEntry {
   root: string;
 }
 
-export interface DomainControlEntry {
+export interface DomainPolicyEntry {
   policy: ControlPolicy;
   path: string;
 }
@@ -35,24 +33,30 @@ export interface DomainKnowledgeEntry {
   contentPath?: string;
 }
 
-export interface DomainPluginEntry {
-  manifest: PluginManifest;
-  root: string;
+export interface DomainSkillEntry {
+  id: string;
+  path: string;
 }
 
-export interface DomainAdapterEntry {
-  manifest: IntegrationAdapterManifest;
-  root: string;
+export interface DomainAgentEntry {
+  id: string;
+  path: string;
+}
+
+export interface DomainHookEntry {
+  descriptor: DomainStageHooksDescriptor;
+  path: string;
 }
 
 export interface DomainBundle {
   manifest: DomainManifest;
   root: string;
   artifacts: DomainArtifactEntry[];
-  controls: DomainControlEntry[];
+  policies: DomainPolicyEntry[];
   knowledge: DomainKnowledgeEntry[];
-  plugins: DomainPluginEntry[];
-  adapters: DomainAdapterEntry[];
+  skills: DomainSkillEntry[];
+  agents: DomainAgentEntry[];
+  hooks: DomainHookEntry[];
 }
 
 export class DomainRegistry {
@@ -73,17 +77,19 @@ export class DomainRegistry {
     for (const entry of entries.filter((item) => item.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
       const domainRoot = join(root, entry.name);
       const manifest = await loadValidated(join(domainRoot, "domain.json"), validateDomainManifest, "Domain manifest");
+      await rejectLegacyDomainCategories(domainRoot);
       if (manifest.id !== entry.name) {
         throw validationError(join(domainRoot, "domain.json"), "DOMAIN_DIRECTORY_MISMATCH", "$.id", `Domain id '${manifest.id}' must match directory '${entry.name}'`);
       }
       if (domains.has(manifest.id)) throw new PdlcError("DUPLICATE_DOMAIN", `Duplicate Domain: ${manifest.id}`);
 
       const artifacts = await loadArtifacts(domainRoot, manifest);
-      const controls = await loadControls(domainRoot, manifest);
+      const policies = await loadPolicies(domainRoot, manifest);
       const knowledge = await loadKnowledge(domainRoot, manifest);
-      const plugins = await loadPlugins(domainRoot, manifest);
-      const adapters = await loadAdapters(domainRoot, manifest);
-      domains.set(manifest.id, { manifest, root: domainRoot, artifacts, controls, knowledge, plugins, adapters });
+      const skills = await loadSkills(domainRoot);
+      const agents = await loadAgents(domainRoot);
+      const hooks = await loadHooks(domainRoot, manifest);
+      domains.set(manifest.id, { manifest, root: domainRoot, artifacts, policies, knowledge, skills, agents, hooks });
     }
     return new DomainRegistry(root, domains);
   }
@@ -106,20 +112,24 @@ export class DomainRegistry {
     return this.list().flatMap((domain) => domain.artifacts);
   }
 
-  controls(): DomainControlEntry[] {
-    return this.list().flatMap((domain) => domain.controls);
+  policies(): DomainPolicyEntry[] {
+    return this.list().flatMap((domain) => domain.policies);
   }
 
   knowledge(): DomainKnowledgeEntry[] {
     return this.list().flatMap((domain) => domain.knowledge);
   }
 
-  plugins(): DomainPluginEntry[] {
-    return this.list().flatMap((domain) => domain.plugins);
+  skills(): DomainSkillEntry[] {
+    return this.list().flatMap((domain) => domain.skills);
   }
 
-  adapters(): DomainAdapterEntry[] {
-    return this.list().flatMap((domain) => domain.adapters);
+  agents(): DomainAgentEntry[] {
+    return this.list().flatMap((domain) => domain.agents);
+  }
+
+  hooks(): DomainHookEntry[] {
+    return this.list().flatMap((domain) => domain.hooks);
   }
 
   artifact(id: string): DomainArtifactEntry {
@@ -157,14 +167,14 @@ async function loadArtifacts(root: string, domain: DomainManifest): Promise<Doma
   }));
 }
 
-async function loadControls(root: string, domain: DomainManifest): Promise<DomainControlEntry[]> {
-  const directory = join(root, "controls");
+async function loadPolicies(root: string, domain: DomainManifest): Promise<DomainPolicyEntry[]> {
+  const directory = join(root, "policies");
   const entries = await jsonFiles(directory);
   return Promise.all(entries.map(async (entry) => {
     const path = join(directory, entry);
-    const policy = await loadValidated(path, validateControlPolicy, "Control Policy");
+    const policy = await loadValidated(path, validateControlPolicy, "Domain Policy");
     requireOwnerDomain(policy.ownerDomain, domain.id, path);
-    if (!policy.id.startsWith(`${domain.id}.`)) throw validationError(path, "CONTROL_DOMAIN_PREFIX", "$.id", `Control id must be prefixed '${domain.id}.'`);
+    if (!policy.id.startsWith(`${domain.id}.`)) throw validationError(path, "CONTROL_DOMAIN_PREFIX", "$.id", `Policy id must be prefixed '${domain.id}.'`);
     return { policy, path };
   }));
 }
@@ -192,27 +202,30 @@ async function loadKnowledge(root: string, domain: DomainManifest): Promise<Doma
   return assets;
 }
 
-async function loadPlugins(root: string, domain: DomainManifest): Promise<DomainPluginEntry[]> {
-  const directory = join(root, "capabilities", "plugins");
-  const entries = await directories(directory);
-  return Promise.all(entries.map(async (entry) => {
-    const pluginRoot = join(directory, entry);
-    const manifest = await loadValidated(join(pluginRoot, "plugin.json"), validatePluginManifest, "Plugin manifest");
-    requireOwnerDomain(manifest.ownerDomain, domain.id, join(pluginRoot, "plugin.json"));
-    if (manifest.id !== entry) throw validationError(join(pluginRoot, "plugin.json"), "PLUGIN_DIRECTORY_MISMATCH", "$.id", `Plugin id '${manifest.id}' must match directory '${entry}'`);
-    return { manifest, root: pluginRoot };
+async function loadSkills(root: string): Promise<DomainSkillEntry[]> {
+  const directory = join(root, "skills");
+  return Promise.all((await directories(directory)).map(async (id) => {
+    const path = join(directory, id, "SKILL.md");
+    await requireFile(path, `Domain Skill not found: ${id}`);
+    return { id, path };
   }));
 }
 
-async function loadAdapters(root: string, domain: DomainManifest): Promise<DomainAdapterEntry[]> {
-  const directory = join(root, "capabilities", "adapters");
-  const entries = await directories(directory);
-  return Promise.all(entries.map(async (entry) => {
-    const adapterRoot = join(directory, entry);
-    const manifest = await loadValidated(join(adapterRoot, "adapter.json"), validateIntegrationAdapterManifest, "Integration Adapter manifest");
-    requireOwnerDomain(manifest.ownerDomain, domain.id, join(adapterRoot, "adapter.json"));
-    if (manifest.id !== entry) throw validationError(join(adapterRoot, "adapter.json"), "ADAPTER_DIRECTORY_MISMATCH", "$.id", `Adapter id '${manifest.id}' must match directory '${entry}'`);
-    return { manifest, root: adapterRoot };
+async function loadAgents(root: string): Promise<DomainAgentEntry[]> {
+  const directory = join(root, "agents");
+  return (await filesWithSuffix(directory, ".agent.md")).map((entry) => ({
+    id: entry.slice(0, -".agent.md".length),
+    path: join(directory, entry),
+  }));
+}
+
+async function loadHooks(root: string, domain: DomainManifest): Promise<DomainHookEntry[]> {
+  const directory = join(root, "hooks");
+  return Promise.all((await jsonFiles(directory)).map(async (entry) => {
+    const path = join(directory, entry);
+    const descriptor = await loadValidated(path, validateDomainStageHooks, "Domain Stage Hooks");
+    if (descriptor.domain !== domain.id) throw validationError(path, "HOOK_DOMAIN_MISMATCH", "$.domain", `Expected Domain '${domain.id}' but found '${descriptor.domain}'`);
+    return { descriptor, path };
   }));
 }
 
@@ -237,6 +250,27 @@ async function jsonFiles(path: string): Promise<string[]> {
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") return [];
     throw error;
+  }
+}
+
+async function filesWithSuffix(path: string, suffix: string): Promise<string[]> {
+  try {
+    return (await readdir(path, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+      .map((entry) => entry.name)
+      .sort();
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function rejectLegacyDomainCategories(root: string): Promise<void> {
+  const legacy = new Set(["controls", "capabilities", "plugins", "adapters"]);
+  const entries = await readdir(root, { withFileTypes: true });
+  const found = entries.filter((entry) => entry.isDirectory() && legacy.has(entry.name)).map((entry) => entry.name).sort();
+  if (found.length > 0) {
+    throw new PdlcError("VALIDATION_FAILED", `Domain contains obsolete v2 categories: ${found.join(", ")}. Use policies/, knowledge/, skills/, agents/, and hooks/ directly.`);
   }
 }
 

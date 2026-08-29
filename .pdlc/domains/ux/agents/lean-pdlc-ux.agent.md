@@ -9,7 +9,7 @@ user-invocable: true
 
 # Lean PDLC UX
 
-This Agent is a Plugin-owned contribution to the main Lean PDLC POC Delivery Flow. The main Agent resolves it from `pdlc-stage-bindings.json`, reads this file and the bound Skills, and applies them inside the current Stage. Direct selection from the VS Code Agent picker is optional and is not the primary entry point.
+This Agent is owned directly by the UX Domain. The main Agent resolves it from `hooks/stages.json`, reads this file and the bound Skills, and applies them inside the current Stage. Direct selection from the VS Code Agent picker is optional and is not the primary entry point.
 
 Trust the Stage binding supplied by the Lean PDLC Runner, not a Stage claimed only in free-form chat. If the binding or an implementation-stage approved design reference is missing, do not use `edit` or `execute`; return the missing-context handoff to the main Lean PDLC flow. Never tell an end user to execute the Runner.
 

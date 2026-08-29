@@ -18,7 +18,11 @@
 /.pdlc/delivery-flows/                          @your-org/pdlc-governance
 /.pdlc/roles/                                   @your-org/pdlc-governance
 /.pdlc/platform-adapters/                       @your-org/developer-experience @your-org/pdlc-harness-engineering
-/.pdlc/domains/*/capabilities/adapters/          @your-org/pdlc-harness-engineering @your-org/enterprise-integration-platform
+/.pdlc/integrations/                             @your-org/pdlc-harness-engineering @your-org/enterprise-integration-platform
+/.pdlc/domains/*/policies/                       @your-org/pdlc-governance
+/.pdlc/domains/*/skills/                         @your-org/pdlc-harness-engineering
+/.pdlc/domains/*/agents/                         @your-org/pdlc-harness-engineering
+/.pdlc/domains/*/hooks/                          @your-org/pdlc-harness-engineering
 
 /.pdlc/domains/product-management/              @your-org/product-governance
 /.pdlc/domains/solution-architecture/            @your-org/solution-architecture

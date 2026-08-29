@@ -128,7 +128,7 @@ export interface PocDeliveryRecord {
     baselines: string[];
     defaults: string[];
     knowledge: string[];
-    capabilities: string[];
+    integrations: string[];
   };
   design: {
     summary: string;
@@ -223,7 +223,7 @@ export interface DeliveryFlowControls {
     allowSinglePersonAllRoles: boolean;
   };
   artifactProfiles?: Record<string, string>;
-  requiredCapabilities?: string[];
+  requiredIntegrations?: string[];
 }
 
 export interface DeliveryFlowDefinition {
@@ -259,9 +259,11 @@ export interface DomainManifest {
   maintainers: string[];
   contributionMode: {
     artifacts: ContributionMode;
-    controls: ContributionMode;
+    policies: ContributionMode;
     knowledge: ContributionMode;
-    capabilities: ContributionMode;
+    skills: ContributionMode;
+    agents: ContributionMode;
+    hooks: ContributionMode;
   };
   defaultApplicability?: Applicability;
 }
@@ -338,53 +340,58 @@ export interface ResolvedStandardDefault {
   shadowedSources: string[];
 }
 
-export const PLUGIN_GUIDANCE_MODES = ["draft", "implement", "verify"] as const;
-export type PluginGuidanceMode = (typeof PLUGIN_GUIDANCE_MODES)[number];
+export const DOMAIN_GUIDANCE_MODES = ["draft", "implement", "verify"] as const;
+export type DomainGuidanceMode = (typeof DOMAIN_GUIDANCE_MODES)[number];
 
-export interface PluginStageBinding {
+export interface DomainStageHookBinding {
   stage: string;
   agent: string;
   skills: string[];
-  mode: PluginGuidanceMode;
+  mode: DomainGuidanceMode;
   handoff: string;
   approvalBoundary: string;
 }
 
-export interface PluginStageBindingsDescriptor {
+export interface DomainStageHooksDescriptor {
   schemaVersion: 1;
-  plugin: string;
-  bindings: PluginStageBinding[];
-}
-
-export interface PluginManifest {
-  schemaVersion: 2;
-  kind: "plugin";
-  id: string;
-  ownerDomain: string;
+  domain: string;
   version: string;
-  description: string;
   deliveryFlows: string[];
-  defaultEnabled: boolean;
+  enabled: boolean;
   permissions: {
     filesystem: "read" | "write";
     network: boolean;
     externalWrites: boolean;
   };
-  contributes: {
-    stageBindings: string;
-    agents: string;
-    skills: string;
-  };
+  bindings: DomainStageHookBinding[];
 }
 
-export interface IntegrationAdapterManifest {
-  schemaVersion: 1;
-  kind: "integration-adapter";
+export interface IntegrationCatalogEntry {
   id: string;
-  ownerDomain: string;
+  definition: string;
+}
+
+export interface IntegrationCatalog {
+  schemaVersion: 1;
+  owner: string;
+  integrations: IntegrationCatalogEntry[];
+}
+
+export interface IntegrationSkillRef {
+  id: string;
+  path: string;
+}
+
+export interface IntegrationManifest {
+  schemaVersion: 1;
+  kind: "integration";
+  id: string;
   version: string;
   description: string;
+  owners: string[];
+  maintainers: string[];
   appliesTo: Applicability;
+  skills: IntegrationSkillRef[];
   permissions: {
     network: boolean;
     credentialRefs: string[];
@@ -392,28 +399,28 @@ export interface IntegrationAdapterManifest {
   };
 }
 
-export interface DiscoveredPlugin {
-  manifest: PluginManifest;
+export interface DiscoveredDomainHooks {
+  domain: string;
+  descriptor: DomainStageHooksDescriptor;
   root: string;
-  bindings: PluginStageBinding[];
+  bindings: DomainStageHookBinding[];
 }
 
-export interface PluginGuidanceContribution {
-  plugin: string;
-  ownerDomain: string;
+export interface DomainGuidanceContribution {
+  domain: string;
   version: string;
-  permissions: PluginManifest["permissions"];
+  permissions: DomainStageHooksDescriptor["permissions"];
   agent: { id: string; path: string };
   skills: Array<{ name: string; path: string }>;
-  mode: PluginGuidanceMode;
+  mode: DomainGuidanceMode;
   handoff: string;
   approvalBoundary: string;
 }
 
-export interface PluginGuidanceResolution {
+export interface DomainGuidanceResolution {
   deliveryFlow: string;
   stage: StageDefinition;
-  contributions: PluginGuidanceContribution[];
+  contributions: DomainGuidanceContribution[];
 }
 
 export interface ProjectBaseline {

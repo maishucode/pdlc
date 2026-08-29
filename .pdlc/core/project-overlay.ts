@@ -4,7 +4,7 @@ import { PdlcError } from "./errors.ts";
 import { validateControlPolicy, validateProjectBaseline, validateProjectDefaultProfile } from "./schema.ts";
 import type { ControlPolicy, ProjectBaseline, ProjectDefaultProfile } from "./types.ts";
 
-export interface ProjectControlEntry {
+export interface ProjectPolicyEntry {
   policy: ControlPolicy;
   path: string;
 }
@@ -23,7 +23,7 @@ export interface ProjectDomainOverlay {
   domain: string;
   root: string;
   baseline?: ProjectBaseline;
-  controls: ProjectControlEntry[];
+  policies: ProjectPolicyEntry[];
   defaults: ProjectDefaultEntry[];
   knowledge: ProjectKnowledgeEntry[];
 }
@@ -40,15 +40,16 @@ export class ProjectOverlay {
         throw new PdlcError("UNKNOWN_PROJECT_DOMAIN", `Project Overlay references an unknown Domain: ${domain}`);
       }
       const root = join(domainsRoot, domain);
+      await rejectLegacyProjectCategories(root);
       const baseline = await optionalJson(join(root, "baseline.json"), validateProjectBaseline, "Project Baseline");
       if (baseline && baseline.domain !== domain) throw mismatch("Project Baseline", domain, baseline.domain);
 
-      const controls: ProjectControlEntry[] = [];
-      for (const file of await listJsonFiles(join(root, "controls"))) {
-        const path = join(root, "controls", file);
-        const policy = await requiredJson(path, validateControlPolicy, "Project Control");
-        if (policy.ownerDomain !== domain) throw mismatch("Project Control", domain, policy.ownerDomain);
-        controls.push({ policy, path });
+      const policies: ProjectPolicyEntry[] = [];
+      for (const file of await listJsonFiles(join(root, "policies"))) {
+        const path = join(root, "policies", file);
+        const policy = await requiredJson(path, validateControlPolicy, "Project Policy");
+        if (policy.ownerDomain !== domain) throw mismatch("Project Policy", domain, policy.ownerDomain);
+        policies.push({ policy, path });
       }
 
       const defaults: ProjectDefaultEntry[] = [];
@@ -60,7 +61,7 @@ export class ProjectOverlay {
       }
 
       const knowledge = (await listFiles(join(root, "knowledge"))).map((path) => ({ domain, path }));
-      domains.push({ domain, root, baseline, controls, defaults, knowledge });
+      domains.push({ domain, root, baseline, policies, defaults, knowledge });
     }
     return new ProjectOverlay(domains);
   }
@@ -69,8 +70,8 @@ export class ProjectOverlay {
     return this.domains.flatMap((entry) => entry.baseline ? [{ domain: entry.domain, baseline: entry.baseline }] : []);
   }
 
-  controls(): ProjectControlEntry[] {
-    return this.domains.flatMap((entry) => entry.controls);
+  policies(): ProjectPolicyEntry[] {
+    return this.domains.flatMap((entry) => entry.policies);
   }
 
   defaults(): ProjectDefaultEntry[] {
@@ -88,6 +89,13 @@ async function listDirectories(path: string): Promise<string[]> {
   } catch (error) {
     if (isNodeError(error) && error.code === "ENOENT") return [];
     throw error;
+  }
+}
+
+async function rejectLegacyProjectCategories(root: string): Promise<void> {
+  const entries = await readdir(root, { withFileTypes: true });
+  if (entries.some((entry) => entry.isDirectory() && entry.name === "controls")) {
+    throw new PdlcError("VALIDATION_FAILED", `Project configuration uses obsolete controls/ folder: ${root}. Rename it to policies/.`);
   }
 }
 

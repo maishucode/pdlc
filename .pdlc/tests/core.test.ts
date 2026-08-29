@@ -8,6 +8,7 @@ import { DeliveryFlowRegistry } from "../core/delivery-flow-registry.ts";
 import { DomainRegistry } from "../core/domain-registry.ts";
 import { resolveDomainContext } from "../core/domain-resolver.ts";
 import { PdlcError } from "../core/errors.ts";
+import { IntegrationRegistry } from "../core/integration-registry.ts";
 import { acquireLock } from "../core/lock.ts";
 import { ProjectOverlay } from "../core/project-overlay.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "../core/readiness.ts";
@@ -33,8 +34,9 @@ async function model(project = projectRoot) {
   const stages = await StageRegistry.load(join(projectRoot, ".pdlc/stages/catalog.json"));
   const flows = await DeliveryFlowRegistry.load(join(projectRoot, ".pdlc/delivery-flows/catalog.json"), stages);
   const domains = await DomainRegistry.load(join(projectRoot, ".pdlc/domains"));
+  const integrations = await IntegrationRegistry.load(join(projectRoot, ".pdlc/integrations/catalog.json"));
   const overlay = await ProjectOverlay.load(project, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  return { stages, flows, domains, overlay };
+  return { stages, flows, domains, integrations, overlay };
 }
 
 test("loads only explicitly cataloged Delivery Flows and resolves conditional Stages", async () => {
@@ -49,20 +51,22 @@ test("loads only explicitly cataloged Delivery Flows and resolves conditional St
   assert.equal(flows.resolve("poc", ["risk:sensitive-data"]).some(({ definition }) => definition.id === "security-verification"), true);
 });
 
-test("loads Domain-owned Artifacts, Controls, Knowledge, and Capabilities", async () => {
-  const { domains } = await model();
+test("loads Domain-owned Artifacts, Policies, Knowledge, Skills, Agents, and Hooks", async () => {
+  const { domains, integrations } = await model();
   assert.deepEqual(domains.list().map(({ manifest }) => manifest.id), ["data-platform", "product-management", "security", "solution-architecture", "ux"]);
   assert.equal(domains.artifact("product-management.requirements").definition.ownerDomain, "product-management");
-  assert.equal(domains.get("ux").controls.length, 1);
-  assert.equal(domains.get("ux").plugins[0]?.manifest.id, "lean-pdlc-ux");
+  assert.equal(domains.get("ux").policies.length, 1);
+  assert.equal(domains.get("ux").skills.length, 3);
+  assert.equal(domains.get("ux").agents[0]?.id, "lean-pdlc-ux");
+  assert.equal(domains.get("ux").hooks.length, 1);
   assert.equal(domains.get("data-platform").knowledge[0]?.asset.kind, "kb");
-  assert.equal(domains.get("data-platform").adapters[0]?.manifest.id, "databricks");
+  assert.equal(integrations.get("databricks").manifest.kind, "integration");
 });
 
 test("resolves mandatory Controls separately from guidance and defaults", async () => {
-  const { flows, domains, overlay } = await model();
+  const { flows, domains, integrations, overlay } = await model();
   const stages = flows.resolve("poc", ["technology:web-ui", "risk:sensitive-data"]).map(({ definition }) => definition.id);
-  const result = resolveDomainContext(domains, overlay, {
+  const result = resolveDomainContext(domains, integrations, overlay, {
     deliveryFlow: "poc",
     stages,
     riskTriggers: ["sensitive-data"],
@@ -79,14 +83,14 @@ test("resolves mandatory Controls separately from guidance and defaults", async 
   assert.equal(result.defaults.find(({ key }) => key === "ux.visual-foundation")?.locked, true);
   assert.equal(result.defaults.find(({ key }) => key === "quality.browser-baseline")?.sourceRef, "ux.poc-web-ui-defaults@1.0.0");
   assert(result.knowledge.some(({ ref }) => ref === "ux.experience-design@1.0.0"));
-  assert(result.capabilities.some(({ ref }) => ref === "lean-pdlc-ux@0.3.0"));
+  assert.deepEqual(result.integrations, []);
 });
 
 test("resolves every active POC Stage independently", async () => {
-  const { flows, domains, overlay } = await model();
+  const { flows, domains, integrations, overlay } = await model();
   const stages = flows.resolve("poc", ["technology:web-ui"]).map(({ definition }) => definition.id);
   for (const stage of stages) {
-    const result = resolveDomainContext(domains, overlay, {
+    const result = resolveDomainContext(domains, integrations, overlay, {
       deliveryFlow: "poc",
       stages: [stage],
       technologies: ["web-ui", "react"],
@@ -96,15 +100,21 @@ test("resolves every active POC Stage independently", async () => {
   }
 });
 
-test("resolves Databricks KB and Adapter as separate assets", async () => {
-  const { domains, overlay } = await model();
-  const result = resolveDomainContext(domains, overlay, {
+test("resolves Databricks Knowledge and Integration as separate assets", async () => {
+  const { domains, integrations, overlay } = await model();
+  const result = resolveDomainContext(domains, integrations, overlay, {
     deliveryFlow: "implementation",
     stages: ["data-integration-boundaries", "solution-design", "implementation"],
     technologies: ["databricks"],
   });
   assert(result.knowledge.some(({ ref, asset }) => ref === "data-platform.databricks-connectivity@1.0.0" && asset.kind === "kb"));
-  assert(result.capabilities.some(({ ref, kind }) => ref === "databricks@1.0.0" && kind === "integration-adapter"));
+  assert(result.integrations.some(({ ref }) => ref === "databricks@1.0.0"));
+  const poc = resolveDomainContext(domains, integrations, overlay, {
+    deliveryFlow: "poc",
+    stages: ["data-integration-boundaries", "implementation"],
+    technologies: ["databricks"],
+  });
+  assert.deepEqual(poc.integrations, []);
 });
 
 test("lets project defaults override Domain defaults but not locked Controls", async (context) => {
@@ -123,12 +133,23 @@ test("lets project defaults override Domain defaults but not locked Controls", a
       { key: "ux.visual-foundation", title: "Attempted palette override", topic: "uxInteraction", statement: "Use a red palette.", rationale: "Project preference.", controlRefs: ["ux.experience-quality@1.0.0#approved-visual-foundation"] },
     ],
   }, null, 2));
-  const { domains } = await model();
+  const { domains, integrations } = await model();
   const overlay = await ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  const result = resolveDomainContext(domains, overlay, { deliveryFlow: "poc", stages: ["ux-design", "build-readiness"], technologies: ["web-ui"] });
+  const result = resolveDomainContext(domains, integrations, overlay, { deliveryFlow: "poc", stages: ["ux-design", "build-readiness"], technologies: ["web-ui"] });
   assert.equal(result.defaults.find(({ key }) => key === "quality.browser-baseline")?.sourceLayer, "project");
   assert.equal(result.defaults.find(({ key }) => key === "ux.visual-foundation")?.sourceLayer, "domain");
   assert(result.issues.some(({ code }) => code === "CONTROL_CONSTRAINT_OVERRIDE"));
+});
+
+test("rejects the obsolete project controls folder", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  await mkdir(join(workspace.path, "pdlc/config/domains/ux/controls"), { recursive: true });
+  const { domains } = await model();
+  await assert.rejects(
+    ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id))),
+    (error: unknown) => error instanceof PdlcError && error.code === "VALIDATION_FAILED" && error.message.includes("Rename it to policies/"),
+  );
 });
 
 test("blocks build until the Requirements Artifact and mandatory Controls are approved and traced", async (context) => {
@@ -141,10 +162,10 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   record.design.decisions = ["Use local browser state only."];
   record.design.technologies = ["web-ui", "react"];
   record.risk.triggers = ["sensitive-data"];
-  const { flows, domains } = await model();
+  const { flows, domains, integrations } = await model();
   const overlay = await ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id)));
   const activeStages = flows.resolve("poc", ["technology:web-ui", "risk:sensitive-data"]).map(({ definition }) => definition.id);
-  const resolved = resolveDomainContext(domains, overlay, { deliveryFlow: "poc", stages: activeStages, riskTriggers: record.risk.triggers, technologies: record.design.technologies });
+  const resolved = resolveDomainContext(domains, integrations, overlay, { deliveryFlow: "poc", stages: activeStages, riskTriggers: record.risk.triggers, technologies: record.design.technologies });
   const policy = await loadRequirementsFlowControl(join(projectRoot, ".pdlc/delivery-flows/poc/controls/requirements.json"));
 
   const blocked = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);

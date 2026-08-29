@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "owner": "enterprise-integration-platform",
+  "integrations": [
+    {
+      "id": "databricks",
+      "definition": "databricks/integration.json"
+    }
+  ]
+}

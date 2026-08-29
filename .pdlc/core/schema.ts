@@ -5,8 +5,8 @@ import {
   COVERAGE_STATUSES,
   DELIVERY_FLOW_STAGE_INCLUSIONS,
   DELIVERY_FLOW_STATUSES,
+  DOMAIN_GUIDANCE_MODES,
   KNOWLEDGE_KINDS,
-  PLUGIN_GUIDANCE_MODES,
   POC_STATUSES,
   REQUIREMENTS_COVERAGE_TOPICS,
   REQUIREMENTS_DEPTHS,
@@ -20,10 +20,11 @@ import {
   type ControlPolicy,
   type DeliveryFlowCatalog,
   type DeliveryFlowDefinition,
+  type DomainStageHooksDescriptor,
   type DomainManifest,
-  type IntegrationAdapterManifest,
+  type IntegrationCatalog,
+  type IntegrationManifest,
   type KnowledgeAsset,
-  type PluginManifest,
   type PocDeliveryRecord,
   type ProjectBaseline,
   type ProjectDefaultProfile,
@@ -219,7 +220,7 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
 
   const resolution = object(record.resolution, "$.resolution", issues);
   if (resolution) {
-    exact(resolution, ["controls", "baselines", "defaults", "knowledge", "capabilities"], "$.resolution", issues);
+    exact(resolution, ["controls", "baselines", "defaults", "knowledge", "integrations"], "$.resolution", issues);
     const controls = object(resolution.controls, "$.resolution.controls", issues);
     if (controls) {
       exact(controls, ["applicable", "exceptions", "applications"], "$.resolution.controls", issues);
@@ -236,7 +237,7 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
         string(application.notes, `${path}.notes`, issues);
       });
     }
-    for (const key of ["baselines", "defaults", "knowledge", "capabilities"] as const) stringArray(resolution[key], `$.resolution.${key}`, issues);
+    for (const key of ["baselines", "defaults", "knowledge", "integrations"] as const) stringArray(resolution[key], `$.resolution.${key}`, issues);
   }
 
   const design = object(record.design, "$.design", issues);
@@ -388,7 +389,7 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
   }
   const controls = object(flow.controls, "$.controls", issues);
   if (controls) {
-    exact(controls, ["initialStatus", "terminalStatuses", "checkpoints", "deliveryDefaults", "constraints", "artifactProfiles", "requiredCapabilities"], "$.controls", issues);
+    exact(controls, ["initialStatus", "terminalStatuses", "checkpoints", "deliveryDefaults", "constraints", "artifactProfiles", "requiredIntegrations"], "$.controls", issues);
     string(controls.initialStatus, "$.controls.initialStatus", issues);
     stringArray(controls.terminalStatuses, "$.controls.terminalStatuses", issues, 1);
     if (!Array.isArray(controls.checkpoints) || controls.checkpoints.length === 0) issue(issues, "EXPECTED_CHECKPOINTS", "$.controls.checkpoints", "Expected at least one checkpoint");
@@ -425,7 +426,7 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
       const profiles = object(controls.artifactProfiles, "$.controls.artifactProfiles", issues);
       if (profiles) Object.entries(profiles).forEach(([key, profile]) => string(profile, `$.controls.artifactProfiles.${key}`, issues));
     }
-    if (controls.requiredCapabilities !== undefined) stringArray(controls.requiredCapabilities, "$.controls.requiredCapabilities", issues);
+    if (controls.requiredIntegrations !== undefined) stringArray(controls.requiredIntegrations, "$.controls.requiredIntegrations", issues);
   }
   return result<DeliveryFlowDefinition>(value, issues);
 }
@@ -444,8 +445,8 @@ export function validateDomainManifest(value: unknown): ValidationResult<DomainM
   stringArray(domain.maintainers, "$.maintainers", issues, 1);
   const contributionMode = object(domain.contributionMode, "$.contributionMode", issues);
   if (contributionMode) {
-    exact(contributionMode, ["artifacts", "controls", "knowledge", "capabilities"], "$.contributionMode", issues);
-    for (const key of ["artifacts", "controls", "knowledge", "capabilities"] as const) {
+    exact(contributionMode, ["artifacts", "policies", "knowledge", "skills", "agents", "hooks"], "$.contributionMode", issues);
+    for (const key of ["artifacts", "policies", "knowledge", "skills", "agents", "hooks"] as const) {
       if (!CONTRIBUTION_MODES.includes(contributionMode[key] as never)) issue(issues, "INVALID_CONTRIBUTION_MODE", `$.contributionMode.${key}`, "Expected restricted, reviewed, or open");
     }
   }
@@ -552,46 +553,57 @@ export function validateKnowledgeAsset(value: unknown): ValidationResult<Knowled
   return result<KnowledgeAsset>(value, issues);
 }
 
-export function validatePluginManifest(value: unknown): ValidationResult<PluginManifest> {
+export function validateIntegrationCatalog(value: unknown): ValidationResult<IntegrationCatalog> {
   const issues: ValidationIssue[] = [];
-  const manifest = object(value, "$", issues);
-  if (!manifest) return result(value, issues);
-  exact(manifest, ["schemaVersion", "kind", "id", "ownerDomain", "version", "description", "deliveryFlows", "defaultEnabled", "permissions", "contributes"], "$", issues);
-  if (manifest.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
-  if (manifest.kind !== "plugin") issue(issues, "INVALID_CAPABILITY_KIND", "$.kind", "Expected plugin");
-  id(manifest.id, "$.id", issues);
-  id(manifest.ownerDomain, "$.ownerDomain", issues);
-  version(manifest.version, "$.version", issues);
-  string(manifest.description, "$.description", issues);
-  stringArray(manifest.deliveryFlows, "$.deliveryFlows", issues, 1);
-  if (typeof manifest.defaultEnabled !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.defaultEnabled", "Expected a boolean");
-  const permissions = object(manifest.permissions, "$.permissions", issues);
-  if (permissions) {
-    exact(permissions, ["filesystem", "network", "externalWrites"], "$.permissions", issues);
-    if (!["read", "write"].includes(String(permissions.filesystem))) issue(issues, "INVALID_FILESYSTEM_PERMISSION", "$.permissions.filesystem", "Expected read or write");
-    if (typeof permissions.network !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.network", "Expected a boolean");
-    if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.externalWrites", "Expected a boolean");
+  const catalog = object(value, "$", issues);
+  if (!catalog) return result(value, issues);
+  exact(catalog, ["schemaVersion", "owner", "integrations"], "$", issues);
+  if (catalog.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  string(catalog.owner, "$.owner", issues);
+  if (!Array.isArray(catalog.integrations)) issue(issues, "EXPECTED_ARRAY", "$.integrations", "Expected integrations array");
+  else {
+    const ids: string[] = [];
+    const definitions: string[] = [];
+    catalog.integrations.forEach((entry, index) => {
+      const path = `$.integrations[${index}]`;
+      const integration = object(entry, path, issues);
+      if (!integration) return;
+      exact(integration, ["id", "definition"], path, issues);
+      if (id(integration.id, `${path}.id`, issues)) ids.push(integration.id);
+      if (relativePath(integration.definition, `${path}.definition`, issues)) definitions.push(integration.definition);
+    });
+    if (new Set(ids).size !== ids.length) issue(issues, "DUPLICATE_INTEGRATION", "$.integrations", "Integration ids must be unique");
+    if (new Set(definitions).size !== definitions.length) issue(issues, "DUPLICATE_INTEGRATION_DEFINITION", "$.integrations", "Integration definition paths must be unique");
   }
-  const contributes = object(manifest.contributes, "$.contributes", issues);
-  if (contributes) {
-    exact(contributes, ["stageBindings", "agents", "skills"], "$.contributes", issues);
-    for (const key of ["stageBindings", "agents", "skills"] as const) relativePath(contributes[key], `$.contributes.${key}`, issues);
-  }
-  return result<PluginManifest>(value, issues);
+  return result<IntegrationCatalog>(value, issues);
 }
 
-export function validateIntegrationAdapterManifest(value: unknown): ValidationResult<IntegrationAdapterManifest> {
+export function validateIntegrationManifest(value: unknown): ValidationResult<IntegrationManifest> {
   const issues: ValidationIssue[] = [];
   const manifest = object(value, "$", issues);
   if (!manifest) return result(value, issues);
-  exact(manifest, ["schemaVersion", "kind", "id", "ownerDomain", "version", "description", "appliesTo", "permissions"], "$", issues);
+  exact(manifest, ["schemaVersion", "kind", "id", "version", "description", "owners", "maintainers", "appliesTo", "skills", "permissions"], "$", issues);
   if (manifest.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
-  if (manifest.kind !== "integration-adapter") issue(issues, "INVALID_CAPABILITY_KIND", "$.kind", "Expected integration-adapter");
+  if (manifest.kind !== "integration") issue(issues, "INVALID_INTEGRATION_KIND", "$.kind", "Expected integration");
   id(manifest.id, "$.id", issues);
-  id(manifest.ownerDomain, "$.ownerDomain", issues);
   version(manifest.version, "$.version", issues);
   string(manifest.description, "$.description", issues);
+  stringArray(manifest.owners, "$.owners", issues, 1);
+  stringArray(manifest.maintainers, "$.maintainers", issues, 1);
   applicability(manifest.appliesTo, "$.appliesTo", issues);
+  if (!Array.isArray(manifest.skills)) issue(issues, "EXPECTED_ARRAY", "$.skills", "Expected skills array");
+  else {
+    const skillIds: string[] = [];
+    manifest.skills.forEach((entry, index) => {
+      const path = `$.skills[${index}]`;
+      const skill = object(entry, path, issues);
+      if (!skill) return;
+      exact(skill, ["id", "path"], path, issues);
+      if (id(skill.id, `${path}.id`, issues)) skillIds.push(skill.id);
+      relativePath(skill.path, `${path}.path`, issues);
+    });
+    if (new Set(skillIds).size !== skillIds.length) issue(issues, "DUPLICATE_INTEGRATION_SKILL", "$.skills", "Integration Skill ids must be unique");
+  }
   const permissions = object(manifest.permissions, "$.permissions", issues);
   if (permissions) {
     exact(permissions, ["network", "credentialRefs", "externalWrites"], "$.permissions", issues);
@@ -599,7 +611,7 @@ export function validateIntegrationAdapterManifest(value: unknown): ValidationRe
     stringArray(permissions.credentialRefs, "$.permissions.credentialRefs", issues);
     if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.externalWrites", "Expected a boolean");
   }
-  return result<IntegrationAdapterManifest>(value, issues);
+  return result<IntegrationManifest>(value, issues);
 }
 
 export function validateProjectBaseline(value: unknown): ValidationResult<ProjectBaseline> {
@@ -635,13 +647,23 @@ export function validateProjectDefaultProfile(value: unknown): ValidationResult<
   return result<ProjectDefaultProfile>(value, issues);
 }
 
-export function validatePluginStageBindings(value: unknown): ValidationResult<{ schemaVersion: 1; plugin: string; bindings: unknown[] }> {
+export function validateDomainStageHooks(value: unknown): ValidationResult<DomainStageHooksDescriptor> {
   const issues: ValidationIssue[] = [];
   const descriptor = object(value, "$", issues);
   if (!descriptor) return result(value, issues);
-  exact(descriptor, ["schemaVersion", "plugin", "bindings"], "$", issues);
+  exact(descriptor, ["schemaVersion", "domain", "version", "deliveryFlows", "enabled", "permissions", "bindings"], "$", issues);
   if (descriptor.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
-  id(descriptor.plugin, "$.plugin", issues);
+  id(descriptor.domain, "$.domain", issues);
+  version(descriptor.version, "$.version", issues);
+  stringArray(descriptor.deliveryFlows, "$.deliveryFlows", issues, 1);
+  if (typeof descriptor.enabled !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.enabled", "Expected a boolean");
+  const permissions = object(descriptor.permissions, "$.permissions", issues);
+  if (permissions) {
+    exact(permissions, ["filesystem", "network", "externalWrites"], "$.permissions", issues);
+    if (!["read", "write"].includes(String(permissions.filesystem))) issue(issues, "INVALID_FILESYSTEM_PERMISSION", "$.permissions.filesystem", "Expected read or write");
+    if (typeof permissions.network !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.network", "Expected a boolean");
+    if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", "$.permissions.externalWrites", "Expected a boolean");
+  }
   if (!Array.isArray(descriptor.bindings)) issue(issues, "EXPECTED_ARRAY", "$.bindings", "Expected bindings array");
   else descriptor.bindings.forEach((entry, index) => {
     const path = `$.bindings[${index}]`;
@@ -651,11 +673,11 @@ export function validatePluginStageBindings(value: unknown): ValidationResult<{ 
     id(binding.stage, `${path}.stage`, issues);
     id(binding.agent, `${path}.agent`, issues);
     stringArray(binding.skills, `${path}.skills`, issues, 1);
-    if (!PLUGIN_GUIDANCE_MODES.includes(binding.mode as never)) issue(issues, "INVALID_PLUGIN_MODE", `${path}.mode`, "Unsupported Plugin mode");
+    if (!DOMAIN_GUIDANCE_MODES.includes(binding.mode as never)) issue(issues, "INVALID_DOMAIN_GUIDANCE_MODE", `${path}.mode`, "Unsupported Domain guidance mode");
     string(binding.handoff, `${path}.handoff`, issues);
     string(binding.approvalBoundary, `${path}.approvalBoundary`, issues);
   });
-  return result(value, issues);
+  return result<DomainStageHooksDescriptor>(value, issues);
 }
 
 export function validateAuditEvent(value: unknown): ValidationResult<AuditEvent> {

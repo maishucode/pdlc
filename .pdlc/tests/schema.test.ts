@@ -7,9 +7,11 @@ import {
   validateControlPolicy,
   validateDeliveryFlowCatalog,
   validateDeliveryFlowDefinition,
+  validateDomainStageHooks,
   validateDomainManifest,
+  validateIntegrationCatalog,
+  validateIntegrationManifest,
   validateKnowledgeAsset,
-  validatePluginManifest,
   validatePocDeliveryRecord,
   validateProjectDefaultProfile,
   validateRequirementsFlowControl,
@@ -24,6 +26,7 @@ test("enforces the Harness and project workspace ownership boundary", async () =
     access(join(projectRoot, ".pdlc/core")),
     access(join(projectRoot, ".pdlc/runtime/records/.gitkeep")),
     access(join(projectRoot, ".pdlc/runtime/audit/.gitkeep")),
+    access(join(projectRoot, ".pdlc/integrations/catalog.json")),
     access(join(projectRoot, "pdlc/config/domains/.gitkeep")),
     access(join(projectRoot, "pdlc/requirements/.gitkeep")),
     access(join(projectRoot, "pdlc/evidence/.gitkeep")),
@@ -32,6 +35,8 @@ test("enforces the Harness and project workspace ownership boundary", async () =
   await Promise.all([
     assert.rejects(access(join(projectRoot, "pdlc/core"))),
     assert.rejects(access(join(projectRoot, ".pdlc/config"))),
+    assert.rejects(access(join(projectRoot, ".pdlc/domains/ux/capabilities"))),
+    assert.rejects(access(join(projectRoot, ".pdlc/domains/ux/controls"))),
   ]);
 });
 
@@ -61,9 +66,11 @@ test("validates the explicit Delivery Flow Catalog and registered Flows", async 
 test("validates representative Domain assets", async () => {
   assert.equal(validateDomainManifest(await json(join(projectRoot, ".pdlc/domains/ux/domain.json"))).ok, true);
   assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/domains/product-management/artifacts/requirements/artifact.json"))).ok, true);
-  assert.equal(validateControlPolicy(await json(join(projectRoot, ".pdlc/domains/ux/controls/experience-quality.policy.json"))).ok, true);
+  assert.equal(validateControlPolicy(await json(join(projectRoot, ".pdlc/domains/ux/policies/experience-quality.policy.json"))).ok, true);
   assert.equal(validateKnowledgeAsset(await json(join(projectRoot, ".pdlc/domains/data-platform/knowledge/kb/databricks-connectivity.json"))).ok, true);
-  assert.equal(validatePluginManifest(await json(join(projectRoot, ".pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/plugin.json"))).ok, true);
+  assert.equal(validateDomainStageHooks(await json(join(projectRoot, ".pdlc/domains/ux/hooks/stages.json"))).ok, true);
+  assert.equal(validateIntegrationCatalog(await json(join(projectRoot, ".pdlc/integrations/catalog.json"))).ok, true);
+  assert.equal(validateIntegrationManifest(await json(join(projectRoot, ".pdlc/integrations/databricks/integration.json"))).ok, true);
 });
 
 test("validates the Requirements Flow Control", async () => {
@@ -102,7 +109,7 @@ test("keeps the Requirements questionnaire under the owning Artifact", async () 
 test("keeps UX clarification options selectable", async () => {
   const sources = await Promise.all([
     readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8"),
-    readFile(join(projectRoot, ".pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
   ]);
   for (const source of sources) {
     assert.match(source, /2[–-]4 mutually exclusive, selectable options/i);

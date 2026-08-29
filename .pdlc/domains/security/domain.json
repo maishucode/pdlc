@@ -8,8 +8,10 @@
   "maintainers": ["security-engineering"],
   "contributionMode": {
     "artifacts": "restricted",
-    "controls": "restricted",
+    "policies": "restricted",
     "knowledge": "reviewed",
-    "capabilities": "restricted"
+    "skills": "restricted",
+    "agents": "restricted",
+    "hooks": "restricted"
   }
 }

@@ -7,7 +7,8 @@ This hidden directory is owned by the Lean PDLC Harness and Runner. Product team
 | `core/` | Registries, resolution, readiness, persistence, locking, state, and audit behavior | Harness Engineering |
 | `stages/` | Canonical reusable work units | PDLC Governance |
 | `delivery-flows/` | Explicit Flow Catalog, Stage composition, checkpoints, constraints, and Flow Controls | PDLC Governance |
-| `domains/` | Domain-owned Artifacts, Controls, Knowledge, Plugins, and Adapters | Named expert teams |
+| `domains/` | Domain-owned Artifacts, Policies, Knowledge, Skills, Agents, and Hooks | Named expert teams |
+| `integrations/` | Cataloged external-system connections and their optional bundled Skills | Integration Platform and named owners |
 | `roles/` | Logical delivery responsibilities | PDLC Governance |
 | `schemas/` | Machine-readable contracts | Harness Engineering |
 | `platform-adapters/` | Thin Codex/Copilot adapter contracts and portability checks | Developer Experience |
