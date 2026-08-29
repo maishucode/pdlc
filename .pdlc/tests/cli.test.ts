@@ -661,8 +661,10 @@ test("status and validate reject tampered stored Agent execution identity", asyn
   const store = new FileStateStore(workspace);
   const current = await store.readRecord(record.id);
   const application = current.resolution.contextApplications.find(({ stage }) => stage === "requirements-clarification")!;
-  application.domainContributions[0]!.capability = "tampered-capability";
-  application.domainContributions[0]!.execution.invocationId = "f".repeat(64);
+  const contribution = application.domainContributions[0]!;
+  contribution.capability = "tampered-capability";
+  contribution.execution.invocationId = "f".repeat(64);
+  contribution.execution.platformExecutionRef = `github-copilot:agent:${contribution.agent}:${contribution.execution.invocationId}:call-tampered`;
   await store.writeRecord({ ...current, revision: current.revision + 1, updatedAt: new Date().toISOString() }, current.revision);
 
   const status = await runCli(["status", "--root", workspace], workspace);
