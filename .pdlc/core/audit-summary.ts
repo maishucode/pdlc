@@ -1,4 +1,5 @@
 import type { AuditEvent, PocDeliveryRecord } from "./types.ts";
+import { currentPocStage } from "./poc-progress.ts";
 
 export type AuditMilestoneState = "pending" | "completed" | "not-recorded";
 
@@ -56,12 +57,6 @@ export interface PocAuditSummary {
     latestEventAt?: string;
     warnings: string[];
   };
-}
-
-function currentStage(record: PocDeliveryRecord): string {
-  if (record.status === "DRAFT") return record.requirements.status === "approved" ? "build-readiness" : "requirements-clarification";
-  if (record.status === "COMMITTED") return "implementation";
-  return "outcome-review-and-disposition";
 }
 
 function headline(record: PocDeliveryRecord): string {
@@ -164,7 +159,7 @@ export function buildPocAuditSummary(record: PocDeliveryRecord, allEvents: reado
       title: record.title,
       deliveryFlow: record.deliveryFlow,
       status: record.status,
-      stage: currentStage(record),
+      stage: currentPocStage(record),
       revision: record.revision,
       updatedAt: record.updatedAt,
     },

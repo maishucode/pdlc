@@ -85,7 +85,9 @@ Use conversational intents:
 /pdlc help
 ```
 
-The Agent reports the active Stage, what changed, blocking questions, and the next action. Do not run the PDLC Runner manually; that is internal Agent/maintainer machinery.
+The Agent reports the current Stage and state, available next actions, known blockers, Requirements approval, evidence readiness, applied Policies/Knowledge/Skills, and Productization Package readiness. An action marked unavailable includes the reason, so you do not need to inspect the Delivery Record to discover what remains. Status is read-only and does not create an Audit Event or advance the Delivery Flow.
+
+The status check remains fast: it derives routine progress from the current Delivery Record and recorded Context Applications. It validates the Productization Package only after the POC reaches `VERIFIED`, when that information can affect the next decision. Do not run the PDLC Runner manually; that is internal Agent/maintainer machinery.
 
 The audit view is intentionally concise. It reports:
 

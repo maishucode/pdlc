@@ -130,6 +130,8 @@ bun .pdlc/cli.ts integration list
 
 `audit summary` is a read-only projection over the selected Delivery Record and append-only Audit Log. It reports the current conclusion, Build Readiness, Verify and Decide milestones, a concise timeline, evidence references, satisfied, excepted, and pending Controls, and warnings when record state has no matching audit event. It never replaces or modifies the underlying Audit Events.
 
+`status` is the read-only operational view. It reports the current canonical Stage and state, allowed and unavailable next actions, known blockers, Requirements approval, evidence readiness, applied Policies/Knowledge/Skills, Control dispositions, and Productization Package readiness. It derives routine status from the current Delivery Record and recorded Context Applications; only a verified POC triggers the just-in-time package check.
+
 This assurance does not add startup questions, network calls, or a full-Harness scan. The Runner hashes only the already-resolved local files for the current Stage, and receipt persistence happens after Stage work rather than before the first clarification round.
 
 ## Adding an asset

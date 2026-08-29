@@ -229,6 +229,26 @@ test("build readiness records one approved and content-bound decision", async (c
   await applyContextReceipt(workspace, "requirements-clarification");
   await applyContextReceipt(workspace, "build-readiness");
 
+  const readyStatus = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(readyStatus.exitCode, 0, JSON.stringify(readyStatus.output));
+  const readySummary = readyStatus.output as {
+    record: { status: string; stage: string };
+    blockers: unknown[];
+    nextActions: Array<{ id: string; available: boolean }>;
+    requirements: { approved: boolean; pendingTopics: string[] };
+    applied: { policies: unknown[]; knowledge: unknown[]; skills: unknown[] };
+    productizationPackage: { state: string };
+  };
+  assert.deepEqual({ status: readySummary.record.status, stage: readySummary.record.stage }, { status: "DRAFT", stage: "build-readiness" });
+  assert.deepEqual(readySummary.blockers, []);
+  assert.equal(readySummary.nextActions.find(({ id }) => id === "request-build-readiness")?.available, true);
+  assert.equal(readySummary.requirements.approved, false);
+  assert.deepEqual(readySummary.requirements.pendingTopics, []);
+  assert(readySummary.applied.policies.length > 0);
+  assert(readySummary.applied.knowledge.length > 0);
+  assert(readySummary.applied.skills.length > 0);
+  assert.equal(readySummary.productizationPackage.state, "not-required");
+
   const result = await runCli(["readiness", "build", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   const approved = await store.readRecord(record.id);
@@ -275,6 +295,19 @@ test("build readiness records one approved and content-bound decision", async (c
   for (const stage of ["implementation", "developer-verification", "security-verification", "acceptance-verification"]) {
     await applyContextReceipt(workspace, stage, "product-owner", verificationEvidence);
   }
+  const verificationStatus = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(verificationStatus.exitCode, 0, JSON.stringify(verificationStatus.output));
+  const verificationSummary = verificationStatus.output as {
+    record: { status: string };
+    blockers: unknown[];
+    nextActions: Array<{ id: string; available: boolean }>;
+    evidence: { readyForVerify: boolean; security: { required: boolean; ready: boolean } };
+  };
+  assert.equal(verificationSummary.record.status, "COMMITTED");
+  assert.deepEqual(verificationSummary.blockers, []);
+  assert.equal(verificationSummary.evidence.readyForVerify, true);
+  assert.deepEqual(verificationSummary.evidence.security, { required: true, ready: true, count: 1, refs: [verificationEvidence[2]] });
+  assert.equal(verificationSummary.nextActions.find(({ id }) => id === "request-verification")?.available, true);
   const verified = await runCli(["checkpoint", "verify", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(verified.exitCode, 0, JSON.stringify(verified.output));
   const verifiedRecord = await store.readRecord(record.id);
@@ -284,9 +317,35 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.equal(missingPackage.exitCode, 2);
   assert.equal((missingPackage.output as { error: { code: string } }).error.code, "BUILD_NOT_READY");
 
+  const missingPackageStatus = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(missingPackageStatus.exitCode, 0, JSON.stringify(missingPackageStatus.output));
+  const missingPackageSummary = missingPackageStatus.output as {
+    nextActions: Array<{ id: string; available: boolean }>;
+    productizationPackage: { state: string; expectedRef: string; issues: string[] };
+  };
+  assert.equal(missingPackageSummary.nextActions.find(({ id }) => id === "park")?.available, true);
+  assert.equal(missingPackageSummary.nextActions.find(({ id }) => id === "recommend-productization")?.available, false);
+  assert.deepEqual(missingPackageSummary.productizationPackage, {
+    state: "missing",
+    expectedRef: `pdlc/artifacts/${record.id}/productization-package.md`,
+    documentRef: "",
+    contentHash: "",
+    issues: [`Productization Package has not been created at pdlc/artifacts/${record.id}/productization-package.md.`],
+  });
+
   const packageRef = `pdlc/artifacts/${record.id}/productization-package.md`;
   await mkdir(join(workspace, "pdlc", "artifacts", record.id), { recursive: true });
   await writeFile(join(workspace, packageRef), productizationPackage(verifiedRecord));
+
+  const packageReadyStatus = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(packageReadyStatus.exitCode, 0, JSON.stringify(packageReadyStatus.output));
+  const packageReadySummary = packageReadyStatus.output as {
+    nextActions: Array<{ id: string; available: boolean }>;
+    productizationPackage: { state: string; contentHash: string };
+  };
+  assert.equal(packageReadySummary.productizationPackage.state, "ready");
+  assert.match(packageReadySummary.productizationPackage.contentHash, /^[a-f0-9]{64}$/);
+  assert.equal(packageReadySummary.nextActions.find(({ id }) => id === "recommend-productization")?.available, true);
 
   const decided = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "product-owner", "--outcome", "recommend-productization"], workspace);
   assert.equal(decided.exitCode, 0, JSON.stringify(decided.output));

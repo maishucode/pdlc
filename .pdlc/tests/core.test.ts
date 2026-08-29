@@ -12,6 +12,7 @@ import { PdlcError } from "../core/errors.ts";
 import { IntegrationRegistry } from "../core/integration-registry.ts";
 import { acquireLock } from "../core/lock.ts";
 import { ProjectOverlay } from "../core/project-overlay.ts";
+import { POC_SECURITY_RISK_TRIGGERS } from "../core/poc-progress.ts";
 import { RoleRegistry } from "../core/role-registry.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "../core/readiness.ts";
 import { loadRequirementsFlowControl } from "../core/requirements.ts";
@@ -102,6 +103,10 @@ test("loads only explicitly cataloged Delivery Flows and resolves conditional St
     park: "PARKED",
     "recommend-productization": "PRODUCTIZATION_RECOMMENDED",
   });
+  assert.deepEqual(
+    flows.getExecutable("poc").stageSequence.find(({ stageId }) => stageId === "security-verification")?.activationTags,
+    POC_SECURITY_RISK_TRIGGERS.map((trigger) => `risk:${trigger}`),
+  );
   assert(!stages.has("principle-applicability"));
   assert.throws(() => flows.getExecutable("pdlc"), (error: unknown) => error instanceof PdlcError && error.code === "DELIVERY_FLOW_NOT_EXECUTABLE");
   assert.equal(flows.resolve("poc").some(({ definition }) => definition.id === "ux-design"), false);

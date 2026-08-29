@@ -11,6 +11,7 @@ import { projectKnowledgeRefs, resolveDomainContext } from "./core/domain-resolv
 import { PdlcError } from "./core/errors.ts";
 import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
+import { verificationContextStages } from "./core/poc-progress.ts";
 import { assessProductizationPackage } from "./core/productization.ts";
 import { assessControlApplications, assessPocBuildReadiness, assessResolvedControlSet, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsFlowControl } from "./core/requirements.ts";
@@ -18,6 +19,7 @@ import { RoleRegistry, type ResolvedRole } from "./core/role-registry.ts";
 import { validatePocDeliveryRecord, validateStageContextReceipt } from "./core/schema.ts";
 import { FileStateStore } from "./core/state.ts";
 import { StageRegistry } from "./core/stage-registry.ts";
+import { buildPocStatusSummary } from "./core/status-summary.ts";
 import type { DeliveryFlowCheckpoint, DomainGuidanceResolution, ExecutableDeliveryFlowDefinition, PocDeliveryRecord, StageContextReceipt, ValidationIssue } from "./core/types.ts";
 import { validateConversationEntrypoints } from "./platform-adapters/validate-entrypoints.ts";
 import { validateCorePortability } from "./platform-adapters/validate-portability.ts";
@@ -83,12 +85,6 @@ function constraintIssues(
     if (new Set(identities).size !== identities.length) issues.push({ code: "ROLE_SEPARATION_REQUIRED", path: "$.assignments", message: "This Delivery Flow requires separate identities for its required Roles" });
   }
   return issues;
-}
-
-function stageFor(record: PocDeliveryRecord): string {
-  if (record.status === "DRAFT") return record.requirements.status === "approved" ? "build-readiness" : "requirements-clarification";
-  if (record.status === "COMMITTED") return "implementation";
-  return "outcome-review-and-disposition";
 }
 
 function contextTags(record: PocDeliveryRecord): string[] {
@@ -305,7 +301,7 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
     evidenceRefs = [original.evidence.tests, original.evidence.build, original.evidence.security, original.evidence.demo].flat().map(({ ref }) => ref);
     issues.push(...assessResolvedControlSet(original, resolution.controls));
     issues.push(...assessControlApplications(original, resolution.controls, ["developer-verification", "security-verification", "acceptance-verification"], new Set(evidenceRefs)));
-    const receiptStages = ["requirements-clarification", "build-readiness", "implementation", "developer-verification", ...(activeStages.includes("security-verification") ? ["security-verification"] : []), "acceptance-verification"];
+    const receiptStages = verificationContextStages(original);
     const snapshots = new Map<string, StageContextSnapshot>();
     for (const stageId of receiptStages) snapshots.set(stageId, (await resolveStageMaterial(options, stageId, original)).snapshot);
     issues.push(...requiredContextIssues(original, receiptStages, snapshots));
@@ -377,7 +373,8 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
 async function status(options: CliOptions): Promise<unknown> {
   try {
     const record = await readRecord(options);
-    return { ok: true, initialized: true, record: { id: record.id, deliveryFlow: record.deliveryFlow, status: record.status, stage: stageFor(record), title: record.title, revision: record.revision, risk: record.risk, assignments: record.assignments, updatedAt: record.updatedAt } };
+    const packageAssessment = record.status === "VERIFIED" ? await assessProductizationPackage(options.root, record) : undefined;
+    return { ok: true, initialized: true, ...buildPocStatusSummary(record, packageAssessment) };
   } catch (error) {
     if (error instanceof PdlcError && error.code === "CURRENT_RECORD_NOT_SET") return { ok: true, initialized: false, message: error.message };
     throw error;
