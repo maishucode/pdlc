@@ -113,7 +113,7 @@ bun pdlc/cli.ts plugin sync --root <project>
 - New Plugin: place it under the owning Domain's `capabilities/plugins/` folder and declare permissions and Stage bindings.
 - Project-specific decision: place it under `.pdlc/project/domains/<domain>/`; do not fork shared definitions.
 
-See [Harness Architecture and Ownership](docs/HARNESS_ARCHITECTURE_AND_OWNERSHIP.md), [Delivery Flow Model](docs/DELIVERY_FLOW_MODEL.md), and [Target Architecture](HARNESS_TARGET_ARCHITECTURE.md).
+See [Harness Architecture and Ownership](pdlc-docs/HARNESS_ARCHITECTURE_AND_OWNERSHIP.md), [Delivery Flow Model](pdlc-docs/DELIVERY_FLOW_MODEL.md), and [Target Architecture](pdlc-docs/HARNESS_TARGET_ARCHITECTURE.md).
 
 ## Validate
 

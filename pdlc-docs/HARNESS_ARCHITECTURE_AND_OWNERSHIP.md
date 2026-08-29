@@ -1,4 +1,4 @@
-# Harness Architecture and Ownership
+# Lean PDLC Harness Architecture and Ownership
 
 ## 1. Purpose
 

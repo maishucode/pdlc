@@ -1,4 +1,4 @@
-# PDLC Harness Target Architecture
+# Lean PDLC Harness v2 Target Architecture
 
 > Status: v2 architecture baseline, implemented on the `v2` branch
 > Purpose: Define the Harness platform model for product teams and provide the design baseline for continued evolution.
@@ -861,7 +861,6 @@ The tree below shows conceptual ownership and grouping. The v2 implementation de
 PDLC/
 ├── AGENTS.md
 ├── README.md
-├── HARNESS_TARGET_ARCHITECTURE.md
 │
 ├── pdlc/
 │   ├── cli.ts
@@ -955,7 +954,11 @@ PDLC/
 │   ├── agents/                   # Thin Copilot Platform Adapter
 │   └── workflows/                # Harness validation and CI
 │
-└── docs/
+└── pdlc-docs/
+    ├── HARNESS_TARGET_ARCHITECTURE.md
+    ├── HARNESS_ARCHITECTURE_AND_OWNERSHIP.md
+    ├── DELIVERY_FLOW_MODEL.md
+    └── GUIDE/
 ```
 
 ### 14.1 Content That Remains Outside Domains

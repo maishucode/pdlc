@@ -1,4 +1,4 @@
-# 03 — Build a Domain Plugin
+# 03 — Build a Lean PDLC Domain Plugin
 
 A Plugin packages optional Agents and Skills and contributes them additively to canonical Stages. Its complete definition lives under the owning Domain's `capabilities/plugins/` folder; it never edits Core, a Delivery Flow, a Control, or the main Agent.
 

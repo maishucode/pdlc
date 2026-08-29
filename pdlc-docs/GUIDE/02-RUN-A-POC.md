@@ -1,4 +1,4 @@
-# 02. Run a POC
+# 02. Run a Lean PDLC POC
 
 This guide is for the person using Lean PDLC in a Copilot conversation. You describe the outcome; the Agent maintains the Delivery Flow artifacts and invokes internal checks when needed.
 

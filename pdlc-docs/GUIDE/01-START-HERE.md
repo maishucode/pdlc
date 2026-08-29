@@ -1,4 +1,4 @@
-# 01. Start Here: Install Lean PDLC
+# 01. Start Here: Install Lean PDLC Harness
 
 This guide is for product owners and engineers who want to use Lean PDLC with GitHub Copilot.
 

@@ -1,4 +1,4 @@
-# GitHub Copilot Adapter Guide
+# Lean PDLC GitHub Copilot Adapter Guide
 
 ## 1. Purpose
 

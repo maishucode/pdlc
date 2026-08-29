@@ -8,7 +8,7 @@
 /.agents/                                      @your-org/pdlc-governance @your-org/pdlc-harness-engineering
 /.github/                                      @your-org/developer-experience
 /.codex/                                       @your-org/developer-experience
-/docs/                                         @your-org/pdlc-harness-product
+/pdlc-docs/                                    @your-org/pdlc-harness-product
 
 /pdlc/cli.ts                                   @your-org/pdlc-harness-engineering
 /pdlc/core/                                    @your-org/pdlc-harness-engineering
