@@ -42,7 +42,8 @@
     },
     "approvedBy": "",
     "approvedAt": "",
-    "approvedContentHash": ""
+    "approvedContentHash": "",
+    "approvedContractHash": ""
   },
   "scope": {
     "inScope": ["The smallest experiment needed to test the hypothesis"],

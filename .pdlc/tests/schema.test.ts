@@ -43,6 +43,17 @@ test("enforces the Harness and project workspace ownership boundary", async () =
   ]);
 });
 
+test("keeps the Runner entry point as a thin composition root", async () => {
+  const cli = await readFile(join(projectRoot, ".pdlc/cli.ts"), "utf8");
+  assert(cli.split("\n").length < 450, "CLI orchestration should stay compact");
+  assert.doesNotMatch(cli, /\.\/core\/[^"\n]*-registry\.ts/);
+  assert.doesNotMatch(cli, /createStageContextSnapshot/);
+  assert.match(cli, /\.\/commands\/context\.ts/);
+  assert.match(cli, /\.\/commands\/validate\.ts/);
+  assert.match(cli, /\.\/core\/harness-context\.ts/);
+  assert.match(cli, /\.\/core\/flow-guard\.ts/);
+});
+
 test("validates the canonical v2 Delivery Record", async () => {
   assert.equal(validatePocDeliveryRecord(await json(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"))).ok, true);
 });

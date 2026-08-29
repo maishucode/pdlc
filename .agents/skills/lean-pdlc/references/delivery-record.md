@@ -7,7 +7,7 @@ Use `.pdlc/schemas/poc-delivery-record.schema.json` as the structural contract a
 - Store the requirements contract at `pdlc/requirements/<POC-ID>.md`; keep it `draft` until explicit Product approval.
 - Track answered-question count, coverage status for every policy topic, open questions, and contradictions under `requirements.clarification`. Keep unknown DRAFT business fields empty instead of inserting fictional values.
 - Keep `questionsAnswered` equal to the number of distinct `RQ-xxx` decisions in the Requirements document.
-- Let the Runner record requirements depth, approver, approval timestamp, and approved content hash. Material scope or standard changes create a content-hash mismatch and require a new explicit approval before further build activity.
+- Let the Runner record requirements depth, approver, approval timestamp, approved document hash, and approved whole-contract hash. The contract hash binds scope, risk, design, assignments, and resolved governance while excluding expected post-Commit evidence and receipt updates. A material contract change requires refreshed context and a new explicit approval before further governed progress.
 - Treat only explicit approval after the complete document review as approval; a generic confirmation during clarification does not qualify.
 - Set `scope.productionUse` to `false` for every POC.
 - Copy the Delivery Flow timebox into the Draft without asking the user. Let the Runner bind all role assignments to the Build Readiness actor when the Delivery Flow uses `approval-actor-all-roles`; do not turn these delivery controls into clarification questions or `RQ-xxx` decisions.

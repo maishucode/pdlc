@@ -1,6 +1,6 @@
 import type { ProductizationPackageAssessment } from "./productization.ts";
 import { buildReadinessContextStages, currentPocStage, requiresSecurityVerification, verificationContextStages } from "./poc-progress.ts";
-import type { PocDeliveryRecord, RequirementsCoverageTopic } from "./types.ts";
+import type { PocDeliveryRecord, RequirementsCoverageTopic, ValidationIssue } from "./types.ts";
 
 export interface StatusBlocker {
   code: string;
@@ -50,6 +50,7 @@ export interface PocStatusSummary {
     approvedBy: string;
     approvedAt: string;
     contentHashBound: boolean;
+    contractHashBound: boolean;
     questionsAnswered: number;
     pendingTopics: RequirementsCoverageTopic[];
     openQuestions: number;
@@ -135,6 +136,8 @@ function packageStatus(record: PocDeliveryRecord, assessment?: ProductizationPac
 export function buildPocStatusSummary(
   record: PocDeliveryRecord,
   productizationAssessment?: ProductizationPackageAssessment,
+  contextIssues?: ValidationIssue[],
+  approvalIssues: ValidationIssue[] = [],
 ): PocStatusSummary {
   const blockers: StatusBlocker[] = [];
   const pendingTopics = Object.entries(record.requirements.clarification.coverage)
@@ -152,8 +155,13 @@ export function buildPocStatusSummary(
   const security = evidenceStatus(securityRequired, record.evidence.security.map(({ ref }) => ref));
   const demo = evidenceStatus(true, record.evidence.demo.map(({ ref }) => ref));
   const evidenceReady = tests.ready && build.ready && security.ready && demo.ready;
+  const contextWasValidated = contextIssues !== undefined;
+  const appendContextIssues = (): void => {
+    for (const issue of contextIssues ?? []) blockers.push({ code: issue.code, area: "context", message: issue.message });
+  };
 
   if (record.risk.level === "blocked") blockers.push({ code: "RISK_BLOCKED", area: "risk", message: "Risk status is blocked." });
+  for (const issue of approvalIssues) blockers.push({ code: issue.code, area: "requirements", message: issue.message });
   if (record.status === "DRAFT") {
     if (!record.idea.problem.trim()) blockers.push({ code: "PROBLEM_MISSING", area: "requirements", message: "Product problem is not defined." });
     if (!record.idea.hypothesis.trim()) blockers.push({ code: "HYPOTHESIS_MISSING", area: "requirements", message: "POC hypothesis is not defined." });
@@ -164,7 +172,8 @@ export function buildPocStatusSummary(
     if (record.requirements.clarification.openQuestions.length > 0) blockers.push({ code: "OPEN_QUESTIONS", area: "requirements", message: `${record.requirements.clarification.openQuestions.length} requirements question(s) remain open.` });
     if (record.requirements.clarification.contradictions.length > 0) blockers.push({ code: "CONTRADICTIONS", area: "requirements", message: `${record.requirements.clarification.contradictions.length} requirements contradiction(s) remain.` });
     for (const control of pendingControls) blockers.push({ code: "CONTROL_PENDING", area: "controls", message: `Control has no recorded disposition: ${control}` });
-    for (const stage of buildReadinessContextStages().filter((stage) => !contextStages.has(stage))) blockers.push({ code: "CONTEXT_NOT_APPLIED", area: "context", message: `Stage context is not yet applied: ${stage}` });
+    if (contextWasValidated) appendContextIssues();
+    else for (const stage of buildReadinessContextStages().filter((stage) => !contextStages.has(stage))) blockers.push({ code: "CONTEXT_NOT_APPLIED", area: "context", message: `Stage context is not yet applied: ${stage}` });
   }
   if (record.status === "COMMITTED") {
     if (!tests.ready) blockers.push({ code: "TEST_EVIDENCE_MISSING", area: "evidence", message: "Test evidence is missing." });
@@ -172,7 +181,8 @@ export function buildPocStatusSummary(
     if (!security.ready) blockers.push({ code: "SECURITY_EVIDENCE_MISSING", area: "evidence", message: "Security evidence is required by the recorded risk triggers." });
     if (!demo.ready) blockers.push({ code: "DEMO_EVIDENCE_MISSING", area: "evidence", message: "Demo evidence is missing." });
     for (const control of pendingControls) blockers.push({ code: "CONTROL_PENDING", area: "controls", message: `Control has no recorded disposition: ${control}` });
-    for (const stage of verificationContextStages(record).filter((stage) => !contextStages.has(stage))) blockers.push({ code: "CONTEXT_NOT_APPLIED", area: "context", message: `Stage context is not yet applied: ${stage}` });
+    if (contextWasValidated) appendContextIssues();
+    else for (const stage of verificationContextStages(record).filter((stage) => !contextStages.has(stage))) blockers.push({ code: "CONTEXT_NOT_APPLIED", area: "context", message: `Stage context is not yet applied: ${stage}` });
   }
   const decisionReady = record.decision.rationale.trim().length > 0 && record.decision.followUp.trim().length > 0;
   if (record.status === "VERIFIED" && !decisionReady) blockers.push({ code: "DECISION_DETAILS_MISSING", area: "decision", message: "Decision rationale and follow-up are required." });
@@ -203,13 +213,14 @@ export function buildPocStatusSummary(
       { id: "request-verification", label: "Request Verify approval", available: ready, reason: ready ? undefined : `Resolve ${blockers.length} known blocker(s).` },
     ];
   } else if (record.status === "VERIFIED") {
+    const governanceReady = blockers.length === 0;
     nextActions = [
-      { id: "park", label: "Park the POC", available: decisionReady, reason: decisionReady ? undefined : "Add decision rationale and follow-up." },
+      { id: "park", label: "Park the POC", available: decisionReady && governanceReady, reason: !governanceReady ? "Restore the approved build contract." : decisionReady ? undefined : "Add decision rationale and follow-up." },
       {
         id: "recommend-productization",
         label: "Recommend productization",
-        available: decisionReady && productizationPackage.state === "ready",
-        reason: !decisionReady ? "Add decision rationale and follow-up." : productizationPackage.state !== "ready" ? "Complete the Productization Package." : undefined,
+        available: decisionReady && governanceReady && productizationPackage.state === "ready",
+        reason: !governanceReady ? "Restore the approved build contract." : !decisionReady ? "Add decision rationale and follow-up." : productizationPackage.state !== "ready" ? "Complete the Productization Package." : undefined,
       },
     ];
   } else if (record.status === "PARKED") {
@@ -254,6 +265,7 @@ export function buildPocStatusSummary(
       approvedBy: record.requirements.approvedBy,
       approvedAt: record.requirements.approvedAt,
       contentHashBound: /^[a-f0-9]{64}$/.test(record.requirements.approvedContentHash),
+      contractHashBound: /^[a-f0-9]{64}$/.test(record.requirements.approvedContractHash ?? ""),
       questionsAnswered: record.requirements.clarification.questionsAnswered,
       pendingTopics,
       openQuestions: record.requirements.clarification.openQuestions.length,

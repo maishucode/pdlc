@@ -6,6 +6,8 @@ import test from "node:test";
 import { runCli } from "../cli.ts";
 import { FileStateStore } from "../core/state.ts";
 import { AuditLog } from "../core/audit.ts";
+import { hashApprovedBuildContract } from "../core/approval-contract.ts";
+import { hashRequirementsDocument } from "../core/readiness.ts";
 import type { PocDeliveryRecord } from "../core/types.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
@@ -56,6 +58,14 @@ async function initializeRecord(workspace: string, record: PocDeliveryRecord, ac
   const input = join(inbox, `${record.id}.json`);
   await writeFile(input, JSON.stringify(record));
   return runCli(["init", "--root", workspace, "--input", `.pdlc/runtime/inbox/${record.id}.json`, "--actor", actor], workspace);
+}
+
+async function bindApprovedContract(workspace: string, record: PocDeliveryRecord): Promise<void> {
+  const requirementsPath = join(workspace, record.requirements.documentRef);
+  await mkdir(dirname(requirementsPath), { recursive: true });
+  await writeFile(requirementsPath, `# Approved Requirements for ${record.id}\n`);
+  record.requirements.approvedContentHash = await hashRequirementsDocument(workspace, record.requirements.documentRef);
+  record.requirements.approvedContractHash = hashApprovedBuildContract(record);
 }
 
 function productizationPackage(record: PocDeliveryRecord): string {
@@ -171,6 +181,44 @@ test("rejects an invalid initial record without writing runtime state", async (c
   assert.equal(JSON.parse(await readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8")).status, "COMMITTED");
 });
 
+test("rejects non-canonical context classifications during initialization", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-tags-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.design.technologies = ["web"];
+  record.design.domains = ["domain:ux"];
+  record.risk.triggers = ["Sensitive Data"];
+  const result = await initializeRecord(workspace, record);
+  assert.equal(result.exitCode, 2);
+  const details = (result.output as { error: { details: Array<{ code: string; message: string }> } }).error.details;
+  assert(details.some(({ code, message }) => code === "NON_CANONICAL_TECHNOLOGY_TAG" && message.includes("web-ui")));
+  assert(details.some(({ code }) => code === "PREFIXED_CONTEXT_VALUE"));
+  assert(details.some(({ code }) => code === "NON_CANONICAL_CONTEXT_VALUE"));
+  await assert.rejects(new FileStateStore(workspace).currentRecordId());
+});
+
+test("loads legacy approved records and requires controlled contract rebinding", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-legacy-contract-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.status = "COMMITTED";
+  record.requirements.status = "approved";
+  record.requirements.approvedBy = "owner@example.com";
+  record.requirements.approvedAt = new Date().toISOString();
+  record.design.summary = "Legacy approved design.";
+  await mkdir(dirname(join(workspace, record.requirements.documentRef)), { recursive: true });
+  await writeFile(join(workspace, record.requirements.documentRef), "# Legacy approved requirements\n");
+  record.requirements.approvedContentHash = await hashRequirementsDocument(workspace, record.requirements.documentRef);
+  delete record.requirements.approvedContractHash;
+  const store = new FileStateStore(workspace);
+  await store.writeRecord(record);
+  await store.setCurrentRecord(record.id);
+
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  assert((status.output as { blockers: Array<{ code: string }> }).blockers.some(({ code }) => code === "APPROVED_BUILD_CONTRACT_CHANGED"));
+});
+
 test("rolls back record and current pointer when creation audit persistence fails", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-rollback-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
@@ -234,6 +282,7 @@ test("parks a verified POC without requiring a Productization Package", async (c
   record.design.summary = "A bounded, reversible design that was verified during the POC.";
   record.decision.rationale = "The POC is useful but is not a current delivery priority.";
   record.decision.followUp = "Retain the artifacts and evidence for a possible future iteration.";
+  await bindApprovedContract(workspace, record);
   const store = new FileStateStore(workspace);
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
@@ -258,6 +307,7 @@ test("rolls back a checkpoint when its audit event cannot be persisted", async (
   record.design.summary = "A bounded, reversible design that was verified during the POC.";
   record.decision.rationale = "The POC is useful but is not a current delivery priority.";
   record.decision.followUp = "Retain the artifacts and evidence for a possible future iteration.";
+  await bindApprovedContract(workspace, record);
   const store = new FileStateStore(workspace);
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
@@ -314,7 +364,13 @@ test("build readiness records one approved and content-bound decision", async (c
     "security.sensitive-data@1.0.0",
     "solution-architecture.reversible-delivery@1.0.0",
     "ux.experience-quality@1.0.0",
-  ].map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.`, evidenceRefs: ["requirements.md"], approvedBy: "product-owner" }));
+  ].map((control) => ({
+    control,
+    disposition: "satisfied",
+    notes: `Apply ${control}.`,
+    evidenceRefs: ["requirements.md"],
+    approvedBy: control === "product-management.requirements-quality@1.0.0" ? "" : "product-owner",
+  }));
   await writeFile(
     join(workspace, "requirements.md"),
     await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"),
@@ -346,6 +402,24 @@ test("build readiness records one approved and content-bound decision", async (c
   assert(readySummary.applied.skills.length > 0);
   assert.equal(readySummary.productizationPackage.state, "not-required");
 
+  const validation = await runCli(["validate", "--root", workspace], workspace);
+  assert.equal(validation.exitCode, 0, JSON.stringify(validation.output));
+  const validationChecks = (validation.output as { checks: { record: { source: string }; contextApplications: { ok: boolean } } }).checks;
+  assert.equal(validationChecks.record.source, join(workspace, ".pdlc/runtime/records", `${record.id}.json`));
+  assert.equal(validationChecks.contextApplications.ok, true);
+
+  const beforeCheck = await store.readRecord(record.id);
+  const eventsBeforeCheck = await new AuditLog(workspace).readAll();
+  const check = await runCli(["readiness", "build", "--check", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(check.exitCode, 0, JSON.stringify(check.output));
+  const checkOutput = check.output as { mode: string; wouldMutate: boolean; transition: { checkpoint: string; from: string; to: string }; approval: { status: string; approvedBy: string } };
+  assert.equal(checkOutput.mode, "check");
+  assert.equal(checkOutput.wouldMutate, false);
+  assert.deepEqual(checkOutput.transition, { checkpoint: "commit", from: "DRAFT", to: "COMMITTED" });
+  assert.deepEqual({ status: checkOutput.approval.status, approvedBy: checkOutput.approval.approvedBy }, { status: "approved", approvedBy: "product-owner" });
+  assert.deepEqual(await store.readRecord(record.id), beforeCheck);
+  assert.deepEqual(await new AuditLog(workspace).readAll(), eventsBeforeCheck);
+
   const result = await runCli(["readiness", "build", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   const approved = await store.readRecord(record.id);
@@ -353,6 +427,8 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.equal(approved.requirements.status, "approved");
   assert.equal(approved.requirements.approvedBy, "product-owner");
   assert.equal(approved.requirements.approvedContentHash.length, 64);
+  assert.equal(approved.requirements.approvedContractHash.length, 64);
+  assert.equal(approved.resolution.controls.applications.find(({ control }) => control === "product-management.requirements-quality@1.0.0")?.approvedBy, "product-owner");
   assert.deepEqual(approved.assignments, {
     product: "product-owner",
     developer: "product-owner",
@@ -363,18 +439,39 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.deepEqual(events.map(({ eventType }) => eventType), ["DELIVERY_FLOW_CREATED", "STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "CHECKPOINT_APPROVED"]);
   assert.deepEqual(events.at(-1) && { checkpoint: events.at(-1)?.checkpoint, from: events.at(-1)?.fromStatus, to: events.at(-1)?.toStatus }, { checkpoint: "commit", from: "DRAFT", to: "COMMITTED" });
 
+  const contractChanged: PocDeliveryRecord = {
+    ...approved,
+    revision: approved.revision + 1,
+    updatedAt: new Date().toISOString(),
+    scope: { ...approved.scope, inScope: [...approved.scope.inScope, "Unapproved scope expansion"] },
+  };
+  await store.writeRecord(contractChanged, approved.revision);
+  const driftStatus = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(driftStatus.exitCode, 0, JSON.stringify(driftStatus.output));
+  assert((driftStatus.output as { blockers: Array<{ code: string }> }).blockers.some(({ code }) => code === "APPROVED_BUILD_CONTRACT_CHANGED"));
+  const driftValidation = await runCli(["validate", "--root", workspace], workspace);
+  assert.equal(driftValidation.exitCode, 2);
+  assert((driftValidation.output as { error: { details: Array<{ code: string }> } }).error.details.some(({ code }) => code === "APPROVED_BUILD_CONTRACT_CHANGED"), JSON.stringify(driftValidation.output));
+  const reapprovalCheck = await runCli(["readiness", "build", "--check", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(reapprovalCheck.exitCode, 0, JSON.stringify(reapprovalCheck.output));
+  const reapproval = await runCli(["readiness", "build", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(reapproval.exitCode, 0, JSON.stringify(reapproval.output));
+  const reapproved = await store.readRecord(record.id);
+  assert.equal(reapproved.status, "COMMITTED");
+  assert.notEqual(reapproved.requirements.approvedContractHash, approved.requirements.approvedContractHash);
+
   const verificationEvidence = ["evidence/tests.txt", "evidence/build.txt", "evidence/security.txt", "evidence/demo.txt"];
   await mkdir(join(workspace, "evidence"), { recursive: true });
   for (const ref of verificationEvidence) await writeFile(join(workspace, ref), `Verified evidence: ${ref}\n`);
   const prepared: PocDeliveryRecord = {
-    ...approved,
-    revision: approved.revision + 1,
+    ...reapproved,
+    revision: reapproved.revision + 1,
     updatedAt: new Date().toISOString(),
     resolution: {
-      ...approved.resolution,
+      ...reapproved.resolution,
       controls: {
-        ...approved.resolution.controls,
-        applications: approved.resolution.controls.applications.map((application) => ({ ...application, evidenceRefs: [...new Set([...application.evidenceRefs, ...verificationEvidence])] })),
+        ...reapproved.resolution.controls,
+        applications: reapproved.resolution.controls.applications.map((application) => ({ ...application, evidenceRefs: [...new Set([...application.evidenceRefs, ...verificationEvidence])] })),
       },
     },
     evidence: {
@@ -390,7 +487,7 @@ test("build readiness records one approved and content-bound decision", async (c
       productizationPackage: { artifactType: "product-management.productization-package", documentRef: "", contentHash: "" },
     },
   };
-  await store.writeRecord(prepared, approved.revision);
+  await store.writeRecord(prepared, reapproved.revision);
   for (const stage of ["implementation", "developer-verification", "security-verification", "acceptance-verification"]) {
     await applyContextReceipt(workspace, stage, "product-owner", verificationEvidence);
   }
@@ -468,7 +565,7 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.equal(recommended.decision.productizationPackage.documentRef, packageRef);
   assert.match(recommended.decision.productizationPackage.contentHash, /^[a-f0-9]{64}$/);
   const completedEvents = await new AuditLog(workspace).readAll();
-  assert.deepEqual(completedEvents.filter(({ eventType }) => eventType === "CHECKPOINT_APPROVED").map(({ checkpoint }) => checkpoint), ["commit", "verify", "decide"]);
+  assert.deepEqual(completedEvents.filter(({ eventType }) => eventType === "CHECKPOINT_APPROVED").map(({ checkpoint }) => checkpoint), ["commit", "commit", "verify", "decide"]);
 
   const auditResult = await runCli(["audit", "summary", "--root", workspace], workspace);
   assert.equal(auditResult.exitCode, 0, JSON.stringify(auditResult.output));
@@ -498,6 +595,37 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.deepEqual(auditSummary.controls.pending, []);
   assert.equal(auditSummary.audit.eventCount, completedEvents.length);
   assert.deepEqual(auditSummary.audit.warnings, []);
+});
+
+test("status and validate detect receipts made stale by a context-driving change", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-stale-status-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+  await applyContextReceipt(workspace, "requirements-clarification");
+  await applyContextReceipt(workspace, "build-readiness");
+
+  const store = new FileStateStore(workspace);
+  const current = await store.readRecord(record.id);
+  await store.writeRecord({
+    ...current,
+    revision: current.revision + 1,
+    updatedAt: new Date().toISOString(),
+    design: { ...current.design, domains: ["ux"] },
+  }, current.revision);
+
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  const summary = status.output as { blockers: Array<{ code: string }>; nextActions: Array<{ id: string; available: boolean }> };
+  assert(summary.blockers.some(({ code }) => code === "STALE_STAGE_CONTEXT_APPLICATION"));
+  assert.equal(summary.nextActions.find(({ id }) => id === "request-build-readiness")?.available, false);
+
+  const validation = await runCli(["validate", "--root", workspace], workspace);
+  assert.equal(validation.exitCode, 2);
+  const details = (validation.output as { error: { code: string; details: Array<{ code: string }> } }).error;
+  assert.equal(details.code, "VALIDATION_FAILED");
+  assert(details.details.some(({ code }) => code === "STALE_STAGE_CONTEXT_APPLICATION"));
 });
 
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {

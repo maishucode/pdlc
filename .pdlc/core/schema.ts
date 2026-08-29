@@ -246,7 +246,7 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
 
   const requirements = object(record.requirements, "$.requirements", issues);
   if (requirements) {
-    exact(requirements, ["artifactType", "documentRef", "profile", "status", "clarification", "approvedBy", "approvedAt", "approvedContentHash"], "$.requirements", issues);
+    exact(requirements, ["artifactType", "documentRef", "profile", "status", "clarification", "approvedBy", "approvedAt", "approvedContentHash", "approvedContractHash"], "$.requirements", issues);
     if (requirements.artifactType !== "product-management.requirements") issue(issues, "INVALID_ARTIFACT_TYPE", "$.requirements.artifactType", "Expected product-management.requirements");
     if (string(requirements.documentRef, "$.requirements.documentRef", issues) && !requirements.documentRef.endsWith(".md")) issue(issues, "INVALID_REQUIREMENTS_REF", "$.requirements.documentRef", "Requirements document must be Markdown");
     if (!REQUIREMENTS_DEPTHS.includes(requirements.profile as never)) issue(issues, "INVALID_REQUIREMENTS_PROFILE", "$.requirements.profile", "Unsupported requirements profile");
@@ -268,11 +268,13 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
     string(requirements.approvedBy, "$.requirements.approvedBy", issues, true);
     isoDate(requirements.approvedAt, "$.requirements.approvedAt", issues, true);
     string(requirements.approvedContentHash, "$.requirements.approvedContentHash", issues, true);
+    if (requirements.approvedContractHash !== undefined) string(requirements.approvedContractHash, "$.requirements.approvedContractHash", issues, true);
     if (requirements.status === "approved") {
       string(requirements.approvedBy, "$.requirements.approvedBy", issues);
       isoDate(requirements.approvedAt, "$.requirements.approvedAt", issues);
       if (typeof requirements.approvedContentHash !== "string" || !/^[a-f0-9]{64}$/.test(requirements.approvedContentHash)) issue(issues, "INVALID_REQUIREMENTS_HASH", "$.requirements.approvedContentHash", "Expected a SHA-256 digest");
-    } else if (requirements.approvedBy !== "" || requirements.approvedAt !== "" || requirements.approvedContentHash !== "") {
+      if (requirements.approvedContractHash !== undefined && !/^[a-f0-9]{64}$/.test(requirements.approvedContractHash)) issue(issues, "INVALID_BUILD_CONTRACT_HASH", "$.requirements.approvedContractHash", "Expected a SHA-256 digest");
+    } else if (requirements.approvedBy !== "" || requirements.approvedAt !== "" || requirements.approvedContentHash !== "" || (requirements.approvedContractHash ?? "") !== "") {
       issue(issues, "DRAFT_REQUIREMENTS_HAVE_APPROVAL", "$.requirements", "Draft requirements cannot contain approval metadata");
     }
   }

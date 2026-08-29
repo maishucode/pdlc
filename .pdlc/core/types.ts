@@ -160,6 +160,7 @@ export interface PocDeliveryRecord {
     approvedBy: string;
     approvedAt: string;
     approvedContentHash: string;
+    approvedContractHash?: string;
   };
   scope: {
     inScope: string[];

@@ -5,6 +5,7 @@ import type { ProjectOverlay } from "./project-overlay.ts";
 import type { ResolvedIntegration } from "./domain-resolver.ts";
 import type {
   DomainGuidanceResolution,
+  ExecutableDeliveryFlowDefinition,
   ResolvedControl,
   ResolvedKnowledge,
   ResolvedBaseline,
@@ -30,6 +31,12 @@ export interface HashedIntegration extends HashedContextAsset {
 
 export interface StageContextSnapshot {
   deliveryFlow: string;
+  deliveryFlowDefinitionHash: string;
+  activation: {
+    riskTriggers: string[];
+    technologies: string[];
+    domains: string[];
+  };
   stage: string;
   stageDefinitionHash: string;
   roles: HashedContextAsset[];
@@ -46,6 +53,10 @@ export async function createStageContextSnapshot(input: {
   harnessRoot: string;
   projectRoot: string;
   deliveryFlow: string;
+  deliveryFlowDefinition: ExecutableDeliveryFlowDefinition;
+  riskTriggers: string[];
+  technologies: string[];
+  domains: string[];
   stage: string;
   stageDefinition: StageDefinition;
   roles: Array<{ id: string; path: string }>;
@@ -96,6 +107,12 @@ export async function createStageContextSnapshot(input: {
 
   const material = {
     deliveryFlow: input.deliveryFlow,
+    deliveryFlowDefinitionHash: sha256(input.deliveryFlowDefinition),
+    activation: {
+      riskTriggers: [...new Set(input.riskTriggers)].sort(),
+      technologies: [...new Set(input.technologies)].sort(),
+      domains: [...new Set(input.domains)].sort(),
+    },
     stage: input.stage,
     stageDefinitionHash: sha256(input.stageDefinition),
     roles: roles.sort(byRef),

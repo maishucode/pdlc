@@ -3,7 +3,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AuditLog } from "./audit.ts";
 import { PdlcError } from "./errors.ts";
 import { withLock } from "./lock.ts";
-import { currentPocStage } from "./poc-progress.ts";
+import { contextClassificationIssues, currentPocStage } from "./poc-progress.ts";
 import { validatePocDeliveryRecord } from "./schema.ts";
 import { FileStateStore } from "./state.ts";
 import type { AuditEvent, PocDeliveryRecord, ValidationIssue } from "./types.ts";
@@ -14,7 +14,7 @@ export interface PocInitializationResult {
 }
 
 function initialRecordIssues(record: PocDeliveryRecord): ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
+  const issues: ValidationIssue[] = [...contextClassificationIssues(record)];
   if (record.status !== "DRAFT") issues.push({ code: "INITIAL_STATUS_INVALID", path: "$.status", message: "A new POC must start in DRAFT status." });
   if (record.revision !== 0) issues.push({ code: "INITIAL_REVISION_INVALID", path: "$.revision", message: "A new POC must start at revision 0." });
   if (record.requirements.status !== "draft") issues.push({ code: "INITIAL_REQUIREMENTS_INVALID", path: "$.requirements.status", message: "A new POC must start with draft Requirements." });
