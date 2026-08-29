@@ -3,7 +3,7 @@ name: pdlc
 description: Start, resume, or inspect a governed Lean PDLC POC
 argument-hint: "poc [idea] | resume [POC-ID] | status | help"
 agent: "agent"
-tools: ["read", "edit", "search", "execute"]
+tools: ["read", "edit", "search", "execute", "agent"]
 ---
 
 Read [AGENTS.md](../../AGENTS.md), then load and follow the canonical [Lean PDLC Skill](../../.agents/skills/lean-pdlc/SKILL.md).

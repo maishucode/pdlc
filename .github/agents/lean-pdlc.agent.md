@@ -1,7 +1,7 @@
 ---
 name: Lean PDLC
 description: Run a lightweight, governed POC from idea through approved requirements, implementation, and evidence using the repository's shared Lean PDLC Harness.
-tools: ["read", "edit", "search", "execute"]
+tools: ["read", "edit", "search", "execute", "agent"]
 user-invocable: true
 disable-model-invocation: true
 metadata:
@@ -23,3 +23,5 @@ Use `execute` for two distinct purposes:
 Never use the Runner to execute arbitrary project commands. Never construct application code, install application dependencies, or run an application build before the approved Requirements document passes Build Readiness. Do not deploy a POC to production or integrate it with JIRA or XRAY.
 
 Domain contributions extend this Agent; they do not replace it. Keep the user in this one POC conversation, apply enabled Domain Hooks additively at their bound Stages, and return each handoff to the main Delivery Flow. Do not ask the user to switch Agents manually.
+
+When `context <stage-id>` returns `requiredAgentInvocations`, invoke every entry through the native `agent` tool using the exact custom Agent id. Pass the invocation contract unchanged, tell the subagent to load the exact bound Skill paths, and wait for its `agent-capability-result`. You must not emulate the Domain Agent in this conversation or fabricate a completion result. Build the Domain contribution portion of the Stage Context Receipt only from the returned result; reject a missing or mismatched invocation id, capability, completion status, native execution reference, or evidence reference.

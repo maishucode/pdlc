@@ -24,16 +24,29 @@ const EXPECTATIONS: EntrypointExpectation[] = [
   },
   {
     path: ".github/prompts/pdlc.prompt.md",
-    markers: ["name: pdlc", "agent: \"agent\"", "../../.agents/skills/lean-pdlc/SKILL.md", "Do not expose or ask the user to run Bun"],
+    markers: ["name: pdlc", "agent: \"agent\"", "tools: [\"read\", \"edit\", \"search\", \"execute\", \"agent\"]", "../../.agents/skills/lean-pdlc/SKILL.md", "Do not expose or ask the user to run Bun"],
     maximumBytes: 3_000,
   },
   {
     path: ".github/agents/lean-pdlc.agent.md",
     markers: [
       "../../.agents/skills/lean-pdlc/SKILL.md",
-      "tools: [\"read\", \"edit\", \"search\", \"execute\"]",
+      "tools: [\"read\", \"edit\", \"search\", \"execute\", \"agent\"]",
       "user-invocable: true",
       "disable-model-invocation: true",
+      "requiredAgentInvocations",
+      "native `agent` tool",
+    ],
+    maximumBytes: 4_000,
+  },
+  {
+    path: ".github/agents/lean-pdlc-ux.agent.md",
+    markers: [
+      "disable-model-invocation: false",
+      "user-invocable: false",
+      "agent-capability-result",
+      "nativeExecutionRef",
+      "evidenceRefs",
     ],
     maximumBytes: 4_000,
   },

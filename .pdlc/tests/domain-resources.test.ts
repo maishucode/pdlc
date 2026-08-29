@@ -45,6 +45,25 @@ test("requires the main POC entry point to compose Domain resources at every Sta
   assert.match(agent, /Domain contributions extend this Agent; they do not replace it/);
 });
 
+test("wires required Domain capabilities to the native Copilot agent tool", async () => {
+  const mainAgent = await readFile(join(projectRoot, ".github/agents/lean-pdlc.agent.md"), "utf8");
+  const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
+  const canonicalUxAgent = await readFile(join(uxRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
+  const projectedUxAgent = await readFile(join(projectRoot, ".github/agents/lean-pdlc-ux.agent.md"), "utf8");
+
+  assert.match(mainAgent, /tools: \["read", "edit", "search", "execute", "agent"\]/);
+  assert.match(mainAgent, /requiredAgentInvocations/);
+  assert.match(mainAgent, /must not emulate/i);
+  assert.match(skill, /native `agent` tool/);
+  assert.match(skill, /agent-capability-result/);
+  assert.equal(projectedUxAgent, canonicalUxAgent);
+  assert.match(canonicalUxAgent, /disable-model-invocation: false/);
+  assert.match(canonicalUxAgent, /user-invocable: false/);
+  for (const field of ["invocationId", "capability", "nativeExecutionRef", "evidenceRefs"]) {
+    assert.match(canonicalUxAgent, new RegExp(field));
+  }
+});
+
 test("syncs enabled Domain assets as a VS Code projection", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-domain-sync-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
