@@ -403,6 +403,8 @@ export type DomainGuidanceMode = (typeof DOMAIN_GUIDANCE_MODES)[number];
 
 export interface DomainStageHookBinding {
   stage: string;
+  capability: string;
+  invocation: "required";
   agent: string;
   skills: string[];
   mode: DomainGuidanceMode;
@@ -411,7 +413,7 @@ export interface DomainStageHookBinding {
 }
 
 export interface DomainStageHooksDescriptor {
-  schemaVersion: 1;
+  schemaVersion: 2;
   domain: string;
   version: string;
   deliveryFlows: string[];
@@ -467,6 +469,8 @@ export interface DiscoveredDomainHooks {
 export interface DomainGuidanceContribution {
   domain: string;
   version: string;
+  capability: string;
+  invocation: "required";
   permissions: DomainStageHooksDescriptor["permissions"];
   agent: { id: string; path: string };
   skills: Array<{ name: string; path: string }>;

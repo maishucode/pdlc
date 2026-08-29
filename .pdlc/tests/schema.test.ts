@@ -116,6 +116,21 @@ test("validates representative Domain assets", async () => {
   assert.equal(validateIntegrationManifest(await json(join(projectRoot, ".pdlc/integrations/databricks/integration.json"))).ok, true);
 });
 
+test("validates required Agent capability bindings", async () => {
+  const value = await json(join(projectRoot, ".pdlc/domains/ux/hooks/stages.json")) as {
+    schemaVersion: number;
+    bindings: Array<Record<string, unknown>>;
+  };
+  value.schemaVersion = 2;
+  value.bindings = value.bindings.map((binding, index) => ({
+    ...binding,
+    capability: `ux-capability-${index}`,
+    invocation: "required",
+  }));
+  const result = validateDomainStageHooks(value);
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+});
+
 test("validates the Requirements Flow Control", async () => {
   const result = validateRequirementsFlowControl(await json(join(projectRoot, ".pdlc/delivery-flows/poc/controls/requirements.json")));
   assert.equal(result.ok, true, JSON.stringify(result.issues));

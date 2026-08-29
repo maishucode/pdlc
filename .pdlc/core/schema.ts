@@ -784,7 +784,7 @@ export function validateDomainStageHooks(value: unknown): ValidationResult<Domai
   const descriptor = object(value, "$", issues);
   if (!descriptor) return result(value, issues);
   exact(descriptor, ["schemaVersion", "domain", "version", "deliveryFlows", "enabled", "permissions", "bindings"], "$", issues);
-  if (descriptor.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  if (descriptor.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
   id(descriptor.domain, "$.domain", issues);
   version(descriptor.version, "$.version", issues);
   stringArray(descriptor.deliveryFlows, "$.deliveryFlows", issues, 1);
@@ -801,8 +801,10 @@ export function validateDomainStageHooks(value: unknown): ValidationResult<Domai
     const path = `$.bindings[${index}]`;
     const binding = object(entry, path, issues);
     if (!binding) return;
-    exact(binding, ["stage", "agent", "skills", "mode", "handoff", "approvalBoundary"], path, issues);
+    exact(binding, ["stage", "capability", "invocation", "agent", "skills", "mode", "handoff", "approvalBoundary"], path, issues);
     id(binding.stage, `${path}.stage`, issues);
+    id(binding.capability, `${path}.capability`, issues);
+    if (binding.invocation !== "required") issue(issues, "INVALID_DOMAIN_INVOCATION", `${path}.invocation`, "Expected required");
     id(binding.agent, `${path}.agent`, issues);
     stringArray(binding.skills, `${path}.skills`, issues, 1);
     if (!DOMAIN_GUIDANCE_MODES.includes(binding.mode as never)) issue(issues, "INVALID_DOMAIN_GUIDANCE_MODE", `${path}.mode`, "Unsupported Domain guidance mode");

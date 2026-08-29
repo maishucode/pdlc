@@ -15,10 +15,11 @@ const NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export async function discoverDomainHooks(stages: StageRegistry, domains: DomainRegistry): Promise<DiscoveredDomainHooks[]> {
   const discovered: DiscoveredDomainHooks[] = [];
+  const seenCapabilities = new Set<string>();
   for (const domain of domains.list()) {
     const seenStages = new Set<string>();
     for (const { descriptor } of domain.hooks) {
-      const bindings = await validateBindings(domain.root, descriptor, seenStages, stages);
+      const bindings = await validateBindings(domain.root, descriptor, seenStages, seenCapabilities, stages);
       discovered.push({ domain: domain.manifest.id, descriptor, root: domain.root, bindings });
     }
   }
@@ -41,6 +42,8 @@ export async function resolveDomainGuidance(
       .map((binding) => ({
         domain,
         version: descriptor.version,
+        capability: binding.capability,
+        invocation: binding.invocation,
         permissions: descriptor.permissions,
         agent: {
           id: binding.agent,
@@ -62,6 +65,7 @@ async function validateBindings(
   root: string,
   descriptor: DomainStageHooksDescriptor,
   seenStages: Set<string>,
+  seenCapabilities: Set<string>,
   stages: StageRegistry,
 ): Promise<DomainStageHookBinding[]> {
   for (const binding of descriptor.bindings) {
@@ -70,6 +74,12 @@ async function validateBindings(
       throw new PdlcError("DUPLICATE_DOMAIN_STAGE_HOOK", `Domain '${descriptor.domain}' defines more than one Hook for Stage: ${binding.stage}`);
     }
     seenStages.add(binding.stage);
+    if (descriptor.enabled && seenCapabilities.has(binding.capability)) {
+      throw new PdlcError("DUPLICATE_AGENT_CAPABILITY", `Agent capability id is bound more than once: ${binding.capability}`);
+    }
+    if (descriptor.enabled) seenCapabilities.add(binding.capability);
+    if (!NAME_PATTERN.test(binding.capability)) throw new PdlcError("INVALID_AGENT_CAPABILITY", `Invalid Agent capability id: ${binding.capability}`);
+    if (binding.invocation !== "required") throw new PdlcError("INVALID_DOMAIN_HOOK", `Unsupported Domain invocation policy: ${binding.invocation}`);
     if (!NAME_PATTERN.test(binding.agent)) throw new PdlcError("INVALID_DOMAIN_AGENT", `Invalid Domain Agent id: ${binding.agent}`);
     if (binding.skills.length === 0 || !binding.skills.every((skill) => NAME_PATTERN.test(skill)) || new Set(binding.skills).size !== binding.skills.length) {
       throw new PdlcError("INVALID_DOMAIN_HOOK", "Domain Hook Skills must be unique kebab-case identifiers");

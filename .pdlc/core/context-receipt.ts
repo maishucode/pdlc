@@ -21,6 +21,8 @@ export interface HashedContextAsset {
 }
 
 export interface HashedDomainContribution extends HashedContextAsset {
+  capability: string;
+  invocation: "required";
   agent: string;
   skills: string[];
 }
@@ -90,9 +92,11 @@ export async function createStageContextSnapshot(input: {
     })));
     return {
       ref: `${contribution.domain}@${contribution.version}:${contribution.agent.id}`,
+      capability: contribution.capability,
+      invocation: contribution.invocation,
       agent: contribution.agent.id,
       skills: contribution.skills.map(({ name }) => name).sort(),
-      hash: sha256({ permissions: contribution.permissions, agentContent, skillContents, mode: contribution.mode, handoff: contribution.handoff, approvalBoundary: contribution.approvalBoundary }),
+      hash: sha256({ capability: contribution.capability, invocation: contribution.invocation, permissions: contribution.permissions, agentContent, skillContents, mode: contribution.mode, handoff: contribution.handoff, approvalBoundary: contribution.approvalBoundary }),
     };
   }));
 

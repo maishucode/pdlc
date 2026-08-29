@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.ts";
+import { discoverDomainHooks } from "../core/domain-guidance.ts";
+import type { DomainRegistry } from "../core/domain-registry.ts";
+import type { StageRegistry } from "../core/stage-registry.ts";
+import type { DomainStageHooksDescriptor } from "../core/types.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 
@@ -36,11 +40,46 @@ test("POC Stage entry automatically composes UX Domain guidance", async () => {
         name: "lean-pdlc-ux-spec",
         path: ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md",
       }],
+      capability: "ux-design-spec",
+      invocation: "required",
       mode: "draft",
       handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",
       approvalBoundary: "The Domain contribution drafts guidance only; product approval and PDLC state remain outside the Domain Agent.",
     }],
   });
+});
+
+test("rejects duplicate Agent capability ids across active Domain Hook bindings", async () => {
+  const descriptor = {
+    schemaVersion: 2,
+    domain: "ux",
+    version: "1.0.0",
+    deliveryFlows: ["poc"],
+    enabled: true,
+    permissions: { filesystem: "write", network: false, externalWrites: false },
+    bindings: [{
+      stage: "ux-design",
+      capability: "duplicate-capability",
+      invocation: "required",
+      agent: "lean-pdlc-ux",
+      skills: ["lean-pdlc-ux-spec"],
+      mode: "draft",
+      handoff: "Draft UX guidance.",
+      approvalBoundary: "Do not approve the Stage.",
+    }],
+  } as DomainStageHooksDescriptor;
+  const domains = {
+    list: () => [
+      { manifest: { id: "ux" }, root: join(projectRoot, ".pdlc/domains/ux"), hooks: [{ descriptor }] },
+      { manifest: { id: "frontend" }, root: join(projectRoot, ".pdlc/domains/ux"), hooks: [{ descriptor: { ...descriptor, domain: "frontend" } }] },
+    ],
+  } as unknown as DomainRegistry;
+  const stages = { get: (id: string) => ({ id }) } as unknown as StageRegistry;
+
+  await assert.rejects(
+    discoverDomainHooks(stages, domains),
+    (error: unknown) => error instanceof Error && error.message.includes("duplicate-capability"),
+  );
 });
 
 test("an unbound POC Stage continues with core behavior", async () => {

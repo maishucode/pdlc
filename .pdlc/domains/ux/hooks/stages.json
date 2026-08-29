@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "domain": "ux",
   "version": "1.0.0",
   "deliveryFlows": ["poc"],
@@ -12,6 +12,8 @@
   "bindings": [
     {
       "stage": "requirements-clarification",
+      "capability": "ux-requirements-spec",
+      "invocation": "required",
       "agent": "lean-pdlc-ux",
       "skills": ["lean-pdlc-ux-spec"],
       "mode": "draft",
@@ -20,6 +22,8 @@
     },
     {
       "stage": "ux-design",
+      "capability": "ux-design-spec",
+      "invocation": "required",
       "agent": "lean-pdlc-ux",
       "skills": ["lean-pdlc-ux-spec"],
       "mode": "draft",
@@ -28,6 +32,8 @@
     },
     {
       "stage": "implementation",
+      "capability": "ux-react-ui-implementation",
+      "invocation": "required",
       "agent": "lean-pdlc-ux",
       "skills": ["lean-pdlc-ux-react-ui-delivery"],
       "mode": "implement",
@@ -36,6 +42,8 @@
     },
     {
       "stage": "developer-verification",
+      "capability": "ux-react-ui-developer-verification",
+      "invocation": "required",
       "agent": "lean-pdlc-ux",
       "skills": ["lean-pdlc-ux-react-ui-delivery"],
       "mode": "verify",
@@ -44,6 +52,8 @@
     },
     {
       "stage": "acceptance-verification",
+      "capability": "ux-acceptance-review",
+      "invocation": "required",
       "agent": "lean-pdlc-ux",
       "skills": ["lean-pdlc-ux-review"],
       "mode": "verify",
