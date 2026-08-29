@@ -64,7 +64,7 @@ Requirements summary
 
 Review it and explicitly approve the named Requirements Artifact and Build Readiness. This is the one POC approval checkpoint before construction. A material requirement or Control-disposition change invalidates the approval and requires a new review.
 
-The approved Build Readiness operation is also the `commit` transition from `DRAFT` to `COMMITTED`. If the POC Requirements change materially during implementation, the Agent presents the complete revision and records a controlled `COMMITTED → COMMITTED` recommit before continuing. After implementation, the Agent presents captured test, build, demo, and any required security evidence for `verify`.
+The approved Build Readiness operation is also the `commit` transition from `DRAFT` to `COMMITTED`. If the POC Requirements change materially during implementation, the Agent presents the complete revision and records a controlled `COMMITTED → COMMITTED` recommit before continuing. After implementation, the Agent presents captured test, build, demo, and any required security evidence for `verify`. Verify re-hashes the approved Requirements and checks that local evidence is a readable file inside the project workspace; URL and CI references are syntax-checked without making a network request.
 
 After Verify, Product chooses one disposition:
 
@@ -106,6 +106,8 @@ It also lists applicable Controls, satisfied Controls, exceptions, evidence refe
 ## What the current v2 POC does and does not do
 
 The v2 POC executes Requirements, context resolution, lightweight design, Build Readiness/Commit, implementation, Verify, and Decide. It does not integrate JIRA, XRAY, CI/CD, deployment, or production release. `PRODUCTIZATION_RECOMMENDED` packages evidence for a separate formal Delivery Flow; it does not mean productization or production release is complete.
+
+Each controlled Record change and its matching Audit Event are persisted through one Runner operation. If the Audit Event cannot be written, the Runner restores the prior Record revision, preventing an unaudited Build Readiness, Context Application, Verify, or Decide transition.
 
 ## Next
 

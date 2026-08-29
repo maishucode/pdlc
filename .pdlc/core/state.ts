@@ -88,6 +88,23 @@ export class FileStateStore {
     });
   }
 
+  async restoreRecordAfterFailedMutation(record: PocDeliveryRecord, expectedCurrentRevision: number): Promise<void> {
+    const validation = validatePocDeliveryRecord(record);
+    if (!validation.ok) {
+      throw new PdlcError("VALIDATION_FAILED", `Refusing to restore invalid Delivery Record: ${record.id}`, validation.issues);
+    }
+    await withLock(this.workspaceRoot, `record-${record.id}`, async () => {
+      const existing = await this.readRecord(record.id);
+      if (existing.revision !== expectedCurrentRevision) {
+        throw new PdlcError(
+          "REVISION_CONFLICT",
+          `Cannot roll back Delivery Record ${record.id}; current=${existing.revision}, expected=${expectedCurrentRevision}`,
+        );
+      }
+      await atomicWrite(this.recordPath(record.id), `${JSON.stringify(record, null, 2)}\n`);
+    });
+  }
+
   async setCurrentRecord(recordId: string): Promise<void> {
     const safeId = safeRecordId(recordId);
     await this.readRecord(safeId);

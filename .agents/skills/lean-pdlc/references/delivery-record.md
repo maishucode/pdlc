@@ -11,7 +11,7 @@ Use `.pdlc/schemas/poc-delivery-record.schema.json` as the structural contract a
 - Treat only explicit approval after the complete document review as approval; a generic confirmation during clarification does not qualify.
 - Set `scope.productionUse` to `false` for every POC.
 - Copy the Delivery Flow timebox into the Draft without asking the user. Let the Runner bind all role assignments to the Build Readiness actor when the Delivery Flow uses `approval-actor-all-roles`; do not turn these delivery controls into clarification questions or `RQ-xxx` decisions.
-- Store evidence as stable file or URL references with a short description; do not embed chat transcripts.
+- Store evidence as stable file or URL references with a short description; do not embed chat transcripts. Local evidence must be a readable regular file inside the project workspace. URL and CI evidence must use an absolute HTTP or HTTPS URL; Verify syntax-checks those references without making a network request.
 - Record resolved Control applicability, application, and exception references explicitly.
 - Record one concrete application disposition for every applicable `pack@version` and trace the same reference in the requirements document.
 - Do not manually alter checkpoint state, audit hashes, or checkpoint timestamps.

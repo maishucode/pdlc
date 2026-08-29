@@ -246,6 +246,32 @@ test("parks a verified POC without requiring a Productization Package", async (c
   assert.equal(parked.decision.productizationPackage.contentHash, "");
 });
 
+test("rolls back a checkpoint when its audit event cannot be persisted", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-checkpoint-rollback-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.status = "VERIFIED";
+  record.requirements.status = "approved";
+  record.requirements.approvedBy = "owner@example.com";
+  record.requirements.approvedAt = new Date().toISOString();
+  record.requirements.approvedContentHash = "a".repeat(64);
+  record.design.summary = "A bounded, reversible design that was verified during the POC.";
+  record.decision.rationale = "The POC is useful but is not a current delivery priority.";
+  record.decision.followUp = "Retain the artifacts and evidence for a possible future iteration.";
+  const store = new FileStateStore(workspace);
+  await store.writeRecord(record);
+  await store.setCurrentRecord(record.id);
+  await writeFile(join(workspace, ".pdlc", "runtime", "audit"), "block audit directory creation");
+
+  const result = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "owner@example.com", "--outcome", "park"], workspace);
+  assert.equal(result.exitCode, 2);
+  assert.equal((result.output as { error: { code: string } }).error.code, "STATE_AUDIT_PERSISTENCE_FAILED");
+  const restored = await store.readRecord(record.id);
+  assert.equal(restored.status, "VERIFIED");
+  assert.equal(restored.decision.outcome, "");
+  assert.equal(restored.revision, record.revision);
+});
+
 test("build readiness rejects an unapproved requirements draft", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-readiness-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
@@ -338,6 +364,8 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.deepEqual(events.at(-1) && { checkpoint: events.at(-1)?.checkpoint, from: events.at(-1)?.fromStatus, to: events.at(-1)?.toStatus }, { checkpoint: "commit", from: "DRAFT", to: "COMMITTED" });
 
   const verificationEvidence = ["evidence/tests.txt", "evidence/build.txt", "evidence/security.txt", "evidence/demo.txt"];
+  await mkdir(join(workspace, "evidence"), { recursive: true });
+  for (const ref of verificationEvidence) await writeFile(join(workspace, ref), `Verified evidence: ${ref}\n`);
   const prepared: PocDeliveryRecord = {
     ...approved,
     revision: approved.revision + 1,
@@ -379,6 +407,20 @@ test("build readiness records one approved and content-bound decision", async (c
   assert.equal(verificationSummary.evidence.readyForVerify, true);
   assert.deepEqual(verificationSummary.evidence.security, { required: true, ready: true, count: 1, refs: [verificationEvidence[2]] });
   assert.equal(verificationSummary.nextActions.find(({ id }) => id === "request-verification")?.available, true);
+
+  const approvedRequirements = await readFile(join(workspace, record.requirements.documentRef), "utf8");
+  await writeFile(join(workspace, record.requirements.documentRef), `${approvedRequirements}\nMaterial unapproved change.\n`);
+  const changedRequirements = await runCli(["checkpoint", "verify", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(changedRequirements.exitCode, 2);
+  assert((changedRequirements.output as { error: { details: Array<{ code: string }> } }).error.details.some(({ code }) => code === "REQUIREMENTS_CHANGED_AFTER_APPROVAL"));
+  await writeFile(join(workspace, record.requirements.documentRef), approvedRequirements);
+
+  await rm(join(workspace, verificationEvidence[0]));
+  const missingEvidence = await runCli(["checkpoint", "verify", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(missingEvidence.exitCode, 2);
+  assert((missingEvidence.output as { error: { details: Array<{ code: string }> } }).error.details.some(({ code }) => code === "EVIDENCE_UNREADABLE"));
+  await writeFile(join(workspace, verificationEvidence[0]), `Verified evidence: ${verificationEvidence[0]}\n`);
+
   const verified = await runCli(["checkpoint", "verify", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(verified.exitCode, 0, JSON.stringify(verified.output));
   const verifiedRecord = await store.readRecord(record.id);

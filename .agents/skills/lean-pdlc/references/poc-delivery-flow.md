@@ -23,10 +23,12 @@ Build Readiness is the single pre-build human confirmation. It freezes the revie
 ## Checkpoints
 
 1. `commit`: approved `readiness build` confirms the Requirements, measurable success criteria, timebox, scope, role assignments, safety boundary, Controls and exceptions, Project Baselines, and lightweight design, then moves `DRAFT → COMMITTED`. A materially revised POC may repeat the approval as an audited `COMMITTED → COMMITTED` recommit.
-2. `verify`: confirm tests, build, demo, conditionally required security evidence, current material Stage receipts, and Control evidence, then move `COMMITTED → VERIFIED`.
+2. `verify`: confirm that Requirements still match their approved content hash; validate test, build, demo, and conditionally required security evidence; revalidate current material Stage receipts and Control evidence; then move `COMMITTED → VERIFIED`. Local evidence must resolve to readable regular files inside the workspace. URL and CI references are syntax-checked without a network request.
 3. `decide`: record `park` or `recommend-productization` with rationale and follow-up. Park moves to `PARKED`. A productization recommendation requires the reviewed Productization Package and moves to `PRODUCTIZATION_RECOMMENDED`.
 
 `PARKED` retains all POC artifacts and evidence as a possible future iteration input. `PRODUCTIZATION_RECOMMENDED` does not mean the product is production-ready: the content-hash-bound package supplies validated outcomes, evidence, gaps, risks, reuse dispositions, and source references to a new formal Delivery Flow. Do not deploy to production or create JIRA/XRAY assets from the POC Flow.
+
+Every controlled Record mutation and its Audit Event are persisted through one Runner operation. If audit persistence fails, the Runner restores the previous Record revision instead of leaving an unaudited transition.
 
 ## Role slots
 

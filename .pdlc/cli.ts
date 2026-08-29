@@ -4,11 +4,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { AuditLog } from "./core/audit.ts";
 import { buildPocAuditSummary } from "./core/audit-summary.ts";
 import { createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./core/context-receipt.ts";
+import { persistRecordAndAudit } from "./core/controlled-mutation.ts";
 import { DeliveryFlowRegistry } from "./core/delivery-flow-registry.ts";
 import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "./core/domain-guidance.ts";
 import { DomainRegistry } from "./core/domain-registry.ts";
 import { projectKnowledgeRefs, resolveDomainContext } from "./core/domain-resolver.ts";
 import { PdlcError } from "./core/errors.ts";
+import { assessEvidenceIntegrity } from "./core/evidence.ts";
 import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { initializePocDeliveryRecord } from "./core/initialization.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
@@ -240,9 +242,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
   const result = await assessPocBuildReadiness(record, options.root, resolution.controls, policy, resolution.defaults, requiredRoles);
   if (!result.ok) throw new PdlcError("BUILD_NOT_READY", "POC requirements or mandatory Controls are not ready for build", result.issues);
   if (options.actor) {
-    await new FileStateStore(options.root).writeRecord(record, original.revision);
-    await new AuditLog(options.root).append(new AuditLog(options.root).create(record, {
-      recordId: record.id,
+    await persistRecordAndAudit(options.root, original, record, {
       eventType: "CHECKPOINT_APPROVED",
       checkpoint: "commit",
       fromStatus: original.status,
@@ -250,7 +250,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
       actor: options.actor,
       riskLevel: record.risk.level,
       evidenceRefs: [record.requirements.documentRef, ...record.resolution.controls.applicable],
-    }));
+    });
   }
   return {
     ok: true,
@@ -300,6 +300,20 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
     if (original.evidence.build.length === 0) issues.push({ code: "BUILD_EVIDENCE_MISSING", path: "$.evidence.build", message: "Build evidence is required before Verify" });
     if (original.evidence.demo.length === 0) issues.push({ code: "DEMO_EVIDENCE_MISSING", path: "$.evidence.demo", message: "POC demonstration evidence is required before Verify" });
     if (activeStages.includes("security-verification") && original.evidence.security.length === 0) issues.push({ code: "SECURITY_EVIDENCE_MISSING", path: "$.evidence.security", message: "Security evidence is required because the Security Verification Stage is active" });
+    try {
+      const currentRequirementsHash = await hashRequirementsDocument(options.root, original.requirements.documentRef);
+      if (currentRequirementsHash !== original.requirements.approvedContentHash) {
+        issues.push({ code: "REQUIREMENTS_CHANGED_AFTER_APPROVAL", path: "$.requirements.approvedContentHash", message: "Requirements content changed after Build Readiness approval; approve the revised Requirements before Verify" });
+      }
+    } catch (error) {
+      issues.push({ code: "REQUIREMENTS_DOCUMENT_UNREADABLE", path: "$.requirements.documentRef", message: error instanceof Error ? error.message : String(error) });
+    }
+    issues.push(...await assessEvidenceIntegrity(options.root, [
+      { name: "tests", entries: original.evidence.tests },
+      { name: "build", entries: original.evidence.build },
+      { name: "security", entries: original.evidence.security },
+      { name: "demo", entries: original.evidence.demo },
+    ]));
     evidenceRefs = [original.evidence.tests, original.evidence.build, original.evidence.security, original.evidence.demo].flat().map(({ ref }) => ref);
     issues.push(...assessResolvedControlSet(original, resolution.controls));
     issues.push(...assessControlApplications(original, resolution.controls, ["developer-verification", "security-verification", "acceptance-verification"], new Set(evidenceRefs)));
@@ -348,9 +362,7 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
         : original.decision.productizationPackage,
     } : original.decision,
   };
-  await new FileStateStore(options.root).writeRecord(updated, original.revision);
-  await new AuditLog(options.root).append(new AuditLog(options.root).create(updated, {
-    recordId: updated.id,
+  await persistRecordAndAudit(options.root, original, updated, {
     eventType: "CHECKPOINT_APPROVED",
     checkpoint: checkpointId,
     fromStatus: original.status,
@@ -359,7 +371,7 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
     riskLevel: updated.risk.level,
     evidenceRefs,
     decision,
-  }));
+  });
   return {
     ok: true,
     recordId: updated.id,
@@ -487,21 +499,19 @@ async function applyStageContext(options: CliOptions, stageId?: string): Promise
     updatedAt: appliedAt,
     resolution: { ...original.resolution, contextApplications },
   };
-  await new FileStateStore(options.root).writeRecord(updated, original.revision);
   const evidenceRefs = [
     ...receipt.knowledge.flatMap((entry) => entry.evidenceRefs),
     ...receipt.domainContributions.flatMap((entry) => entry.evidenceRefs),
     ...receipt.integrations.flatMap((entry) => entry.evidenceRefs),
   ];
-  await new AuditLog(options.root).append(new AuditLog(options.root).create(updated, {
-    recordId: updated.id,
+  await persistRecordAndAudit(options.root, original, updated, {
     eventType: "STAGE_CONTEXT_APPLIED",
     stage: stageId,
     contextHash: receipt.contextHash,
     actor: options.actor,
     riskLevel: updated.risk.level,
     evidenceRefs: [...new Set(evidenceRefs)],
-  }));
+  });
   return { ok: true, recordId: updated.id, stage: stageId, contextHash: receipt.contextHash, revision: updated.revision, appliedAt };
 }
 

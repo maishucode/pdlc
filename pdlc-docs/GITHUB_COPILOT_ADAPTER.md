@@ -192,7 +192,7 @@ Validation confirms:
 - Only the POC Delivery Flow is executable.
 - Prompt Files are IDE-only and remain a preview feature.
 - Custom Agent support in some IDEs is still preview-dependent.
-- Commit, Verify, and Decide transitions are not implemented.
+- Commit, Verify, and Decide are implemented by the shared Runner; adapter-specific interactive checkpoint behavior still requires validation on each supported Copilot surface.
 - JIRA, XRAY, CI/CD evidence import, release, and production deployment are not implemented.
 - A real enterprise pilot must validate the organization's exact Copilot surface and command-approval policy.
 
