@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { createStageContextSnapshot, type StageContextSnapshot } from "./context-receipt.ts";
+import { createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./context-receipt.ts";
 import { DeliveryFlowRegistry } from "./delivery-flow-registry.ts";
 import { resolveDomainGuidance } from "./domain-guidance.ts";
 import { DomainRegistry } from "./domain-registry.ts";
@@ -113,9 +113,9 @@ export class HarnessContext {
     return uniqueStages.flatMap((stage, index) => {
       const application = applications.get(stage);
       if (!application) return [{ code: "STAGE_CONTEXT_APPLICATION_MISSING", path: "$.resolution.contextApplications", message: `Stage context has not been applied: ${stage}` }];
-      return application.contextHash !== materials[index]!.snapshot.contextHash
-        ? [{ code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets or activation inputs changed after the Stage context was applied: ${stage}` }]
-        : [];
+      return validateReceiptAgainstSnapshot(application, materials[index]!.snapshot).map((issue) => issue.code === "STALE_CONTEXT_RECEIPT"
+        ? { code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets or activation inputs changed after the Stage context was applied: ${stage}` }
+        : { ...issue, path: `$.resolution.contextApplications.${stage}${issue.path.slice(1)}` });
     });
   }
 }

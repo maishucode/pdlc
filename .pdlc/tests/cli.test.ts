@@ -647,6 +647,34 @@ test("status and validate detect receipts made stale by a context-driving change
   assert(details.details.some(({ code }) => code === "STALE_STAGE_CONTEXT_APPLICATION"));
 });
 
+test("status and validate reject tampered stored Agent execution identity", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-tampered-agent-receipt-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+  await applyContextReceipt(workspace, "requirements-clarification");
+
+  const store = new FileStateStore(workspace);
+  const current = await store.readRecord(record.id);
+  const application = current.resolution.contextApplications.find(({ stage }) => stage === "requirements-clarification")!;
+  application.domainContributions[0]!.capability = "tampered-capability";
+  application.domainContributions[0]!.execution.invocationId = "f".repeat(64);
+  await store.writeRecord({ ...current, revision: current.revision + 1, updatedAt: new Date().toISOString() }, current.revision);
+
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  const blockers = (status.output as { blockers: Array<{ code: string }> }).blockers;
+  assert(blockers.some(({ code }) => code === "CONTEXT_CAPABILITY_MISMATCH"), JSON.stringify(status.output));
+  assert(blockers.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"), JSON.stringify(status.output));
+
+  const validation = await runCli(["validate", "--root", workspace], workspace);
+  assert.equal(validation.exitCode, 2);
+  const details = (validation.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(details.some(({ code }) => code === "CONTEXT_CAPABILITY_MISMATCH"), JSON.stringify(validation.output));
+  assert(details.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"), JSON.stringify(validation.output));
+});
+
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-context-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
