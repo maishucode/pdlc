@@ -111,6 +111,12 @@ test("requires completed platform execution metadata for Agent capability receip
   const missing = validateStageContextReceipt(missingExecution);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert(missing.issues.some(({ path }) => path.endsWith(".execution")));
+
+  const malformedTrace = structuredClone(completed);
+  malformedTrace.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:lean-pdlc-ux:${"b".repeat(64)}:bad trace/`;
+  const malformed = validateStageContextReceipt(malformedTrace);
+  assert.equal(malformed.ok, false);
+  if (!malformed.ok) assert(malformed.issues.some(({ code }) => code === "INVALID_PLATFORM_EXECUTION_REF"));
 });
 
 test("rejects production use in a POC", async () => {

@@ -215,7 +215,8 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
         if (string(execution.platformExecutionRef, `${itemPath}.execution.platformExecutionRef`, issues) && typeof item.agent === "string" && typeof execution.invocationId === "string") {
           const platformExecutionRef = execution.platformExecutionRef;
           const prefix = `github-copilot:agent:${item.agent}:${execution.invocationId}:`;
-          if (!platformExecutionRef.startsWith(prefix) || platformExecutionRef.length === prefix.length) {
+          const traceId = platformExecutionRef.startsWith(prefix) ? platformExecutionRef.slice(prefix.length) : "";
+          if (!/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(traceId)) {
             issue(issues, "INVALID_PLATFORM_EXECUTION_REF", `${itemPath}.execution.platformExecutionRef`, "Expected a platform Agent execution reference bound to the Agent and invocation id");
           }
         }
