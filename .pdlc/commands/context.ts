@@ -8,6 +8,7 @@ import { PdlcError } from "../core/errors.ts";
 import { HarnessContext } from "../core/harness-context.ts";
 import { validateStageContextReceipt } from "../core/schema.ts";
 import { FileStateStore } from "../core/state.ts";
+import { buildRequiredAgentInvocations } from "../platform-adapters/github-copilot-agent-runtime.ts";
 import type { PocDeliveryRecord, StageContextReceipt } from "../core/types.ts";
 import type { RunnerOptions } from "./types.ts";
 
@@ -38,6 +39,7 @@ export async function stageContext(harnessRoot: string, options: RunnerOptions, 
       ...projectKnowledgeRefs(project, options.root).map((ref) => ({ ref, kind: "project" })),
     ],
     domainContributions: domainGuidance.contributions,
+    requiredAgentInvocations: buildRequiredAgentInvocations(snapshot.contextHash, domainGuidance.contributions),
     integrations: resolved.integrations.map(({ ref, owners, permissions, skills }) => ({
       ref,
       owners,

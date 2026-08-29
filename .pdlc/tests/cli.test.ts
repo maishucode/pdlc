@@ -18,6 +18,18 @@ interface ContextOutput {
   knowledge: Array<{ ref: string }>;
   domainContributions: Array<{ domain: string; version: string; agent: { id: string }; skills: Array<{ name: string }> }>;
   integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
+  requiredAgentInvocations: Array<{
+    invocationId: string;
+    capability: string;
+    invocation: "required";
+    platform: "github-copilot";
+    tool: "agent";
+    agent: { id: string; path: string };
+    skills: Array<{ name: string; path: string }>;
+    mode: string;
+    handoff: string;
+    approvalBoundary: string;
+  }>;
 }
 
 async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent", evidenceRefs = ["requirements.md"]): Promise<void> {
@@ -646,4 +658,48 @@ test("resolves Stage context without writing runtime state and rejects stale rec
   const applied = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(applied.exitCode, 2);
   assert.equal((applied.output as { error: { code: string } }).error.code, "CONTEXT_RECEIPT_INVALID");
+});
+
+test("emits deterministic context-bound GitHub Copilot Agent invocation contracts", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-agent-invocation-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+
+  const first = await runCli(["context", "ux-design", "--root", workspace], workspace);
+  const second = await runCli(["context", "ux-design", "--root", workspace], workspace);
+  assert.equal(first.exitCode, 0, JSON.stringify(first.output));
+  assert.equal(second.exitCode, 0, JSON.stringify(second.output));
+  const firstOutput = first.output as ContextOutput;
+  const secondOutput = second.output as ContextOutput;
+  assert.deepEqual(firstOutput.requiredAgentInvocations, secondOutput.requiredAgentInvocations);
+  assert.equal(firstOutput.requiredAgentInvocations.length, 1);
+  const invocation = firstOutput.requiredAgentInvocations[0]!;
+  assert.match(invocation.invocationId, /^[a-f0-9]{64}$/);
+  assert.deepEqual({ ...invocation, invocationId: "<context-bound>" }, {
+    invocationId: "<context-bound>",
+    capability: "ux-design-spec",
+    invocation: "required",
+    platform: "github-copilot",
+    tool: "agent",
+    agent: {
+      id: "lean-pdlc-ux",
+      path: ".pdlc/domains/ux/agents/lean-pdlc-ux.agent.md",
+    },
+    skills: [{
+      name: "lean-pdlc-ux-spec",
+      path: ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md",
+    }],
+    mode: "draft",
+    handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",
+    approvalBoundary: "The Domain contribution drafts guidance only; product approval and PDLC state remain outside the Domain Agent.",
+  });
+
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.design.technologies = ["react"];
+  const store = new FileStateStore(workspace);
+  await store.writeRecord(record);
+  await store.setCurrentRecord(record.id);
+  const changed = await runCli(["context", "ux-design", "--root", workspace], workspace);
+  assert.equal(changed.exitCode, 0, JSON.stringify(changed.output));
+  const changedInvocation = (changed.output as ContextOutput).requiredAgentInvocations[0]!;
+  assert.notEqual(changedInvocation.invocationId, invocation.invocationId);
 });
