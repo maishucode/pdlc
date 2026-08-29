@@ -110,7 +110,7 @@ test("resolves Databricks KB and Adapter as separate assets", async () => {
 test("lets project defaults override Domain defaults but not locked Controls", async (context) => {
   const workspace = await temporaryWorkspace();
   context.after(workspace.cleanup);
-  const defaultsRoot = join(workspace.path, ".pdlc/project/domains/ux/defaults");
+  const defaultsRoot = join(workspace.path, ".pdlc/config/domains/ux/defaults");
   await mkdir(defaultsRoot, { recursive: true });
   await writeFile(join(defaultsRoot, "override.json"), JSON.stringify({
     schemaVersion: 1,

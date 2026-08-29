@@ -14,7 +14,13 @@ Your product repository
 ├── .agents/skills/lean-pdlc/         Main Delivery Flow Skill
 ├── .github/                          Copilot adapter and prompt
 ├── pdlc/                             Stages, Flows, Domains, schemas, and Runner
-└── .pdlc/project/domains/            Optional Project Overlay
+├── pdlc-docs/                        Namespaced Harness documentation
+└── .pdlc/                            Project configuration and delivery runtime
+    ├── config/domains/               Optional project configuration overlay
+    ├── records/                      Delivery Records
+    ├── requirements/                 Requirements Artifacts
+    ├── evidence/                     Delivery evidence
+    └── audit/                        Append-only audit events
 ```
 
 ## Put Lean PDLC in a project
@@ -40,9 +46,11 @@ AGENTS.md
 .github/prompts/pdlc.prompt.md
 .github/workflows/copilot-setup-steps.yml
 pdlc/
+pdlc-docs/
+.pdlc/
 ```
 
-Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Controls, Knowledge, and Capabilities before each Stage. Add project-specific context only under `.pdlc/project/domains/`.
+Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Controls, Knowledge, and Capabilities before each Stage. Add project-specific context only under `.pdlc/config/domains/`.
 
 Maintainers may project all enabled Plugin Agents and Skills into VS Code-native directories with:
 

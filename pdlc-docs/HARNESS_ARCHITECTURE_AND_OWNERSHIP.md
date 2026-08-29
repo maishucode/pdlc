@@ -72,7 +72,7 @@ An Integration Adapter encapsulates authenticated access to an external system a
 
 ### Project Overlay
 
-The Project Overlay adds project-specific context under `.pdlc/project/domains/<domain>/`:
+The Project Configuration Overlay adds project-specific context under `.pdlc/config/domains/<domain>/`:
 
 - `baseline.json` — approved facts that later Stages should not ask again;
 - `controls/` — cumulative project-specific mandatory rules;
@@ -256,7 +256,7 @@ Control reviewers should be able to trace every effective obligation to its sour
 | Flow lifecycle and intrinsic controls | `pdlc/delivery-flows/<flow>/flow.json` and `controls/` |
 | Stage completion semantics | `pdlc/stages/catalog.json` |
 | Enterprise professional Controls | `pdlc/domains/<domain>/controls/` |
-| Project Controls and Baselines | `.pdlc/project/domains/<domain>/` |
+| Project Controls and Baselines | `.pdlc/config/domains/<domain>/` |
 | Effective applications and exceptions | Delivery Record `resolution.controls` |
 | Evidence and controlled decisions | Delivery Record evidence, Checkpoint data, and append-only audit events |
 
@@ -318,6 +318,23 @@ pdlc/domains/<domain>/
 ```
 
 Only create categories that the Domain actually owns.
+
+Project-specific configuration and persistent delivery state use a separate namespace:
+
+```text
+.pdlc/
+  config/domains/<domain>/
+    baseline.json
+    controls/
+    defaults/
+    knowledge/
+  records/
+  requirements/
+  evidence/
+  audit/
+```
+
+The Runner creates the transient `.pdlc/locks/` directory and the `.pdlc/current` active-record pointer only when required. They are not part of the empty repository skeleton.
 
 ## 7. Governance Model
 

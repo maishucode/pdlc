@@ -489,10 +489,10 @@ Professional owners do not need to participate in every delivery. Their approved
 
 ## 10. Project Overlay
 
-Shared Domains define enterprise-wide rules, knowledge, and capabilities. A project adds approved architecture, project rules, defaults, and local knowledge under `.pdlc/project/` as a sparse overlay.
+Shared Domains define enterprise-wide rules, knowledge, and capabilities. A project adds approved architecture, project rules, defaults, and local knowledge under `.pdlc/config/` as a sparse configuration overlay.
 
 ```text
-.pdlc/project/
+.pdlc/config/
   project.json
 
   domains/
@@ -936,11 +936,10 @@ PDLC/
 │   └── tests/
 │
 ├── .pdlc/
-│   ├── project/
-│   │   ├── project.json
+│   ├── config/
 │   │   └── domains/
 │   ├── records/
-│   ├── artifacts/
+│   ├── requirements/
 │   ├── evidence/
 │   └── audit/
 │
@@ -1085,7 +1084,7 @@ The foundational migration was completed incrementally while keeping the executa
 
 ### Phase 4: Establish the Project Overlay — complete
 
-- Migrate `.pdlc/project/standards/` into the Domain-first Project Overlay.
+- Migrate the legacy `.pdlc/project/standards/` path into the Domain-first Project Configuration Overlay.
 - Support Project Baselines, Project Controls, Project Defaults, and Project Knowledge.
 - Implement deterministic conflict detection and provenance reporting.
 
@@ -1109,7 +1108,7 @@ Future evolution must continue to preserve schema validation, Runner tests, and 
 | Top-level `plugins/` | Owning Domain's `capabilities/plugins/` |
 | `pdlc/integrations/` implementations | Owning Domain's `capabilities/adapters/` |
 | Integration contracts | Stable Core capability contracts |
-| `.pdlc/project/standards/` | `.pdlc/project/domains/<domain>/` overlay |
+| `.pdlc/project/standards/` | `.pdlc/config/domains/<domain>/` overlay |
 | Requirements policy with mixed responsibilities | Artifact schema + Domain Control + Guidance + Flow Control + Plugin |
 
 ## 21. Architectural Constraints

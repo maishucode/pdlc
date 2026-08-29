@@ -1,6 +1,6 @@
 # Domain context resolution
 
-Before each Stage, resolve context from `pdlc/domains/` and `.pdlc/project/domains/` using the Delivery Flow, Stage, risk, technology, and domain tags.
+Before each Stage, resolve context from `pdlc/domains/` and `.pdlc/config/domains/` using the Delivery Flow, Stage, risk, technology, and domain tags.
 
 Treat the returned channels independently:
 

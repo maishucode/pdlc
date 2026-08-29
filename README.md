@@ -65,11 +65,16 @@ pdlc/
   tests/
   cli.ts
 
-.pdlc/project/domains/<domain>/
-  baseline.json
-  controls/
-  defaults/
-  knowledge/
+.pdlc/
+  config/domains/<domain>/
+    baseline.json
+    controls/
+    defaults/
+    knowledge/
+  records/
+  requirements/
+  evidence/
+  audit/
 ```
 
 Every shared asset lives under its owning Domain. This lets an expert team review one folder and see both what it mandates and what it offers.
@@ -111,7 +116,7 @@ bun pdlc/cli.ts plugin sync --root <project>
 - New Delivery Flow: create `pdlc/delivery-flows/<id>/flow.json` and explicitly register it in `pdlc/delivery-flows/catalog.json`.
 - New Control or Knowledge: place it in the owning Domain and declare applicability metadata.
 - New Plugin: place it under the owning Domain's `capabilities/plugins/` folder and declare permissions and Stage bindings.
-- Project-specific decision: place it under `.pdlc/project/domains/<domain>/`; do not fork shared definitions.
+- Project-specific decision: place it under `.pdlc/config/domains/<domain>/`; do not fork shared definitions.
 
 See [Harness Architecture and Ownership](pdlc-docs/HARNESS_ARCHITECTURE_AND_OWNERSHIP.md), [Delivery Flow Model](pdlc-docs/DELIVERY_FLOW_MODEL.md), and [Target Architecture](pdlc-docs/HARNESS_TARGET_ARCHITECTURE.md).
 

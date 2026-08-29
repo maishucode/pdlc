@@ -51,6 +51,7 @@ const EXPECTATIONS: EntrypointExpectation[] = [
 
 const FORBIDDEN_LEGACY_PATHS = [
   ".github/agents/lean-pdlc.md",
+  ".pdlc/project",
   "pdlc/defaults",
   "pdlc/harnesses",
   "pdlc/integrations",

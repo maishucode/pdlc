@@ -9,5 +9,7 @@
     "architecture.runtime": "existing-project-runtime",
     "architecture.persistence": "existing-approved-database"
   },
-  "references": ["docs/architecture/approved-baseline.md"]
+  "references": [
+    "docs/architecture/approved-baseline.md"
+  ]
 }

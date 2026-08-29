@@ -4,8 +4,13 @@
   "domain": "solution-architecture",
   "version": "1.0.0",
   "appliesTo": {
-    "technologies": ["web-ui"],
-    "stages": ["solution-design", "implementation"]
+    "technologies": [
+      "web-ui"
+    ],
+    "stages": [
+      "solution-design",
+      "implementation"
+    ]
   },
   "defaults": [
     {
