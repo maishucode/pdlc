@@ -100,7 +100,7 @@ The POC Delivery Flow is executable. Implementation and end-to-end PDLC Flows ar
 
 Bundled Domains demonstrate the model:
 
-- Product Management owns Requirements and Story Artifact Definitions, requirements quality Policies, and authoring guidance.
+- Product Management owns Requirements, Story, and Productization Package Artifact Definitions, requirements quality Policies, and authoring guidance.
 - UX owns experience Policies, design guidance, web-POC Defaults, Skills, an Agent, and Stage Hooks.
 - Solution Architecture owns reversible-delivery Controls and minimum-design guidance/defaults.
 - Security owns credential and sensitive-data Controls.

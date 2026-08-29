@@ -18,9 +18,8 @@ export const POC_STATUSES = [
   "DRAFT",
   "COMMITTED",
   "VERIFIED",
-  "CLOSED_KILLED",
-  "CLOSED_PIVOTED",
-  "CLOSED_PRODUCTIZED",
+  "PARKED",
+  "PRODUCTIZATION_RECOMMENDED",
 ] as const;
 export type PocStatus = (typeof POC_STATUSES)[number];
 
@@ -196,9 +195,14 @@ export interface PocDeliveryRecord {
     demo: EvidenceRef[];
   };
   decision: {
-    outcome: "" | "kill" | "pivot" | "productize";
+    outcome: "" | "park" | "recommend-productization";
     rationale: string;
     followUp: string;
+    productizationPackage: {
+      artifactType: "product-management.productization-package";
+      documentRef: string;
+      contentHash: string;
+    };
   };
 }
 

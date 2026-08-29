@@ -84,6 +84,11 @@
   "decision": {
     "outcome": "",
     "rationale": "",
-    "followUp": ""
+    "followUp": "",
+    "productizationPackage": {
+      "artifactType": "product-management.productization-package",
+      "documentRef": "",
+      "contentHash": ""
+    }
   }
 }

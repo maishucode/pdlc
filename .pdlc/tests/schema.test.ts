@@ -68,6 +68,14 @@ test("rejects production use in a POC", async () => {
   if (!result.ok) assert(result.issues.some(({ code }) => code === "POC_PRODUCTION_FORBIDDEN"));
 });
 
+test("keeps terminal POC status and outcome consistent", async () => {
+  const value = await json(join(projectRoot, ".pdlc/examples/poc-delivery-record.json")) as Record<string, unknown>;
+  value.status = "PARKED";
+  const result = validatePocDeliveryRecord(value);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert(result.issues.some(({ code }) => code === "OUTCOME_STATUS_MISMATCH"));
+});
+
 test("validates the explicit Delivery Flow Catalog and registered Flows", async () => {
   assert.equal(validateDeliveryFlowCatalog(await json(join(projectRoot, ".pdlc/delivery-flows/catalog.json"))).ok, true);
   const stages = validateStageCatalog(await json(join(projectRoot, ".pdlc/stages/catalog.json")));
@@ -88,6 +96,7 @@ test("validates the explicit Role Catalog", async () => {
 test("validates representative Domain assets", async () => {
   assert.equal(validateDomainManifest(await json(join(projectRoot, ".pdlc/domains/ux/domain.json"))).ok, true);
   assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/domains/product-management/artifacts/requirements/artifact.json"))).ok, true);
+  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/domains/product-management/artifacts/productization-package/artifact.json"))).ok, true);
   assert.equal(validateControlPolicy(await json(join(projectRoot, ".pdlc/domains/ux/policies/experience-quality.policy.json"))).ok, true);
   assert.equal(validateKnowledgeAsset(await json(join(projectRoot, ".pdlc/domains/data-platform/knowledge/kb/databricks-connectivity.json"))).ok, true);
   assert.equal(validateDomainStageHooks(await json(join(projectRoot, ".pdlc/domains/ux/hooks/stages.json"))).ok, true);

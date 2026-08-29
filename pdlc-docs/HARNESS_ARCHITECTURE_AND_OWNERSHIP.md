@@ -47,7 +47,7 @@ A Domain does not need content in every category. UX can own Policies, guidance,
 
 ### Artifact Definition
 
-An Artifact Definition is the governed contract for a deliverable such as Requirements or Story. The owning Domain defines format, schema, profiles, templates, and examples. Stages consume and produce Artifact type references rather than copying templates.
+An Artifact Definition is the governed contract for a deliverable such as Requirements, Story, or Productization Package. The owning Domain defines format, schema, profiles, templates, and examples. Stages consume and produce Artifact type references rather than copying templates.
 
 ### Policy and Control
 
@@ -294,7 +294,8 @@ The v2 implementation currently provides:
 - Requirements content-hash approval binding;
 - per-Stage Control enforcement points;
 - Verify evidence and current-context enforcement;
-- Decide outcomes with rationale, follow-up, terminal state, and audit events;
+- Decide outcomes limited to `PARKED` and `PRODUCTIZATION_RECOMMENDED`, with rationale, follow-up, and audit events;
+- Productization Package validation, required source/evidence/Control references, reuse dispositions, canonical location, and content-hash binding;
 - hashed Stage Context Receipts covering Role definitions, Policies, Knowledge, Agents, Skills, and Integrations;
 - Delivery Record and audit infrastructure;
 - Domain Hook and Integration permission metadata.
@@ -352,7 +353,7 @@ Expert teams contribute through Domain ownership rather than attending every del
 
 | Team | Typical ownership |
 |---|---|
-| Product Management | Requirements and Story Artifacts, product-quality Policies, authoring guidance |
+| Product Management | Requirements, Story, and Productization Package Artifacts, product-quality Policies, authoring guidance |
 | UX | Experience Policies, guidance, reference UI, Skills, Agents, and Hooks |
 | Solution Architecture | Architecture Policies, design guidance and references |
 | Security | Security Policies and verification guidance |

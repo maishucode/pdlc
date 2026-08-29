@@ -10,6 +10,7 @@ import { projectKnowledgeRefs, resolveDomainContext } from "./core/domain-resolv
 import { PdlcError } from "./core/errors.ts";
 import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
+import { assessProductizationPackage } from "./core/productization.ts";
 import { assessControlApplications, assessPocBuildReadiness, assessResolvedControlSet, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsFlowControl } from "./core/requirements.ts";
 import { RoleRegistry, type ResolvedRole } from "./core/role-registry.ts";
@@ -281,6 +282,7 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
 
   let targetStatus: PocDeliveryRecord["status"];
   let decision: string | undefined;
+  let productizationPackageHash: string | undefined;
   let evidenceRefs: string[] = [];
   if (checkpointId === "verify") {
     if (!definition.to) throw new PdlcError("INVALID_ARGUMENT", "Verify checkpoint has no target status");
@@ -310,10 +312,18 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
     targetStatus = definition.to as PocDeliveryRecord["status"];
   } else if (checkpointId === "decide") {
     if (!definition.toByOutcome) throw new PdlcError("INVALID_ARGUMENT", "Decide checkpoint has no outcome transitions");
-    if (!options.outcome || !["kill", "pivot", "productize"].includes(options.outcome)) throw new PdlcError("INVALID_ARGUMENT", "Decide requires --outcome kill|pivot|productize");
+    if (!options.outcome || !["park", "recommend-productization"].includes(options.outcome)) throw new PdlcError("INVALID_ARGUMENT", "Decide requires --outcome park|recommend-productization");
     if (original.decision.outcome && original.decision.outcome !== options.outcome) throw new PdlcError("INVALID_ARGUMENT", "Requested outcome conflicts with the Delivery Record decision");
     if (!original.decision.rationale.trim() || !original.decision.followUp.trim()) throw new PdlcError("BUILD_NOT_READY", "Decision rationale and follow-up are required before Decide");
     decision = options.outcome;
+    if (decision === "recommend-productization") {
+      const packageAssessment = await assessProductizationPackage(options.root, original);
+      if (!packageAssessment.ok || !packageAssessment.contentHash || !packageAssessment.documentRef) {
+        throw new PdlcError("BUILD_NOT_READY", "Productization Package is not ready for recommendation", packageAssessment.issues);
+      }
+      productizationPackageHash = packageAssessment.contentHash;
+      evidenceRefs = [packageAssessment.documentRef];
+    }
     const mapped = definition.toByOutcome[decision];
     if (!mapped) throw new PdlcError("INVALID_ARGUMENT", `No Decide transition is defined for outcome: ${decision}`);
     targetStatus = mapped as PocDeliveryRecord["status"];
@@ -327,7 +337,17 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
     status: targetStatus,
     revision: original.revision + 1,
     updatedAt: timestamp,
-    decision: decision ? { ...original.decision, outcome: decision as PocDeliveryRecord["decision"]["outcome"] } : original.decision,
+    decision: decision ? {
+      ...original.decision,
+      outcome: decision as PocDeliveryRecord["decision"]["outcome"],
+      productizationPackage: productizationPackageHash
+        ? {
+          ...original.decision.productizationPackage,
+          documentRef: evidenceRefs[0],
+          contentHash: productizationPackageHash,
+        }
+        : original.decision.productizationPackage,
+    } : original.decision,
   };
   await new FileStateStore(options.root).writeRecord(updated, original.revision);
   await new AuditLog(options.root).append(new AuditLog(options.root).create(updated, {
@@ -341,7 +361,16 @@ async function checkpoint(options: CliOptions, checkpointId?: string): Promise<u
     evidenceRefs,
     decision,
   }));
-  return { ok: true, recordId: updated.id, checkpoint: checkpointId, from: original.status, to: updated.status, revision: updated.revision, decision };
+  return {
+    ok: true,
+    recordId: updated.id,
+    checkpoint: checkpointId,
+    from: original.status,
+    to: updated.status,
+    revision: updated.revision,
+    decision,
+    productizationPackage: productizationPackageHash ? { documentRef: updated.decision.productizationPackage.documentRef, contentHash: productizationPackageHash } : undefined,
+  };
 }
 
 async function status(options: CliOptions): Promise<unknown> {
@@ -557,7 +586,7 @@ async function validate(options: CliOptions): Promise<unknown> {
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome <outcome>", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "context") return { exitCode: 0, output: await stageContext(parsed.options, parsed.subcommand) };

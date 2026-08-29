@@ -37,9 +37,8 @@
         "DRAFT",
         "COMMITTED",
         "VERIFIED",
-        "CLOSED_KILLED",
-        "CLOSED_PIVOTED",
-        "CLOSED_PRODUCTIZED"
+        "PARKED",
+        "PRODUCTIZATION_RECOMMENDED"
       ]
     },
     "title": {
@@ -103,8 +102,63 @@
       "type": "object"
     },
     "decision": {
-      "type": "object"
+      "type": "object",
+      "required": ["outcome", "rationale", "followUp", "productizationPackage"],
+      "properties": {
+        "outcome": { "enum": ["", "park", "recommend-productization"] },
+        "rationale": { "type": "string" },
+        "followUp": { "type": "string" },
+        "productizationPackage": {
+          "type": "object",
+          "required": ["artifactType", "documentRef", "contentHash"],
+          "properties": {
+            "artifactType": { "const": "product-management.productization-package" },
+            "documentRef": { "type": "string" },
+            "contentHash": { "type": "string", "pattern": "^$|^[a-f0-9]{64}$" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "PARKED" } }, "required": ["status"] },
+      "then": { "properties": { "decision": { "properties": { "outcome": { "const": "park" } } } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "PRODUCTIZATION_RECOMMENDED" } }, "required": ["status"] },
+      "then": { "properties": { "decision": { "properties": { "outcome": { "const": "recommend-productization" } } } } }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["DRAFT", "COMMITTED", "VERIFIED"] } }, "required": ["status"] },
+      "then": { "properties": { "decision": { "properties": { "outcome": { "const": "" } } } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "properties": { "outcome": { "const": "recommend-productization" } },
+            "required": ["outcome"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decision": {
+            "properties": {
+              "productizationPackage": {
+                "properties": {
+                  "documentRef": { "type": "string", "minLength": 1, "pattern": "\\.md$" },
+                  "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "additionalProperties": false
 }

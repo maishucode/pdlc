@@ -89,8 +89,8 @@ v2 currently executes only the POC path, including Commit through Build Readines
 13. Before invoking Build Readiness, ensure current receipts for `requirements-clarification` and `build-readiness` have been applied. Only after explicit approval, internally invoke `bun .pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>`. That operation binds approval metadata to the Requirements content hash, validates Build Readiness, moves the Record from `DRAFT` to `COMMITTED`, and appends the Commit audit event. Do not edit approval or state fields manually.
 14. If Build Readiness passes, implement exactly the approved scope. If Requirements, applicable Controls, Project Baselines, or resolved Defaults change materially, the content-hash or context mismatch blocks further governed progress; update the Artifact and Record, present a new Build Readiness summary, and obtain approval again. The POC Commit permits an audited `COMMITTED → COMMITTED` recommit for this controlled iteration.
 15. Capture tests, build, demo, and conditionally required security evidence as references, not pasted transcripts. Read [references/delivery-record.md](references/delivery-record.md) before updating a record. Before Verify, keep the Commit receipts current and apply receipts for `implementation`, `developer-verification`, `acceptance-verification`, and `security-verification` when that conditional Stage is active.
-16. Before a checkpoint, show a concise summary of state, risks, required evidence, exceptions, and proposed transition.
-17. Invoke `bun .pdlc/cli.ts checkpoint <name>` only after explicit user confirmation. One checkpoint must equal one Runner process.
+16. Before Decide, offer only `park` or `recommend-productization`. Park preserves the POC and its evidence for a possible later iteration. For `recommend-productization`, create `pdlc/artifacts/<POC-ID>/productization-package.md` from the Product-owned template, link the approved Requirements, all captured evidence, applicable Controls and exceptions, and record `adopt`, `refine`, or `replace` for Requirements, Design, and Code. Present the complete package for explicit Product review before the checkpoint.
+17. Before a checkpoint, show a concise summary of state, risks, required evidence, exceptions, and proposed transition. Invoke `bun .pdlc/cli.ts checkpoint <name>` only after explicit user confirmation. One checkpoint must equal one Runner process.
 18. Stop when required clarification coverage is incomplete, the Flow Control's traceable-decision minimum is unmet, Requirements are unapproved, questions or contradictions remain, context resolution conflicts or locked-Control override attempts remain, final document review was not presented, Build Readiness fails, evidence is missing, risk rises beyond POC policy, a mandatory Control is unsatisfied, or the Runner rejects the transition.
 
 ## Preserve control boundaries
@@ -99,7 +99,7 @@ v2 currently executes only the POC path, including Commit through Build Readines
 - Treat the approved Requirements document as the functional build contract. Do not silently reinterpret it during implementation.
 - Never edit state or audit fields to imitate a successful checkpoint.
 - Never run JIRA, XRAY, deployment, or arbitrary project scripts through the PDLC Runner.
-- Never productize by converting a POC record into a production record. Close the POC and supply its evidence to a new formal Delivery Flow.
+- Never treat `PRODUCTIZATION_RECOMMENDED` as completed productization or production approval. It requires a content-hash-bound Productization Package that becomes input to a new formal Delivery Flow; formal Requirements, design, Stories, test cases, JIRA/Xray work, release, and production validation remain downstream work.
 - Keep Product, Developer, and QA as logical responsibilities rather than mandatory headcount.
 - Treat applicable Controls as blocking and Knowledge as advisory. A Control exception requires the declared approver and evidence path.
 - Never let a Project Overlay override a locked enterprise Control. An overrideable Default may be changed, but the Requirements must show the replacement and rationale.
@@ -116,7 +116,7 @@ v2 currently executes only the POC path, including Commit through Build Readines
 - On fresh activation with an idea, normally make only the one `context requirements-clarification` Runner call before the first question. Do not make anticipatory Context or compatibility Guidance calls.
 - Internally use `bun .pdlc/cli.ts validate` for an explicit integrity check, recovery from a definition failure, or final reconciliation before Build Readiness. Never use it as routine pre-question startup work.
 - Internally use `bun .pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>` exactly once after Requirements approval and before application construction.
-- Treat approved `readiness build` as Commit. Internally use `checkpoint verify` after verification approval and `checkpoint decide --outcome kill|pivot|productize` after the final outcome approval.
+- Treat approved `readiness build` as Commit. Internally use `checkpoint verify` after verification approval and `checkpoint decide --outcome park|recommend-productization` after the final outcome approval. The latter outcome must not pass without the reviewed Productization Package at the canonical project path.
 - Do not invoke internal TypeScript modules as scripts.
 - Do not substitute another shell command for a rejected Runner operation.
 

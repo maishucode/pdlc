@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "poc",
   "name": "POC Delivery Flow",
-  "description": "A bounded, non-production Delivery Flow that tests an idea and produces a kill, pivot, or productize decision.",
+  "description": "A bounded, non-production Delivery Flow that tests an idea and produces a park or recommend-productization decision.",
   "status": "active",
   "stageSequence": [
     { "stageId": "requirements-clarification", "inclusion": "required" },
@@ -19,9 +19,8 @@
   "controls": {
     "initialStatus": "DRAFT",
     "terminalStatuses": [
-      "CLOSED_KILLED",
-      "CLOSED_PIVOTED",
-      "CLOSED_PRODUCTIZED"
+      "PARKED",
+      "PRODUCTIZATION_RECOMMENDED"
     ],
     "checkpoints": [
       {
@@ -40,9 +39,8 @@
         "id": "decide",
         "from": ["VERIFIED"],
         "toByOutcome": {
-          "kill": "CLOSED_KILLED",
-          "pivot": "CLOSED_PIVOTED",
-          "productize": "CLOSED_PRODUCTIZED"
+          "park": "PARKED",
+          "recommend-productization": "PRODUCTIZATION_RECOMMENDED"
         },
         "ownerRole": "product"
       }

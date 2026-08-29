@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -44,6 +44,59 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
   assert.equal(applied.exitCode, 0, JSON.stringify(applied.output));
 }
 
+function productizationPackage(record: PocDeliveryRecord): string {
+  const evidenceRefs = [record.evidence.tests, record.evidence.build, record.evidence.security, record.evidence.demo].flat().map(({ ref }) => ref);
+  return `<!-- pdlc:productization-package:v1 -->
+# Productization Package: ${record.title}
+
+## Package Identity
+
+- Source POC: \`${record.id}\`
+- Source revision: \`${record.revision}\`
+- Approved Requirements: \`${record.requirements.documentRef}\`
+- Recommendation: \`recommend-productization\`
+
+<!-- pdlc:section:validated-outcome -->
+## Validated Outcome
+
+- The POC met its approved success measures and is recommended for formal delivery.
+
+<!-- pdlc:section:evidence -->
+## Evidence Index
+
+${evidenceRefs.map((ref) => `- \`${ref}\``).join("\n")}
+
+<!-- pdlc:section:gaps -->
+## Productization Gaps
+
+- Expand production requirements, operations, security, and release readiness in the formal Delivery Flow.
+
+<!-- pdlc:section:reuse -->
+## Reuse Disposition
+
+| Asset | Disposition | Rationale |
+|---|---|---|
+| Requirements | \`refine\` | Expand the validated behavior for production. |
+| Design | \`replace\` | Perform formal architecture review. |
+| Code | \`refine\` | Reuse only after formal engineering review. |
+
+<!-- pdlc:section:control-handoff -->
+## Risks and Control Handoff
+
+${record.resolution.controls.applicable.map((ref) => `- \`${ref}\``).join("\n")}
+${record.resolution.controls.exceptions.map((ref) => `- Exception: \`${ref}\``).join("\n")}
+
+<!-- pdlc:section:delivery-handoff -->
+## Formal Delivery Handoff
+
+- Recommended Delivery Flow: \`implementation\`
+- Generate production Requirements, design, Stories, acceptance criteria, test cases, and approved Integration work items.
+- Accountable follow-up: Product starts formal requirements analysis with Developer and QA.
+
+<!-- pdlc:productization-review:presented -->
+`;
+}
+
 test("status is safe when no record is active", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-cli-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
@@ -69,6 +122,44 @@ test("explains that Commit is owned by Build Readiness", async () => {
     (result.output as { error: { code: string } }).error.code,
     "INVALID_ARGUMENT",
   );
+});
+
+test("parks a verified POC without requiring a Productization Package", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-park-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.status = "VERIFIED";
+  record.requirements.status = "approved";
+  record.requirements.approvedBy = "owner@example.com";
+  record.requirements.approvedAt = new Date().toISOString();
+  record.requirements.approvedContentHash = "a".repeat(64);
+  record.requirements.clarification = {
+    questionsAnswered: 8,
+    coverage: {
+      productContext: "complete",
+      functionalBehavior: "complete",
+      userScenarios: "complete",
+      uxInteraction: "complete",
+      qualityAttributes: "complete",
+      dataIntegrations: "complete",
+      scopeSuccess: "complete",
+    },
+    openQuestions: [],
+    contradictions: [],
+  };
+  record.design.summary = "A bounded, reversible design that was verified during the POC.";
+  record.decision.rationale = "The POC is useful but is not a current delivery priority.";
+  record.decision.followUp = "Retain the artifacts and evidence for a possible future iteration.";
+  const store = new FileStateStore(workspace);
+  await store.writeRecord(record);
+  await store.setCurrentRecord(record.id);
+
+  const result = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "owner@example.com", "--outcome", "park"], workspace);
+  assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+  const parked = await store.readRecord(record.id);
+  assert.equal(parked.status, "PARKED");
+  assert.equal(parked.decision.outcome, "park");
+  assert.equal(parked.decision.productizationPackage.contentHash, "");
 });
 
 test("build readiness rejects an unapproved requirements draft", async (context) => {
@@ -161,7 +252,12 @@ test("build readiness records one approved and content-bound decision", async (c
       security: [{ kind: "file", ref: verificationEvidence[2], description: "Sensitive-data verification." }],
       demo: [{ kind: "demo", ref: verificationEvidence[3], description: "Browser acceptance demonstration." }],
     },
-    decision: { outcome: "", rationale: "The POC met its acceptance criteria.", followUp: "Prepare an Implementation Delivery Flow." },
+    decision: {
+      outcome: "",
+      rationale: "The POC met its acceptance criteria.",
+      followUp: "Prepare an Implementation Delivery Flow.",
+      productizationPackage: { artifactType: "product-management.productization-package", documentRef: "", contentHash: "" },
+    },
   };
   await store.writeRecord(prepared, approved.revision);
   for (const stage of ["implementation", "developer-verification", "security-verification", "acceptance-verification"]) {
@@ -169,13 +265,24 @@ test("build readiness records one approved and content-bound decision", async (c
   }
   const verified = await runCli(["checkpoint", "verify", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(verified.exitCode, 0, JSON.stringify(verified.output));
-  assert.equal((await store.readRecord(record.id)).status, "VERIFIED");
+  const verifiedRecord = await store.readRecord(record.id);
+  assert.equal(verifiedRecord.status, "VERIFIED");
 
-  const decided = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "product-owner", "--outcome", "productize"], workspace);
+  const missingPackage = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "product-owner", "--outcome", "recommend-productization"], workspace);
+  assert.equal(missingPackage.exitCode, 2);
+  assert.equal((missingPackage.output as { error: { code: string } }).error.code, "BUILD_NOT_READY");
+
+  const packageRef = `pdlc/artifacts/${record.id}/productization-package.md`;
+  await mkdir(join(workspace, "pdlc", "artifacts", record.id), { recursive: true });
+  await writeFile(join(workspace, packageRef), productizationPackage(verifiedRecord));
+
+  const decided = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "product-owner", "--outcome", "recommend-productization"], workspace);
   assert.equal(decided.exitCode, 0, JSON.stringify(decided.output));
-  const closed = await store.readRecord(record.id);
-  assert.equal(closed.status, "CLOSED_PRODUCTIZED");
-  assert.equal(closed.decision.outcome, "productize");
+  const recommended = await store.readRecord(record.id);
+  assert.equal(recommended.status, "PRODUCTIZATION_RECOMMENDED");
+  assert.equal(recommended.decision.outcome, "recommend-productization");
+  assert.equal(recommended.decision.productizationPackage.documentRef, packageRef);
+  assert.match(recommended.decision.productizationPackage.contentHash, /^[a-f0-9]{64}$/);
   const completedEvents = await new AuditLog(workspace).readAll();
   assert.deepEqual(completedEvents.filter(({ eventType }) => eventType === "CHECKPOINT_APPROVED").map(({ checkpoint }) => checkpoint), ["commit", "verify", "decide"]);
 });

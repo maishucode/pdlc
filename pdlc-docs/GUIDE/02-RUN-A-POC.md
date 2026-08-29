@@ -64,7 +64,14 @@ Requirements summary
 
 Review it and explicitly approve the named Requirements Artifact and Build Readiness. This is the one POC approval checkpoint before construction. A material requirement or Control-disposition change invalidates the approval and requires a new review.
 
-The approved Build Readiness operation is also the `commit` transition from `DRAFT` to `COMMITTED`. If the POC Requirements change materially during implementation, the Agent presents the complete revision and records a controlled `COMMITTED → COMMITTED` recommit before continuing. After implementation, the Agent presents captured test, build, demo, and any required security evidence for `verify`. Finally, Product approves a `kill`, `pivot`, or `productize` decision with rationale and follow-up. These transitions are recorded in the Delivery Record and audit log.
+The approved Build Readiness operation is also the `commit` transition from `DRAFT` to `COMMITTED`. If the POC Requirements change materially during implementation, the Agent presents the complete revision and records a controlled `COMMITTED → COMMITTED` recommit before continuing. After implementation, the Agent presents captured test, build, demo, and any required security evidence for `verify`.
+
+After Verify, Product chooses one disposition:
+
+- `park` moves the POC to `PARKED`, preserving Requirements, code, design, and evidence for possible future work.
+- `recommend-productization` requires a reviewed Productization Package at `pdlc/artifacts/<POC-ID>/productization-package.md` and moves the POC to `PRODUCTIZATION_RECOMMENDED`.
+
+The package references the approved Requirements, evidence, Controls and exceptions, known gaps, and `adopt`/`refine`/`replace` decisions for Requirements, Design, and Code. The Runner validates it and binds its content hash to the Delivery Record and audit event.
 
 ## Follow progress or resume later
 
@@ -80,7 +87,7 @@ The Agent reports the active Stage, what changed, blocking questions, and the ne
 
 ## What the current v2 POC does and does not do
 
-The v2 POC executes Requirements, context resolution, lightweight design, Build Readiness/Commit, implementation, Verify, and Decide. It does not integrate JIRA, XRAY, CI/CD, deployment, or production release. A `productize` decision closes the POC and becomes input to a separate formal Delivery Flow; it is not permission to release the POC to production.
+The v2 POC executes Requirements, context resolution, lightweight design, Build Readiness/Commit, implementation, Verify, and Decide. It does not integrate JIRA, XRAY, CI/CD, deployment, or production release. `PRODUCTIZATION_RECOMMENDED` packages evidence for a separate formal Delivery Flow; it does not mean productization or production release is complete.
 
 ## Next
 

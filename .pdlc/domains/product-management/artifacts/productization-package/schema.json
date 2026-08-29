@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/artifacts/product-management.productization-package.schema.json",
+  "title": "Productization Package Metadata",
+  "type": "object",
+  "required": ["artifactType", "sourceRecord", "documentRef", "status"],
+  "properties": {
+    "artifactType": { "const": "product-management.productization-package" },
+    "sourceRecord": { "type": "string", "pattern": "^POC-[A-Z0-9][A-Z0-9-]*$" },
+    "documentRef": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["draft", "approved"] }
+  },
+  "additionalProperties": true
+}

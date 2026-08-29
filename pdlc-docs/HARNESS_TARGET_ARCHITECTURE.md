@@ -38,6 +38,11 @@ Stage entry
 Stage execution
   -> reads or produces governed Artifacts
   -> records decisions, evidence, exceptions, and audit events
+
+POC disposition
+  -> PARKED retains the validated POC for possible later iteration
+  -> PRODUCTIZATION_RECOMMENDED requires a reviewed, hash-bound Productization Package
+  -> the package is input to a new formal Delivery Flow, not production approval
 ```
 
 These channels remain separate:
@@ -227,7 +232,7 @@ Place the smallest necessary content under `pdlc/config/domains/<domain>/`. Do n
 - Project configuration cannot override locked enterprise constraints.
 - Requirements approval is content-hash bound.
 - Controlled state changes go through the Runner and audit log.
-- Build Readiness performs Commit; Verify and Decide enforce evidence, authority, and terminal outcome transitions.
+- Build Readiness performs Commit; Verify enforces evidence and authority; Decide produces `PARKED` or a package-backed `PRODUCTIZATION_RECOMMENDED` transition.
 - Platform adapters remain thin and do not duplicate governance logic.
 
 See [Harness Architecture and Ownership](HARNESS_ARCHITECTURE_AND_OWNERSHIP.md) for the detailed governance and Control review model.

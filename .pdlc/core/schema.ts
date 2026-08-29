@@ -342,10 +342,31 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
 
   const decision = object(record.decision, "$.decision", issues);
   if (decision) {
-    exact(decision, ["outcome", "rationale", "followUp"], "$.decision", issues);
-    if (!["", "kill", "pivot", "productize"].includes(String(decision.outcome))) issue(issues, "INVALID_OUTCOME", "$.decision.outcome", "Unsupported outcome");
+    exact(decision, ["outcome", "rationale", "followUp", "productizationPackage"], "$.decision", issues);
+    if (!["", "park", "recommend-productization"].includes(String(decision.outcome))) issue(issues, "INVALID_OUTCOME", "$.decision.outcome", "Unsupported outcome");
     string(decision.rationale, "$.decision.rationale", issues, true);
     string(decision.followUp, "$.decision.followUp", issues, true);
+    const productizationPackage = object(decision.productizationPackage, "$.decision.productizationPackage", issues);
+    if (productizationPackage) {
+      exact(productizationPackage, ["artifactType", "documentRef", "contentHash"], "$.decision.productizationPackage", issues);
+      if (productizationPackage.artifactType !== "product-management.productization-package") issue(issues, "INVALID_ARTIFACT_TYPE", "$.decision.productizationPackage.artifactType", "Expected product-management.productization-package");
+      string(productizationPackage.documentRef, "$.decision.productizationPackage.documentRef", issues, true);
+      string(productizationPackage.contentHash, "$.decision.productizationPackage.contentHash", issues, true);
+      if (decision.outcome === "recommend-productization") {
+        if (typeof productizationPackage.documentRef !== "string" || !productizationPackage.documentRef.endsWith(".md")) issue(issues, "INVALID_PRODUCTIZATION_PACKAGE_REF", "$.decision.productizationPackage.documentRef", "Productization Package must reference a Markdown document");
+        if (typeof productizationPackage.contentHash !== "string" || !/^[a-f0-9]{64}$/.test(productizationPackage.contentHash)) issue(issues, "INVALID_PRODUCTIZATION_PACKAGE_HASH", "$.decision.productizationPackage.contentHash", "Expected a SHA-256 digest");
+      } else if (productizationPackage.contentHash !== "") {
+        issue(issues, "UNBOUND_PRODUCTIZATION_PACKAGE", "$.decision.productizationPackage.contentHash", "Package content hash is written only by the recommend-productization checkpoint");
+      }
+    }
+    const terminalOutcome = record.status === "PARKED"
+      ? "park"
+      : record.status === "PRODUCTIZATION_RECOMMENDED"
+        ? "recommend-productization"
+        : "";
+    if (decision.outcome !== terminalOutcome) {
+      issue(issues, "OUTCOME_STATUS_MISMATCH", "$.decision.outcome", `Outcome must be ${terminalOutcome || "empty"} while status is ${String(record.status)}`);
+    }
   }
   return result<PocDeliveryRecord>(value, issues);
 }
