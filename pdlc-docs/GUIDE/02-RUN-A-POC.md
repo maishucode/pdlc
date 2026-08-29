@@ -10,7 +10,7 @@ Use a short outcome-oriented request:
 /pdlc poc validate whether support agents can classify customer feedback into billing, access, and product-bug categories.
 ```
 
-The Agent opens a draft POC. It does not start coding yet.
+The Agent opens a draft POC. The Harness establishes its DRAFT Delivery Record, current selection, and `DELIVERY_FLOW_CREATED` audit event together, so the audit timeline starts at creation. It does not start coding yet.
 
 Startup uses a fast path: the Agent creates a minimal Draft, resolves the Requirements Stage context once, reads any returned Domain contribution, and asks the first clarification round. Full validation, future Stage resolution, detailed Control application, design, and verification planning happen only when needed and are completed before Build Readiness.
 

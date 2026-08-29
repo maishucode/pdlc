@@ -78,6 +78,7 @@ The four context channels remain separate because they have different semantics:
   tests/
   cli.ts
   runtime/
+    inbox/
     records/
     audit/
 
@@ -115,6 +116,7 @@ The Agent owns Runner calls; end users should not be asked to execute Bun comman
 Internal Runner operations include:
 
 ```text
+bun .pdlc/cli.ts init --root <project> --input .pdlc/runtime/inbox/<POC-ID>.json --actor <identity>
 bun .pdlc/cli.ts validate
 bun .pdlc/cli.ts status --root <project>
 bun .pdlc/cli.ts audit summary --root <project> [--record <id>]
@@ -131,6 +133,8 @@ bun .pdlc/cli.ts integration list
 `audit summary` is a read-only projection over the selected Delivery Record and append-only Audit Log. It reports the current conclusion, Build Readiness, Verify and Decide milestones, a concise timeline, evidence references, satisfied, excepted, and pending Controls, and warnings when record state has no matching audit event. It never replaces or modifies the underlying Audit Events.
 
 `status` is the read-only operational view. It reports the current canonical Stage and state, allowed and unavailable next actions, known blockers, Requirements approval, evidence readiness, applied Policies/Knowledge/Skills, Control dispositions, and Productization Package readiness. It derives routine status from the current Delivery Record and recorded Context Applications; only a verified POC triggers the just-in-time package check.
+
+`init` is the only supported new-POC state creation path. It validates a revision-zero DRAFT from the runtime inbox, confirms that its Requirements shell exists inside the project workspace, assigns Runner-owned timestamps, creates the Delivery Record, makes it current, and appends the content-hash-bound `DELIVERY_FLOW_CREATED` event. Invalid input causes no state write; a later persistence failure rolls back the new Record and current pointer. The consumed inbox file is removed after success.
 
 This assurance does not add startup questions, network calls, or a full-Harness scan. The Runner hashes only the already-resolved local files for the current Stage, and receipt persistence happens after Stage work rather than before the first clarification round.
 

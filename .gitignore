@@ -1,4 +1,6 @@
 .pdlc/runtime/locks/
+.pdlc/runtime/inbox/*
+!.pdlc/runtime/inbox/.gitkeep
 .pdlc/**/*.tmp
 pocs/**/node_modules/
 pocs/**/dist/

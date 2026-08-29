@@ -6,6 +6,7 @@
 - Treat `.pdlc/stages/`, `.pdlc/delivery-flows/`, `.pdlc/domains/`, `.pdlc/integrations/`, `.pdlc/roles/`, and `.pdlc/schemas/` as the shared source of truth. Treat `pdlc/config/domains/<domain>/` as the project-specific configuration overlay.
 - Resolve the selected Delivery Flow from canonical Stage references and delivery-context tags. Never redefine Stage requirements inside a Delivery Flow or platform adapter, and never treat every Stage as a human checkpoint.
 - Change controlled Delivery Flow state only through `bun .pdlc/cli.ts`.
+- Create a new POC only through the Runner's controlled initialization operation so the DRAFT Record, current pointer, and `DELIVERY_FLOW_CREATED` audit event are established together. Never write those three initialization surfaces independently.
 - Do not bypass checkpoints, required evidence, applicable Controls, or approved Control exceptions.
 - Do not create application code, install application dependencies, or run an application build before the approved Requirements document passes the internal Build Readiness check.
 - Follow the Product-owned requirements policy, resolve all required clarification topics and contradictions, and present the complete Requirements document for explicit review before treating any response as Build approval.

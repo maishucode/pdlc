@@ -298,6 +298,7 @@ The v2 implementation currently provides:
 - Productization Package validation, required source/evidence/Control references, reuse dispositions, canonical location, and content-hash binding;
 - hashed Stage Context Receipts covering Role definitions, Policies, Knowledge, Agents, Skills, and Integrations;
 - Delivery Record and audit infrastructure;
+- controlled POC initialization with DRAFT validation, Runner-owned timestamps, current-pointer coordination, `DELIVERY_FLOW_CREATED`, and rollback on persistence failure;
 - a read-only audit summary with lifecycle milestones, per-record event filtering, evidence and Control indexes, and missing-event warnings;
 - a read-only operational status summary with current Stage, next-action availability, known blockers, applied context, Requirements/evidence readiness, and just-in-time Productization Package readiness;
 - Domain Hook and Integration permission metadata.

@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AuditLog } from "./core/audit.ts";
@@ -10,6 +10,7 @@ import { DomainRegistry } from "./core/domain-registry.ts";
 import { projectKnowledgeRefs, resolveDomainContext } from "./core/domain-resolver.ts";
 import { PdlcError } from "./core/errors.ts";
 import { IntegrationRegistry } from "./core/integration-registry.ts";
+import { initializePocDeliveryRecord } from "./core/initialization.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
 import { verificationContextStages } from "./core/poc-progress.ts";
 import { assessProductizationPackage } from "./core/productization.ts";
@@ -27,7 +28,7 @@ import { validateCorePortability } from "./platform-adapters/validate-portabilit
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const HARNESS_ROOT = resolve(MODULE_DIRECTORY, "..");
 
-interface CliOptions { root: string; record?: string; actor?: string; receipt?: string; outcome?: string }
+interface CliOptions { root: string; record?: string; actor?: string; receipt?: string; outcome?: string; input?: string }
 interface ParsedArguments { command?: string; subcommand?: string; options: CliOptions }
 
 function parseArguments(args: string[], currentDirectory: string): ParsedArguments {
@@ -36,14 +37,15 @@ function parseArguments(args: string[], currentDirectory: string): ParsedArgumen
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--help") positional.push("help");
-    else if (["--root", "--record", "--actor", "--receipt", "--outcome"].includes(argument)) {
+    else if (["--root", "--record", "--actor", "--receipt", "--outcome", "--input"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Missing value for ${argument}`);
       if (argument === "--root") options.root = resolve(currentDirectory, value);
       else if (argument === "--record") options.record = value;
       else if (argument === "--actor") options.actor = value;
       else if (argument === "--receipt") options.receipt = value;
-      else options.outcome = value;
+      else if (argument === "--outcome") options.outcome = value;
+      else options.input = value;
       index += 1;
     } else if (argument.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Unknown option: ${argument}`);
     else positional.push(argument);
@@ -381,6 +383,34 @@ async function status(options: CliOptions): Promise<unknown> {
   }
 }
 
+async function initialize(options: CliOptions): Promise<unknown> {
+  if (!options.input) throw new PdlcError("INVALID_ARGUMENT", "Init requires --input <draft-record.json>");
+  if (!options.actor?.trim()) throw new PdlcError("INVALID_ARGUMENT", "Init requires --actor <identity>");
+  const inboxRoot = resolve(options.root, ".pdlc", "runtime", "inbox");
+  const inputPath = isAbsolute(options.input) ? resolve(options.input) : resolve(options.root, options.input);
+  const inputFromInbox = relative(inboxRoot, inputPath);
+  if (inputFromInbox === "" || inputFromInbox === ".." || inputFromInbox.startsWith(`..${sep}`) || isAbsolute(inputFromInbox) || !inputPath.endsWith(".json")) {
+    throw new PdlcError("INVALID_ARGUMENT", "Init input must be a JSON file under .pdlc/runtime/inbox/");
+  }
+  let raw: unknown;
+  try { raw = JSON.parse(await readFile(inputPath, "utf8")) as unknown; }
+  catch (error) { throw new PdlcError("VALIDATION_FAILED", "Initial POC draft cannot be read", error instanceof Error ? error.message : String(error)); }
+  const initialized = await initializePocDeliveryRecord(options.root, raw, options.actor);
+  let inputConsumed = true;
+  try { await unlink(inputPath); } catch { inputConsumed = false; }
+  return {
+    ok: true,
+    recordId: initialized.record.id,
+    deliveryFlow: initialized.record.deliveryFlow,
+    status: initialized.record.status,
+    stage: initialized.event.stage,
+    revision: initialized.record.revision,
+    current: true,
+    auditEvent: { eventId: initialized.event.eventId, eventType: initialized.event.eventType, actor: initialized.event.actor, timestamp: initialized.event.timestamp, recordHash: initialized.event.recordHash },
+    inputConsumed,
+  };
+}
+
 async function auditSummary(options: CliOptions, subcommand?: string): Promise<unknown> {
   if (subcommand !== "summary") throw new PdlcError("INVALID_ARGUMENT", "Audit command must be summary");
   let record: PocDeliveryRecord;
@@ -599,7 +629,8 @@ async function validate(options: CliOptions): Promise<unknown> {
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "audit summary", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["init --input <draft-record.json> --actor <identity>", "status", "audit summary", "validate", "context <stage>", "context-apply <stage>", "readiness build", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (parsed.command === "init") return { exitCode: 0, output: await initialize(parsed.options) };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "audit") return { exitCode: 0, output: await auditSummary(parsed.options, parsed.subcommand) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };

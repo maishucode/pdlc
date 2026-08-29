@@ -28,6 +28,7 @@ test("enforces the Harness and project workspace ownership boundary", async () =
     access(join(projectRoot, ".pdlc/core")),
     access(join(projectRoot, ".pdlc/runtime/records/.gitkeep")),
     access(join(projectRoot, ".pdlc/runtime/audit/.gitkeep")),
+    access(join(projectRoot, ".pdlc/runtime/inbox/.gitkeep")),
     access(join(projectRoot, ".pdlc/integrations/catalog.json")),
     access(join(projectRoot, "pdlc/config/domains/.gitkeep")),
     access(join(projectRoot, "pdlc/requirements/.gitkeep")),

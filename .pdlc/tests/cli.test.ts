@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { runCli } from "../cli.ts";
 import { FileStateStore } from "../core/state.ts";
@@ -42,6 +42,20 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const applied = await runCli(["context-apply", stage, "--root", workspace, "--receipt", receiptPath, "--actor", actor], workspace);
   assert.equal(applied.exitCode, 0, JSON.stringify(applied.output));
+}
+
+async function initializeRecord(workspace: string, record: PocDeliveryRecord, actor = "pdlc-agent"): Promise<Awaited<ReturnType<typeof runCli>>> {
+  const requirementsPath = join(workspace, record.requirements.documentRef);
+  try { await readFile(requirementsPath, "utf8"); }
+  catch {
+    await mkdir(dirname(requirementsPath), { recursive: true });
+    await writeFile(requirementsPath, `# ${record.id} Requirements\n`);
+  }
+  const inbox = join(workspace, ".pdlc", "runtime", "inbox");
+  await mkdir(inbox, { recursive: true });
+  const input = join(inbox, `${record.id}.json`);
+  await writeFile(input, JSON.stringify(record));
+  return runCli(["init", "--root", workspace, "--input", `.pdlc/runtime/inbox/${record.id}.json`, "--actor", actor], workspace);
 }
 
 function productizationPackage(record: PocDeliveryRecord): string {
@@ -121,6 +135,64 @@ test("audit summary is safe when no record is active", async (context) => {
   });
 });
 
+test("initializes a POC record, current pointer, and creation audit event together", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const result = await initializeRecord(workspace, record, "pdlc-agent");
+  assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+  const output = result.output as { recordId: string; status: string; current: boolean; inputConsumed: boolean; auditEvent: { eventType: string; actor: string; recordHash: string } };
+  assert.deepEqual({ recordId: output.recordId, status: output.status, current: output.current, inputConsumed: output.inputConsumed }, { recordId: record.id, status: "DRAFT", current: true, inputConsumed: true });
+  assert.deepEqual({ eventType: output.auditEvent.eventType, actor: output.auditEvent.actor }, { eventType: "DELIVERY_FLOW_CREATED", actor: "pdlc-agent" });
+  assert.match(output.auditEvent.recordHash, /^[a-f0-9]{64}$/);
+  const store = new FileStateStore(workspace);
+  assert.equal(await store.currentRecordId(), record.id);
+  const initialized = await store.readCurrentRecord();
+  assert.equal(initialized.revision, 0);
+  assert.notEqual(initialized.createdAt, record.createdAt);
+  const events = await new AuditLog(workspace).readAll();
+  assert.equal(events.length, 1);
+  assert.deepEqual({ type: events[0]?.eventType, to: events[0]?.toStatus, stage: events[0]?.stage }, { type: "DELIVERY_FLOW_CREATED", to: "DRAFT", stage: "requirements-clarification" });
+  await assert.rejects(readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8"));
+});
+
+test("rejects an invalid initial record without writing runtime state", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-invalid-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.status = "COMMITTED";
+  const result = await initializeRecord(workspace, record);
+  assert.equal(result.exitCode, 2);
+  assert.equal((result.output as { error: { code: string } }).error.code, "VALIDATION_FAILED");
+  const store = new FileStateStore(workspace);
+  await assert.rejects(store.readRecord(record.id));
+  await assert.rejects(store.currentRecordId());
+  assert.deepEqual(await new AuditLog(workspace).readAll(), []);
+  assert.equal(JSON.parse(await readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8")).status, "COMMITTED");
+});
+
+test("rolls back record and current pointer when creation audit persistence fails", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-rollback-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  record.id = "POC-NEW";
+  record.requirements.documentRef = "pdlc/requirements/POC-NEW.md";
+  const previous = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  previous.id = "POC-PREVIOUS";
+  previous.requirements.documentRef = "pdlc/requirements/POC-PREVIOUS.md";
+  const store = new FileStateStore(workspace);
+  await store.writeRecord(previous);
+  await store.setCurrentRecord(previous.id);
+  await mkdir(join(workspace, ".pdlc", "runtime"), { recursive: true });
+  await writeFile(join(workspace, ".pdlc", "runtime", "audit"), "block audit directory creation");
+  const result = await initializeRecord(workspace, record);
+  assert.equal(result.exitCode, 1);
+  await assert.rejects(store.readRecord(record.id));
+  assert.equal(await store.currentRecordId(), previous.id);
+  assert.equal((await store.readCurrentRecord()).id, previous.id);
+  assert.equal(JSON.parse(await readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8")).id, record.id);
+});
+
 test("validate checks all v2 Harness assets", async () => {
   const result = await runCli(["validate"]);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
@@ -178,9 +250,8 @@ test("build readiness rejects an unapproved requirements draft", async (context)
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-readiness-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
-  const store = new FileStateStore(workspace);
-  await store.writeRecord(record);
-  await store.setCurrentRecord(record.id);
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
 
   const result = await runCli(["readiness", "build", "--root", workspace], workspace);
   assert.equal(result.exitCode, 2);
@@ -222,9 +293,9 @@ test("build readiness records one approved and content-bound decision", async (c
     join(workspace, "requirements.md"),
     await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"),
   );
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
   const store = new FileStateStore(workspace);
-  await store.writeRecord(record);
-  await store.setCurrentRecord(record.id);
 
   await applyContextReceipt(workspace, "requirements-clarification");
   await applyContextReceipt(workspace, "build-readiness");
@@ -263,7 +334,7 @@ test("build readiness records one approved and content-bound decision", async (c
   });
   assert.equal(approved.idea.timebox, "1 working day");
   const events = await new AuditLog(workspace).readAll();
-  assert.deepEqual(events.map(({ eventType }) => eventType), ["STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "CHECKPOINT_APPROVED"]);
+  assert.deepEqual(events.map(({ eventType }) => eventType), ["DELIVERY_FLOW_CREATED", "STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "CHECKPOINT_APPROVED"]);
   assert.deepEqual(events.at(-1) && { checkpoint: events.at(-1)?.checkpoint, from: events.at(-1)?.fromStatus, to: events.at(-1)?.toStatus }, { checkpoint: "commit", from: "DRAFT", to: "COMMITTED" });
 
   const verificationEvidence = ["evidence/tests.txt", "evidence/build.txt", "evidence/security.txt", "evidence/demo.txt"];
@@ -377,6 +448,7 @@ test("build readiness records one approved and content-bound decision", async (c
     { id: "verification", state: "completed" },
     { id: "disposition", state: "completed" },
   ]);
+  assert.equal(auditSummary.timeline[0]?.summary, "Delivery Flow record created");
   assert(auditSummary.timeline.some(({ summary }) => summary === "Requirements approved and Build Readiness passed"));
   assert(auditSummary.timeline.some(({ summary }) => summary === "Verification approved"));
   assert(auditSummary.timeline.some(({ summary }) => summary === "Productization recommended"));
