@@ -1,7 +1,18 @@
 export type DeliveryFlowId = string;
 
-export const ROLE_SLOTS = ["product", "developer", "qa"] as const;
-export type RoleSlot = (typeof ROLE_SLOTS)[number];
+export type RoleSlot = string;
+
+export interface RoleCatalogEntry {
+  id: RoleSlot;
+  name: string;
+  definition: string;
+}
+
+export interface RoleCatalog {
+  schemaVersion: 1;
+  owner: string;
+  roles: RoleCatalogEntry[];
+}
 
 export const POC_STATUSES = [
   "DRAFT",
@@ -128,7 +139,7 @@ export interface PocDeliveryRecord {
   revision: number;
   createdAt: string;
   updatedAt: string;
-  assignments: Record<RoleSlot, string>;
+  assignments: Record<string, string>;
   idea: {
     problem: string;
     hypothesis: string;

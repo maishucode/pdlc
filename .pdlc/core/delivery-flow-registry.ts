@@ -39,6 +39,9 @@ export class DeliveryFlowRegistry {
           ]);
         }
       }
+      for (const [index, checkpoint] of (definition.controls?.checkpoints ?? []).entries()) if (!stages.roles.has(checkpoint.ownerRole)) {
+        throw new PdlcError("UNKNOWN_ROLE_REF", `Delivery Flow ${definition.id} checkpoint ${checkpoint.id} references unregistered Role ${checkpoint.ownerRole}`, [{ code: "UNKNOWN_ROLE_REF", path: `$.controls.checkpoints[${index}].ownerRole`, message: `Role is not registered in the Role Catalog: ${checkpoint.ownerRole}` }]);
+      }
       byId.set(definition.id, definition);
     }
     this.catalog = catalog;
@@ -102,5 +105,12 @@ export class DeliveryFlowRegistry {
         matchedActivationTags,
       }];
     });
+  }
+
+  requiredRoles(id: DeliveryFlowId, activeTags: readonly string[] = []): string[] {
+    const flow = this.get(id);
+    const roles = new Set(this.resolve(id, activeTags).flatMap(({ definition }) => definition.roleSlots));
+    for (const checkpoint of flow.controls?.checkpoints ?? []) roles.add(checkpoint.ownerRole);
+    return [...roles].sort();
   }
 }

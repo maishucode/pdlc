@@ -235,7 +235,7 @@ Context resolution is a system operation before each Stage; it is not itself a S
 
 Discovery alone does not prove application. v2 therefore uses a lightweight two-step contract:
 
-1. `context <stage>` resolves only the requested Stage and returns the exact Policies, Knowledge, Domain contributions, Integrations, and a SHA-256 `contextHash`. This operation is read-only.
+1. `context <stage>` resolves only the requested Stage and returns its registered Role definitions, exact Policies, Knowledge, Domain contributions, Integrations, and a SHA-256 `contextHash`. This operation is read-only.
 2. After the Stage work, the Agent submits a Stage Context Receipt. Policies must be acknowledged. Knowledge, Domain contributions, and Integrations must be marked `used` with evidence references or `not-used` with a reason. The Runner rejects missing assets, unexpected assets, changed Agent/Skill sets, or a stale hash.
 3. The Runner stores the validated Context Application in the Delivery Record and appends a `STAGE_CONTEXT_APPLIED` audit event. Build Readiness requires current applications for `requirements-clarification` and `build-readiness`.
 
@@ -292,7 +292,7 @@ The v2 implementation currently provides:
 - locked-Control versus Default conflict detection;
 - Requirements content-hash approval binding;
 - per-Stage Control enforcement points;
-- hashed Stage Context Receipts covering Policies, Knowledge, Agents, Skills, and Integrations;
+- hashed Stage Context Receipts covering Role definitions, Policies, Knowledge, Agents, Skills, and Integrations;
 - Delivery Record and audit infrastructure;
 - Domain Hook and Integration permission metadata.
 
@@ -300,7 +300,50 @@ Formal `commit`, `verify`, and `decide` state transitions, generalized per-rule 
 
 ## 5. Roles and collaboration
 
-Product owns product intent, Requirements, scope, business rules, acceptance conditions, and approval. Developer owns solution design, implementation, developer verification, and technical evidence. QA owns verification strategy, independent evidence, and acceptance findings. One person may fill multiple slots unless an applicable Control requires separation of duties.
+### 5.1 What a Role means
+
+A Role is a logical delivery-accountability slot. It is not a job title, person, Domain, Agent, or approval group. The Role Catalog at `.pdlc/roles/catalog.json` is the source of truth; each entry points to a human-readable responsibility definition in the same folder.
+
+The initial Roles are Product, Developer, and QA. Product owns product intent, Requirements, scope, business rules, acceptance conditions, and approval. Developer owns solution design, implementation, developer verification, and technical evidence. QA owns verification strategy, independent evidence, and acceptance findings. One person may fill multiple slots unless an applicable Control requires separation of duties.
+
+### 5.2 Relationship to the delivery model
+
+| Concept | Role relationship |
+|---|---|
+| Stage | `roleSlots` declares the accountable or participating Roles for that reusable work unit |
+| Delivery Flow | Active Stages determine required Role assignments; a Checkpoint `ownerRole` declares controlled decision authority |
+| Delivery Record | `assignments` binds each required logical Role to a concrete identity for one delivery |
+| Policy / Control | Control approval and exception approvers are governed identities or groups; they are not implicitly Delivery Roles |
+| Domain | A Domain owns expert content and governance; it does not automatically create a delivery Role |
+| Agent / Skill / Hook | An Agent performs work using Skills when a Hook matches a Stage; it may serve one or more Role responsibilities but is not itself a Role |
+| Knowledge / Integration | Resolved by delivery context and Stage, not by Role membership |
+
+The Runner validates every Stage and Checkpoint Role reference against the Role Catalog. It derives required assignments from the currently active Stages plus Checkpoint owners. The configured POC assignment strategy can therefore bind the Build Readiness actor to every required Role without naming Product, Developer, or QA in Core code.
+
+### 5.3 Role versus expert contribution
+
+Do not create a Role merely because an expert team participates. UX, Solution Architecture, Security, and Data Platform normally contribute through Domain Policies, Knowledge, Skills, Agents, and Hooks. Add a formal Role only when the responsibility needs at least one of the following:
+
+- an explicit identity in every applicable Delivery Record;
+- accountable ownership of a Stage result;
+- independent Checkpoint decision authority;
+- a governed separation-of-duties requirement.
+
+For example, architecture guidance belongs to the Solution Architecture Domain. An `architect` Role is justified only if a Flow requires an assigned Architect or an Architect-owned controlled decision.
+
+### 5.4 Adding a Role
+
+Adding a Role does not require Core, CLI, TypeScript type, or schema-enum changes:
+
+1. Create `.pdlc/roles/<role-id>.md` with the logical responsibilities and boundaries.
+2. Register its id, display name, and definition path in `.pdlc/roles/catalog.json`.
+3. Add the Role id to relevant Stage `roleSlots`.
+4. Optionally use it as a Delivery Flow Checkpoint `ownerRole` when it owns that decision.
+5. Update affected Delivery Record examples or migrations and add a reference/assignment test.
+
+Unknown Role references, missing definition files, unknown Delivery Record assignments, and missing assignments required by an active Flow fail validation or readiness deterministically.
+
+### 5.5 Expert-team collaboration
 
 Expert teams contribute through Domain ownership rather than attending every delivery:
 

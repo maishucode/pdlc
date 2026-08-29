@@ -13,7 +13,6 @@ import {
   REQUIREMENTS_DEPTHS,
   REQUIREMENTS_STATUSES,
   RISK_LEVELS,
-  ROLE_SLOTS,
   STAGE_PHASES,
   type Applicability,
   type ArtifactDefinition,
@@ -30,6 +29,7 @@ import {
   type ProjectBaseline,
   type ProjectDefaultProfile,
   type RequirementsFlowControl,
+  type RoleCatalog,
   type StageCatalog,
   type StageContextReceipt,
   type ValidationIssue,
@@ -38,6 +38,7 @@ import {
 
 type JsonObject = Record<string, unknown>;
 const ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
+const ROLE_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 function isObject(value: unknown): value is JsonObject {
@@ -79,6 +80,12 @@ function string(value: unknown, path: string, issues: ValidationIssue[], allowEm
 function id(value: unknown, path: string, issues: ValidationIssue[]): value is string {
   if (!string(value, path, issues)) return false;
   if (!ID_PATTERN.test(value)) issue(issues, "INVALID_ID", path, "Expected a lowercase kebab-case or domain-qualified id");
+  return true;
+}
+
+function roleId(value: unknown, path: string, issues: ValidationIssue[]): value is string {
+  if (!string(value, path, issues)) return false;
+  if (!ROLE_ID_PATTERN.test(value)) issue(issues, "INVALID_ROLE_ID", path, "Expected a lowercase kebab-case Role id");
   return true;
 }
 
@@ -222,8 +229,12 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
   const requirementsApproved = isObject(record.requirements) && record.requirements.status === "approved";
   const assignments = object(record.assignments, "$.assignments", issues);
   if (assignments) {
-    exact(assignments, ROLE_SLOTS, "$.assignments", issues);
-    ROLE_SLOTS.forEach((role) => string(assignments[role], `$.assignments.${role}`, issues, !requirementsApproved));
+    const entries = Object.entries(assignments);
+    if (entries.length === 0) issue(issues, "ROLE_ASSIGNMENTS_EMPTY", "$.assignments", "Expected at least one registered Role assignment");
+    entries.forEach(([role, identity]) => {
+      roleId(role, `$.assignments.${role}`, issues);
+      string(identity, `$.assignments.${role}`, issues, !requirementsApproved);
+    });
   }
 
   const idea = object(record.idea, "$.idea", issues);
@@ -394,9 +405,7 @@ export function validateStageCatalog(value: unknown): ValidationResult<StageCata
       string(stage.name, `${path}.name`, issues);
       string(stage.description, `${path}.description`, issues);
       if (!STAGE_PHASES.includes(stage.phase as never)) issue(issues, "INVALID_STAGE_PHASE", `${path}.phase`, "Unsupported Stage phase");
-      if (stringArray(stage.roleSlots, `${path}.roleSlots`, issues, 1)) stage.roleSlots.forEach((role, roleIndex) => {
-        if (!ROLE_SLOTS.includes(role as never)) issue(issues, "INVALID_ROLE", `${path}.roleSlots[${roleIndex}]`, "Unsupported role slot");
-      });
+      if (stringArray(stage.roleSlots, `${path}.roleSlots`, issues, 1)) stage.roleSlots.forEach((role, roleIndex) => roleId(role, `${path}.roleSlots[${roleIndex}]`, issues));
       stringArray(stage.requirements, `${path}.requirements`, issues, 1);
       stringArray(stage.outputs, `${path}.outputs`, issues, 1);
       if (stage.inputArtifacts !== undefined) stringArray(stage.inputArtifacts, `${path}.inputArtifacts`, issues);
@@ -480,7 +489,7 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
         const outcomes = object(checkpoint.toByOutcome, `${path}.toByOutcome`, issues);
         if (outcomes) Object.entries(outcomes).forEach(([key, status]) => string(status, `${path}.toByOutcome.${key}`, issues));
       }
-      if (!ROLE_SLOTS.includes(checkpoint.ownerRole as never)) issue(issues, "INVALID_ROLE", `${path}.ownerRole`, "Unsupported role slot");
+      roleId(checkpoint.ownerRole, `${path}.ownerRole`, issues);
     });
     const deliveryDefaults = object(controls.deliveryDefaults, "$.controls.deliveryDefaults", issues);
     if (deliveryDefaults) {
@@ -503,6 +512,35 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
     if (controls.requiredIntegrations !== undefined) stringArray(controls.requiredIntegrations, "$.controls.requiredIntegrations", issues);
   }
   return result<DeliveryFlowDefinition>(value, issues);
+}
+
+export function validateRoleCatalog(value: unknown): ValidationResult<RoleCatalog> {
+  const issues: ValidationIssue[] = [];
+  const catalog = object(value, "$", issues);
+  if (!catalog) return result(value, issues);
+  exact(catalog, ["schemaVersion", "owner", "roles"], "$", issues);
+  if (catalog.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  string(catalog.owner, "$.owner", issues);
+  if (!Array.isArray(catalog.roles) || catalog.roles.length === 0) issue(issues, "EXPECTED_ROLES", "$.roles", "Expected at least one registered Role");
+  else {
+    const ids: string[] = [];
+    const definitions: string[] = [];
+    catalog.roles.forEach((entry, index) => {
+      const path = `$.roles[${index}]`;
+      const role = object(entry, path, issues);
+      if (!role) return;
+      exact(role, ["id", "name", "definition"], path, issues);
+      if (roleId(role.id, `${path}.id`, issues)) ids.push(role.id);
+      string(role.name, `${path}.name`, issues);
+      if (relativePath(role.definition, `${path}.definition`, issues)) {
+        definitions.push(role.definition);
+        if (!role.definition.endsWith(".md")) issue(issues, "INVALID_ROLE_DEFINITION", `${path}.definition`, "Role definition must be a Markdown file");
+      }
+    });
+    if (new Set(ids).size !== ids.length) issue(issues, "DUPLICATE_ROLE", "$.roles", "Role ids must be unique");
+    if (new Set(definitions).size !== definitions.length) issue(issues, "DUPLICATE_ROLE_DEFINITION", "$.roles", "Role definition paths must be unique");
+  }
+  return result<RoleCatalog>(value, issues);
 }
 
 export function validateDomainManifest(value: unknown): ValidationResult<DomainManifest> {

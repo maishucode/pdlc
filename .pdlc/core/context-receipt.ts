@@ -32,6 +32,7 @@ export interface StageContextSnapshot {
   deliveryFlow: string;
   stage: string;
   stageDefinitionHash: string;
+  roles: HashedContextAsset[];
   policies: HashedContextAsset[];
   baselines: HashedContextAsset[];
   defaults: HashedContextAsset[];
@@ -47,6 +48,7 @@ export async function createStageContextSnapshot(input: {
   deliveryFlow: string;
   stage: string;
   stageDefinition: StageDefinition;
+  roles: Array<{ id: string; path: string }>;
   controls: ResolvedControl[];
   baselines: ResolvedBaseline[];
   defaults: ResolvedStandardDefault[];
@@ -56,6 +58,7 @@ export async function createStageContextSnapshot(input: {
   integrations: ResolvedIntegration[];
 }): Promise<StageContextSnapshot> {
   const policies = input.controls.map(({ ref, policy }) => ({ ref, hash: sha256(policy) })).sort(byRef);
+  const roles = await Promise.all(input.roles.map(async ({ id, path }) => ({ ref: id, hash: sha256(await readFile(path, "utf8")) })));
   const baselines = input.baselines.map(({ ref, baseline }) => ({ ref, hash: sha256(baseline) })).sort(byRef);
   const defaults = input.defaults.map((entry) => ({ ref: `${entry.sourceRef}:${entry.key}`, hash: sha256(entry) })).sort(byRef);
   const domainKnowledge = await Promise.all(input.knowledge.map(async ({ ref, asset, contentPath }) => ({
@@ -95,6 +98,7 @@ export async function createStageContextSnapshot(input: {
     deliveryFlow: input.deliveryFlow,
     stage: input.stage,
     stageDefinitionHash: sha256(input.stageDefinition),
+    roles: roles.sort(byRef),
     policies,
     baselines,
     defaults,

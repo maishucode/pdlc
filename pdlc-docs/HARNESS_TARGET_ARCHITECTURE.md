@@ -8,14 +8,15 @@ The target architecture uses a small set of concepts:
 
 1. `Delivery Flow` is the only lifecycle composition model. There is no separate Workflow or User Journey.
 2. A `Stage` is a reusable unit of delivery work and is not automatically an approval gate.
-3. A `Domain` is an expert-team ownership boundary.
-4. Domain content is direct and type-specific: Artifacts, Policies, Knowledge, Skills, Agents, and Hooks.
-5. A `Policy` is an authored mandatory rule. When applicable, it enters the effective Control chain.
-6. An `Integration` is a top-level external-system package, not a Domain capability or Plugin.
-7. Integrations may bundle Skills so existing JIRA, Xray, Databricks, and similar system procedures can be reused.
-8. A `Project Overlay` supplies approved project facts, project Policies, Defaults, and local Knowledge.
-9. The Runner performs deterministic resolution, readiness, state, and audit behavior. The Agent provides the conversation and delivery work.
-10. Governance is expressed through ownership metadata, CODEOWNERS, schemas, approvals, and tests rather than a separate runtime layer.
+3. A `Role` is a cataloged logical accountability slot referenced by Stages, Checkpoints, and Delivery Record assignments.
+4. A `Domain` is an expert-team ownership boundary.
+5. Domain content is direct and type-specific: Artifacts, Policies, Knowledge, Skills, Agents, and Hooks.
+6. A `Policy` is an authored mandatory rule. When applicable, it enters the effective Control chain.
+7. An `Integration` is a top-level external-system package, not a Domain capability or Plugin.
+8. Integrations may bundle Skills so existing JIRA, Xray, Databricks, and similar system procedures can be reused.
+9. A `Project Overlay` supplies approved project facts, project Policies, Defaults, and local Knowledge.
+10. The Runner performs deterministic resolution, readiness, state, and audit behavior. The Agent provides the conversation and delivery work.
+11. Governance is expressed through ownership metadata, CODEOWNERS, schemas, approvals, and tests rather than a separate runtime layer.
 
 There is no `Principle Pack`, `Plugin`, or generic `Capability` runtime concept in v2.
 
@@ -27,6 +28,7 @@ Delivery Flow
   -> owns checkpoints, constraints, role behavior, and timebox
 
 Stage entry
+  -> resolves registered Role definitions for the current Stage
   -> resolves Domain and Project Policies into the Control set
   -> applies Project Baselines and resolved Defaults
   -> retrieves relevant Domain and Project Knowledge
@@ -171,6 +173,8 @@ Project configuration cannot introduce hidden Integrations, replace shared Domai
   domains/
   integrations/
   roles/
+    catalog.json
+    <role-id>.md
   schemas/
   platform-adapters/
   examples/

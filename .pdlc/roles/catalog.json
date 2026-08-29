@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "owner": "pdlc-governance",
+  "roles": [
+    { "id": "product", "name": "Product", "definition": "product.md" },
+    { "id": "developer", "name": "Developer", "definition": "developer.md" },
+    { "id": "qa", "name": "QA", "definition": "qa.md" }
+  ]
+}

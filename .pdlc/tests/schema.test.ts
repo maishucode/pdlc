@@ -15,6 +15,7 @@ import {
   validatePocDeliveryRecord,
   validateProjectDefaultProfile,
   validateRequirementsFlowControl,
+  validateRoleCatalog,
   validateStageCatalog,
   validateStageContextReceipt,
 } from "../core/schema.ts";
@@ -76,6 +77,12 @@ test("validates the explicit Delivery Flow Catalog and registered Flows", async 
     const result = validateDeliveryFlowDefinition(await json(join(projectRoot, `.pdlc/delivery-flows/${id}/flow.json`)));
     assert.equal(result.ok, true, `${id}: ${JSON.stringify(result.issues)}`);
   }
+});
+
+test("validates the explicit Role Catalog", async () => {
+  const result = validateRoleCatalog(await json(join(projectRoot, ".pdlc/roles/catalog.json")));
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+  if (result.ok) assert.deepEqual(result.value.roles.map(({ id }) => id), ["product", "developer", "qa"]);
 });
 
 test("validates representative Domain assets", async () => {

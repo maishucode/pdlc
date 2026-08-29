@@ -6,6 +6,7 @@ The v2 architecture is intentionally small:
 
 - A **Stage** is a reusable work unit.
 - A **Delivery Flow** composes Stages and owns lifecycle controls such as checkpoints, constraints, role-assignment behavior, and timebox.
+- A **Role** is a cataloged logical accountability slot used by Stages, Checkpoints, and Delivery Record assignments.
 - A **Domain** is the expert-team ownership boundary for Artifacts, mandatory Policies, advisory Knowledge, Skills, Agents, and Hooks.
 - An **Integration** is a cataloged external-system connection such as JIRA, Xray, or Databricks. It may bundle Skills and always declares ownership and permissions.
 - A **Project Overlay** records approved project decisions and project-specific additions without copying the shared Harness.
@@ -68,6 +69,10 @@ The four context channels remain separate because they have different semantics:
     catalog.json
     databricks/integration.json
   roles/
+    catalog.json
+    product.md
+    developer.md
+    qa.md
   schemas/
   core/
   tests/
@@ -120,7 +125,7 @@ bun .pdlc/cli.ts domain sync --root <project>
 bun .pdlc/cli.ts integration list
 ```
 
-`context` is the normal Stage-resolution API. It returns Controls, Baselines, Defaults, Knowledge, Domain contributions, Integrations, and a deterministic `contextHash`. It remains read-only and resolves only the requested Stage. After the Stage work, `context-apply` records an evidence-backed receipt for what was applied or intentionally not used. Build Readiness rejects missing or stale receipts for the requirements and readiness Stages. `guidance` is the narrower Domain-contribution view.
+`context` is the normal Stage-resolution API. It returns the current Stage's registered Roles, Controls, Baselines, Defaults, Knowledge, Domain contributions, Integrations, and a deterministic `contextHash`. It remains read-only and resolves only the requested Stage. After the Stage work, `context-apply` records an evidence-backed receipt for what was applied or intentionally not used. Build Readiness rejects missing or stale receipts for the requirements and readiness Stages. `guidance` is the narrower Domain-contribution view.
 
 This assurance does not add startup questions, network calls, or a full-Harness scan. The Runner hashes only the already-resolved local files for the current Stage, and receipt persistence happens after Stage work rather than before the first clarification round.
 
@@ -128,6 +133,7 @@ This assurance does not add startup questions, network calls, or a full-Harness 
 
 - New Stage: add it once to `.pdlc/stages/catalog.json`, then reference it from registered Delivery Flows and applicable Domain assets.
 - New Delivery Flow: create `.pdlc/delivery-flows/<id>/flow.json` and explicitly register it in `.pdlc/delivery-flows/catalog.json`.
+- New Role: add its definition under `.pdlc/roles/`, register it in `.pdlc/roles/catalog.json`, and reference it from the relevant Stage or Checkpoint. Core code does not change.
 - New mandatory Policy or Knowledge asset: place it in the owning Domain and declare applicability metadata.
 - New expert behavior: add a Skill or Agent directly under the Domain and bind it to Stages through `hooks/`.
 - New external system: create `.pdlc/integrations/<id>/integration.json`, optionally include `skills/`, and register it in `.pdlc/integrations/catalog.json`.

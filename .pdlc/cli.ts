@@ -12,6 +12,7 @@ import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsFlowControl } from "./core/requirements.ts";
+import { RoleRegistry, type ResolvedRole } from "./core/role-registry.ts";
 import { validatePocDeliveryRecord, validateStageContextReceipt } from "./core/schema.ts";
 import { FileStateStore } from "./core/state.ts";
 import { StageRegistry } from "./core/stage-registry.ts";
@@ -61,12 +62,13 @@ function contextTags(record: PocDeliveryRecord): string[] {
 }
 
 async function loadHarnessModel(projectRoot = HARNESS_ROOT) {
-  const stages = await StageRegistry.load(join(HARNESS_ROOT, ".pdlc", "stages", "catalog.json"));
+  const roles = await RoleRegistry.load(join(HARNESS_ROOT, ".pdlc", "roles", "catalog.json"));
+  const stages = await StageRegistry.load(join(HARNESS_ROOT, ".pdlc", "stages", "catalog.json"), roles);
   const deliveryFlows = await DeliveryFlowRegistry.load(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "catalog.json"), stages);
   const domains = await DomainRegistry.load(join(HARNESS_ROOT, ".pdlc", "domains"));
   const integrations = await IntegrationRegistry.load(join(HARNESS_ROOT, ".pdlc", "integrations", "catalog.json"));
   const project = await ProjectOverlay.load(projectRoot, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  return { stages, deliveryFlows, domains, integrations, project };
+  return { roles, stages, deliveryFlows, domains, integrations, project };
 }
 
 function unknownStageReferences(stages: StageRegistry, sources: Array<{ source: string; stageIds?: string[] }>): ValidationIssue[] {
@@ -89,11 +91,13 @@ interface ResolvedStageMaterial {
   domainGuidance: DomainGuidanceResolution;
   snapshot: StageContextSnapshot;
   project: ProjectOverlay;
+  roles: ResolvedRole[];
 }
 
 async function resolveStageMaterial(options: CliOptions, stageId: string, record?: PocDeliveryRecord): Promise<ResolvedStageMaterial> {
-  const { stages, domains, integrations, project } = await loadHarnessModel(options.root);
+  const { roles, stages, domains, integrations, project } = await loadHarnessModel(options.root);
   const stage = stages.get(stageId);
+  const stageRoles = stage.roleSlots.map((role) => roles.get(role));
   const deliveryFlow = record?.deliveryFlow ?? "poc";
   const resolved = resolveDomainContext(domains, integrations, project, {
     deliveryFlow,
@@ -110,6 +114,7 @@ async function resolveStageMaterial(options: CliOptions, stageId: string, record
     deliveryFlow,
     stage: stageId,
     stageDefinition: stage,
+    roles: stageRoles,
     controls: resolved.controls,
     baselines: resolved.baselines,
     defaults: resolved.defaults,
@@ -118,7 +123,7 @@ async function resolveStageMaterial(options: CliOptions, stageId: string, record
     domainGuidance,
     integrations: resolved.integrations,
   });
-  return { deliveryFlow, stage, resolved, domainGuidance, snapshot, project };
+  return { deliveryFlow, stage, resolved, domainGuidance, snapshot, project, roles: stageRoles };
 }
 
 function requiredContextIssues(record: PocDeliveryRecord, stages: string[], snapshots: Map<string, StageContextSnapshot>): ValidationIssue[] {
@@ -136,10 +141,11 @@ function requiredContextIssues(record: PocDeliveryRecord, stages: string[], snap
 async function readiness(options: CliOptions, target?: string): Promise<unknown> {
   if (target !== "build") throw new PdlcError("INVALID_ARGUMENT", "Readiness target must be 'build'");
   const original = await readRecord(options);
-  const { deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
+  const { roles, deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
   const flow = deliveryFlows.getExecutable("poc");
   let record = original;
   const activeStages = deliveryFlows.resolve(flow.id, contextTags(record)).map(({ definition }) => definition.id);
+  const requiredRoles = deliveryFlows.requiredRoles(flow.id, contextTags(record));
   const resolution = resolveDomainContext(domains, integrations, project, {
     deliveryFlow: flow.id,
     stages: activeStages,
@@ -166,7 +172,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
       ...original,
       revision: original.revision + 1,
       updatedAt: timestamp,
-      assignments: { product: options.actor, developer: options.actor, qa: options.actor },
+      assignments: Object.fromEntries(requiredRoles.map((role) => [role, options.actor])),
       idea: { ...original.idea, timebox: flow.controls.deliveryDefaults.timebox },
       requirements: { ...original.requirements, status: "approved", approvedBy: options.actor, approvedAt: timestamp, approvedContentHash },
       resolution: {
@@ -180,6 +186,9 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     };
   }
 
+  const roleIssues = roles.validateAssignments(record, requiredRoles);
+  if (roleIssues.length > 0) throw new PdlcError("BUILD_NOT_READY", "Required Delivery Flow Roles are not assigned", roleIssues);
+
   const receiptStages = ["requirements-clarification", "build-readiness"];
   const receiptSnapshots = new Map<string, StageContextSnapshot>();
   for (const stageId of receiptStages) receiptSnapshots.set(stageId, (await resolveStageMaterial(options, stageId, record)).snapshot);
@@ -187,7 +196,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
   if (contextIssues.length > 0) throw new PdlcError("BUILD_NOT_READY", "Required Stage context has not been applied or is stale", contextIssues);
 
   const policy = await loadRequirementsFlowControl(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
-  const result = await assessPocBuildReadiness(record, options.root, resolution.controls, policy, resolution.defaults);
+  const result = await assessPocBuildReadiness(record, options.root, resolution.controls, policy, resolution.defaults, requiredRoles);
   if (!result.ok) throw new PdlcError("BUILD_NOT_READY", "POC requirements or mandatory Controls are not ready for build", result.issues);
   if (options.actor) {
     await new FileStateStore(options.root).writeRecord(record, original.revision);
@@ -231,12 +240,13 @@ async function stageContext(options: CliOptions, stageId?: string): Promise<unkn
   try { record = await readRecord(options); } catch (error) {
     if (!(error instanceof PdlcError) || error.code !== "CURRENT_RECORD_NOT_SET") throw error;
   }
-  const { deliveryFlow, stage, resolved, domainGuidance, snapshot, project } = await resolveStageMaterial(options, stageId, record);
+  const { deliveryFlow, stage, resolved, domainGuidance, snapshot, project, roles } = await resolveStageMaterial(options, stageId, record);
   return {
     ok: true,
     deliveryFlow,
     stage,
     contextHash: snapshot.contextHash,
+    roles: roles.map(({ id, name, path }) => ({ id, name, path: relative(HARNESS_ROOT, path) })),
     controls: resolved.controls.map(({ ref, ownerDomain, source, policy }) => ({ ref, ownerDomain, source, rules: policy.rules })),
     baselines: resolved.baselines.map(({ ref, baseline }) => ({ ref, decisions: baseline.decisions })),
     defaults: resolved.defaults,
@@ -368,7 +378,7 @@ async function integrationList(): Promise<unknown> {
 
 async function validate(options: CliOptions): Promise<unknown> {
   const checks: Record<string, unknown> = {};
-  const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "domain-stage-hooks", "integration-catalog", "integration", "knowledge-metadata", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "stage-catalog", "stage-context-receipt"];
+  const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "domain-stage-hooks", "integration-catalog", "integration", "knowledge-metadata", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "role-catalog", "stage-catalog", "stage-context-receipt"];
   for (const schemaName of schemaNames) {
     const path = join(HARNESS_ROOT, ".pdlc", "schemas", `${schemaName}.schema.json`);
     const schema = JSON.parse(await readFile(path, "utf8")) as { $schema?: unknown; type?: unknown };
@@ -376,7 +386,8 @@ async function validate(options: CliOptions): Promise<unknown> {
   }
   checks.schemas = { ok: true, loaded: schemaNames };
 
-  const { stages, deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
+  const { roles, stages, deliveryFlows, domains, integrations, project } = await loadHarnessModel(options.root);
+  checks.roles = { ok: true, owner: roles.catalog.owner, loaded: roles.list().map(({ id, name, definition }) => ({ id, name, definition })) };
   checks.deliveryModel = { ok: true, catalogVersion: stages.catalog.catalogVersion, canonicalStages: stages.list().length, catalog: deliveryFlows.catalog.flows, deliveryFlows: deliveryFlows.list().map(({ id, status, stageSequence }) => ({ id, status, stageCount: stageSequence.length })) };
   checks.domains = { ok: true, loaded: domains.list().map(({ manifest, artifacts, policies, knowledge, skills, agents, hooks }) => ({ id: manifest.id, artifacts: artifacts.length, policies: policies.length, knowledge: knowledge.length, skills: skills.length, agents: agents.length, hooks: hooks.length })) };
   checks.integrations = { ok: true, loaded: integrations.list().map(({ manifest }) => ({ ref: `${manifest.id}@${manifest.version}`, owners: manifest.owners, skills: manifest.skills.map(({ id }) => id) })) };
@@ -406,6 +417,10 @@ async function validate(options: CliOptions): Promise<unknown> {
   checks.record = { ok: recordValidation.ok, source: recordSource, issues: recordValidation.issues };
   if (!recordValidation.ok) throw new PdlcError("VALIDATION_FAILED", `Invalid Delivery Record: ${recordSource}`, recordValidation.issues);
   const activeStages = deliveryFlows.resolve(recordValidation.value.deliveryFlow, contextTags(recordValidation.value)).map(({ definition }) => definition.id);
+  const requiredRoles = deliveryFlows.requiredRoles(recordValidation.value.deliveryFlow, contextTags(recordValidation.value));
+  const roleIssues = roles.validateAssignments(recordValidation.value, requiredRoles, recordValidation.value.requirements.status === "approved");
+  checks.roleAssignments = { ok: roleIssues.length === 0, required: requiredRoles, assigned: Object.keys(recordValidation.value.assignments).sort(), issues: roleIssues };
+  if (roleIssues.length > 0) throw new PdlcError("VALIDATION_FAILED", "Delivery Record contains invalid or missing Role assignments", roleIssues);
   const resolution = resolveDomainContext(domains, integrations, project, { deliveryFlow: recordValidation.value.deliveryFlow, stages: activeStages, riskTriggers: recordValidation.value.risk.triggers, technologies: recordValidation.value.design.technologies, domains: recordValidation.value.design.domains });
   checks.resolution = { ok: resolution.issues.length === 0, controls: resolution.controls.map(({ ref }) => ref), defaults: resolution.defaults.map(({ key, sourceRef }) => ({ key, sourceRef })), knowledge: resolution.knowledge.map(({ ref }) => ref), baselines: resolution.baselines.map(({ ref }) => ref), integrations: resolution.integrations.map(({ ref }) => ref), issues: resolution.issues };
   if (resolution.issues.length > 0) throw new PdlcError("VALIDATION_FAILED", "Domain context contains unresolved conflicts", resolution.issues);

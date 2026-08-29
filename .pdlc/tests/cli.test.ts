@@ -148,6 +148,7 @@ test("resolves Stage context without writing runtime state and rejects stale rec
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+  assert.deepEqual((result.output as { roles: Array<{ id: string }> }).roles.map(({ id }) => id), ["product", "developer", "qa"]);
   await assert.rejects(readFile(join(workspace, ".pdlc/runtime/current"), "utf8"));
 
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;

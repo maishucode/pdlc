@@ -46,7 +46,8 @@ export async function assessPocBuildReadiness(
   workspaceRoot: string,
   controls: ResolvedControl[],
   policy: RequirementsFlowControl,
-  standardDefaults: ResolvedStandardDefault[] = [],
+  standardDefaults: ResolvedStandardDefault[],
+  requiredRoles: readonly string[],
 ): Promise<BuildReadinessResult> {
   const enforcementStage = "build-readiness";
   const issues: ValidationIssue[] = [];
@@ -61,8 +62,8 @@ export async function assessPocBuildReadiness(
   if (!record.requirements.approvedBy || !record.requirements.approvedAt) {
     issues.push(issue("REQUIREMENTS_APPROVAL_MISSING", "$.requirements", "Approved requirements must identify the approver and approval time"));
   }
-  for (const role of ["product", "developer", "qa"] as const) {
-    if (!record.assignments[role].trim()) issues.push(issue("ROLE_ASSIGNMENT_MISSING", `$.assignments.${role}`, `The ${role} role must be assigned before build`));
+  for (const role of requiredRoles) {
+    if (!record.assignments[role]?.trim()) issues.push(issue("ROLE_ASSIGNMENT_MISSING", `$.assignments.${role}`, `The ${role} role must be assigned before build`));
   }
   for (const field of ["problem", "hypothesis", "expectedOutcome", "timebox"] as const) {
     if (!record.idea[field].trim()) issues.push(issue("IDEA_FIELD_MISSING", `$.idea.${field}`, `${field} must be confirmed before build`));

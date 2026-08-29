@@ -27,7 +27,12 @@ export type PdlcErrorCode =
   | "INTEGRATION_SKILL_NOT_FOUND"
   | "INTEGRATION_NOT_FOUND"
   | "CONTEXT_RESOLUTION_FAILED"
-  | "CONTEXT_RECEIPT_INVALID";
+  | "CONTEXT_RECEIPT_INVALID"
+  | "DUPLICATE_ROLE"
+  | "UNKNOWN_ROLE_REF"
+  | "ROLE_NOT_FOUND"
+  | "ROLE_DEFINITION_NOT_FOUND"
+  | "INVALID_ROLE_DEFINITION";
 
 export class PdlcError extends Error {
   readonly code: PdlcErrorCode;

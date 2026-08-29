@@ -58,7 +58,10 @@
       "format": "date-time"
     },
     "assignments": {
-      "type": "object"
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "type": "string" }
     },
     "idea": {
       "type": "object"

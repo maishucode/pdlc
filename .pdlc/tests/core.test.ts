@@ -11,6 +11,7 @@ import { PdlcError } from "../core/errors.ts";
 import { IntegrationRegistry } from "../core/integration-registry.ts";
 import { acquireLock } from "../core/lock.ts";
 import { ProjectOverlay } from "../core/project-overlay.ts";
+import { RoleRegistry } from "../core/role-registry.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "../core/readiness.ts";
 import { loadRequirementsFlowControl } from "../core/requirements.ts";
 import { FileStateStore } from "../core/state.ts";
@@ -31,13 +32,39 @@ async function temporaryWorkspace(): Promise<{ path: string; cleanup(): Promise<
 }
 
 async function model(project = projectRoot) {
-  const stages = await StageRegistry.load(join(projectRoot, ".pdlc/stages/catalog.json"));
+  const roles = await RoleRegistry.load(join(projectRoot, ".pdlc/roles/catalog.json"));
+  const stages = await StageRegistry.load(join(projectRoot, ".pdlc/stages/catalog.json"), roles);
   const flows = await DeliveryFlowRegistry.load(join(projectRoot, ".pdlc/delivery-flows/catalog.json"), stages);
   const domains = await DomainRegistry.load(join(projectRoot, ".pdlc/domains"));
   const integrations = await IntegrationRegistry.load(join(projectRoot, ".pdlc/integrations/catalog.json"));
   const overlay = await ProjectOverlay.load(project, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  return { stages, flows, domains, integrations, overlay };
+  return { roles, stages, flows, domains, integrations, overlay };
 }
+
+test("loads registered Roles and derives Delivery Flow accountability dynamically", async () => {
+  const { roles, flows } = await model();
+  assert.deepEqual(roles.list().map(({ id }) => id), ["developer", "product", "qa"]);
+  assert.deepEqual(flows.requiredRoles("poc", ["technology:web-ui"]), ["developer", "product", "qa"]);
+});
+
+test("adds a new Role through catalogs without changing Core code", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  const rolesRoot = join(workspace.path, "roles");
+  const flowsRoot = join(workspace.path, "flows");
+  await mkdir(join(flowsRoot, "architecture-review"), { recursive: true });
+  await mkdir(rolesRoot, { recursive: true });
+  await writeFile(join(rolesRoot, "architect.md"), "# Architect role\n\nOwn the architecture decision.\n");
+  await writeFile(join(rolesRoot, "catalog.json"), JSON.stringify({ schemaVersion: 1, owner: "pdlc-governance", roles: [{ id: "architect", name: "Architect", definition: "architect.md" }] }));
+  await writeFile(join(workspace.path, "stages.json"), JSON.stringify({ schemaVersion: 2, catalogVersion: "2.0.0", owner: "pdlc-governance", stages: [{ id: "architecture-review", name: "Architecture review", description: "Review the material architecture decision.", phase: "design", roleSlots: ["architect"], requirements: ["Record the decision."], outputs: ["architecture-decision"] }] }));
+  await writeFile(join(flowsRoot, "catalog.json"), JSON.stringify({ schemaVersion: 1, owner: "pdlc-governance", flows: [{ id: "architecture-review", definition: "architecture-review/flow.json" }] }));
+  await writeFile(join(flowsRoot, "architecture-review/flow.json"), JSON.stringify({ schemaVersion: 2, id: "architecture-review", name: "Architecture Review", description: "A minimal Role extensibility test.", status: "active", stageSequence: [{ stageId: "architecture-review", inclusion: "required" }], controls: { initialStatus: "DRAFT", terminalStatuses: ["COMMITTED"], checkpoints: [{ id: "commit", from: ["DRAFT"], to: "COMMITTED", ownerRole: "architect" }], deliveryDefaults: { roleAssignmentMode: "approval-actor-all-roles", timebox: "1 working day", collectDuringRequirements: false }, constraints: { productionUse: false, externalIntegrations: [], allowSinglePersonAllRoles: true } } }));
+
+  const roles = await RoleRegistry.load(join(rolesRoot, "catalog.json"));
+  const stages = await StageRegistry.load(join(workspace.path, "stages.json"), roles);
+  const flows = await DeliveryFlowRegistry.load(join(flowsRoot, "catalog.json"), stages);
+  assert.deepEqual(flows.requiredRoles("architecture-review"), ["architect"]);
+});
 
 test("loads only explicitly cataloged Delivery Flows and resolves conditional Stages", async () => {
   const { stages, flows } = await model();
@@ -168,7 +195,7 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   const resolved = resolveDomainContext(domains, integrations, overlay, { deliveryFlow: "poc", stages: activeStages, riskTriggers: record.risk.triggers, technologies: record.design.technologies });
   const policy = await loadRequirementsFlowControl(join(projectRoot, ".pdlc/delivery-flows/poc/controls/requirements.json"));
 
-  const blocked = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);
+  const blocked = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults, flows.requiredRoles("poc", ["technology:web-ui", "risk:sensitive-data"]));
   assert(blocked.issues.some(({ code }) => code === "REQUIREMENTS_NOT_APPROVED"));
 
   record.requirements.status = "approved";
@@ -185,12 +212,12 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   }));
   await writeFile(join(workspace.path, "requirements.md"), await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"));
   record.requirements.approvedContentHash = await hashRequirementsDocument(workspace.path, record.requirements.documentRef);
-  const ready = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);
+  const ready = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults, flows.requiredRoles("poc", ["technology:web-ui", "risk:sensitive-data"]));
   assert.deepEqual(ready.issues, []);
   assert.equal(ready.ok, true);
 
   await writeFile(join(workspace.path, "requirements.md"), "changed after approval");
-  const changed = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);
+  const changed = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults, flows.requiredRoles("poc", ["technology:web-ui", "risk:sensitive-data"]));
   assert(changed.issues.some(({ code }) => code === "REQUIREMENTS_CHANGED_AFTER_APPROVAL"));
 });
 

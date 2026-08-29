@@ -56,12 +56,11 @@
           },
           "roleSlots": {
             "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
             "items": {
-              "enum": [
-                "product",
-                "developer",
-                "qa"
-              ]
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
             }
           },
           "requirements": {
