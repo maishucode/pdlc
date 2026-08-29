@@ -10,6 +10,41 @@ import type { PocDeliveryRecord } from "../core/types.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 
+interface ContextOutput {
+  contextHash: string;
+  controls: Array<{ ref: string }>;
+  knowledge: Array<{ ref: string }>;
+  domainContributions: Array<{ domain: string; version: string; agent: { id: string }; skills: Array<{ name: string }> }>;
+  integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
+}
+
+async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent"): Promise<void> {
+  const context = await runCli(["context", stage, "--root", workspace], workspace);
+  assert.equal(context.exitCode, 0, JSON.stringify(context.output));
+  const output = context.output as ContextOutput;
+  const evidenceRefs = ["requirements.md"];
+  const receipt = {
+    schemaVersion: 1,
+    stage,
+    contextHash: output.contextHash,
+    policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref} while performing ${stage}.` })),
+    knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs })),
+    domainContributions: output.domainContributions.map(({ domain, version, agent, skills }) => ({
+      ref: `${domain}@${version}:${agent.id}`,
+      agent: agent.id,
+      skills: skills.map(({ name }) => name),
+      disposition: "used",
+      notes: `Executed ${agent.id} guidance for ${stage}.`,
+      evidenceRefs,
+    })),
+    integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs })),
+  };
+  const receiptPath = `receipt-${stage}.json`;
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const applied = await runCli(["context-apply", stage, "--root", workspace, "--receipt", receiptPath, "--actor", actor], workspace);
+  assert.equal(applied.exitCode, 0, JSON.stringify(applied.output));
+}
+
 test("status is safe when no record is active", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-cli-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
@@ -80,7 +115,7 @@ test("build readiness records one approved and content-bound decision", async (c
     "security.sensitive-data@1.0.0",
     "solution-architecture.reversible-delivery@1.0.0",
     "ux.experience-quality@1.0.0",
-  ].map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.` }));
+  ].map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.`, evidenceRefs: ["requirements.md"], approvedBy: "product-owner" }));
   await writeFile(
     join(workspace, "requirements.md"),
     await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"),
@@ -88,6 +123,9 @@ test("build readiness records one approved and content-bound decision", async (c
   const store = new FileStateStore(workspace);
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
+
+  await applyContextReceipt(workspace, "requirements-clarification");
+  await applyContextReceipt(workspace, "build-readiness");
 
   const result = await runCli(["readiness", "build", "--root", workspace, "--actor", "product-owner"], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
@@ -101,5 +139,25 @@ test("build readiness records one approved and content-bound decision", async (c
     qa: "product-owner",
   });
   assert.equal(approved.idea.timebox, "1 working day");
-  assert.equal((await new AuditLog(workspace).readAll())[0]?.eventType, "BUILD_READINESS_APPROVED");
+  const events = await new AuditLog(workspace).readAll();
+  assert.deepEqual(events.map(({ eventType }) => eventType), ["STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "BUILD_READINESS_APPROVED"]);
+});
+
+test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-context-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const result = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
+  assert.equal(result.exitCode, 0, JSON.stringify(result.output));
+  await assert.rejects(readFile(join(workspace, ".pdlc/runtime/current"), "utf8"));
+
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const store = new FileStateStore(workspace);
+  await store.writeRecord(record);
+  await store.setCurrentRecord(record.id);
+  const output = result.output as ContextOutput;
+  const receiptPath = "stale-receipt.json";
+  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 1, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], domainContributions: [], integrations: [] }));
+  const applied = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(applied.exitCode, 2);
+  assert.equal((applied.output as { error: { code: string } }).error.code, "CONTEXT_RECEIPT_INVALID");
 });

@@ -165,7 +165,7 @@ The Harness control model is a chain of distinct authorities. They are evaluated
                 |
                 v
 7. Effective Control Set
-   Control rules + enforcement mode + required evidence
+   Control rules + enforcement mode + enforcement Stage + required evidence
    + exception approvers + provenance
                 |
                 v
@@ -175,7 +175,7 @@ The Harness control model is a chain of distinct authorities. They are evaluated
                 |
                 v
 9. Evidence, Exception, Checkpoint, and Audit
-   Persist applications and references in the Delivery Record;
+   Persist hashed Stage Context Applications and Control applications in the Delivery Record;
    evaluate Checkpoints and append audit events
 ```
 
@@ -225,12 +225,23 @@ Before every Stage, the Runner must:
 6. Resolve Project Baselines and Defaults and reject Control conflicts.
 7. Produce one provenance-rich effective Control set.
 8. Return Controls separately from Knowledge, Domain contributions, and Integrations.
-9. Require the Agent or Runner to satisfy, evidence, approve, or formally except each applicable obligation at the appropriate point.
-10. Persist Control applications, exception references, evidence, Checkpoint decisions, content hashes, and audit events.
+9. Require the Agent or Runner to satisfy, evidence, approve, or formally except each applicable obligation at its declared `enforceAt` Stage.
+10. After Stage work, validate a receipt against the exact resolved asset set and content hash; record Knowledge, Agent, Skill, and Integration use or an explained `not-used` disposition.
+11. Persist Context Applications, Control applications, exception references, evidence, Checkpoint decisions, content hashes, and audit events.
 
 Context resolution is a system operation before each Stage; it is not itself a Stage.
 
-### 4.5 Enforcement modes and failure behavior
+### 4.5 Stage Context assurance
+
+Discovery alone does not prove application. v2 therefore uses a lightweight two-step contract:
+
+1. `context <stage>` resolves only the requested Stage and returns the exact Policies, Knowledge, Domain contributions, Integrations, and a SHA-256 `contextHash`. This operation is read-only.
+2. After the Stage work, the Agent submits a Stage Context Receipt. Policies must be acknowledged. Knowledge, Domain contributions, and Integrations must be marked `used` with evidence references or `not-used` with a reason. The Runner rejects missing assets, unexpected assets, changed Agent/Skill sets, or a stale hash.
+3. The Runner stores the validated Context Application in the Delivery Record and appends a `STAGE_CONTEXT_APPLIED` audit event. Build Readiness requires current applications for `requirements-clarification` and `build-readiness`.
+
+This mechanism provides deterministic provenance and evidence; it does not claim to inspect an Agent's hidden reasoning. It keeps startup fast because it performs no network access, loads no future Stage, adds no user question, and writes the receipt only after current-Stage work. A typical current-Stage context call remains a small local-file operation.
+
+### 4.6 Enforcement modes and failure behavior
 
 A Domain or Project Control rule declares one of these enforcement modes:
 
@@ -250,7 +261,9 @@ If an applicable Control cannot be satisfied:
 
 Harness Invariants do not use the delivery-level Control exception mechanism. Failing an invariant blocks execution until the Harness definition, state, or referenced asset is corrected.
 
-### 4.6 Provenance and review surface
+Each rule also declares `enforceAt`. Applicability determines whether the Policy belongs to the delivery context; `enforceAt` determines the Stage at which its automatic check, evidence, or approval becomes blocking. For example, UX implementation evidence is not demanded during Requirements or Build Readiness.
+
+### 4.7 Provenance and review surface
 
 Control reviewers should be able to trace every effective obligation to its source:
 
@@ -262,11 +275,12 @@ Control reviewers should be able to trace every effective obligation to its sour
 | Enterprise professional Policies | `.pdlc/domains/<domain>/policies/` |
 | Project Policies and Baselines | `pdlc/config/domains/<domain>/` |
 | Effective applications and exceptions | Delivery Record `resolution.controls` |
+| Resolved asset use and freshness | Delivery Record `resolution.contextApplications` and `STAGE_CONTEXT_APPLIED` audit events |
 | Evidence and controlled decisions | Delivery Record evidence, Checkpoint data, and append-only audit events |
 
 The final Requirements Artifact or readiness summary must disclose applicable Controls, Baselines, Defaults, exceptions, and provenance. Automatic resolution must not become hidden control application.
 
-### 4.7 Current v2 enforcement status
+### 4.8 Current v2 enforcement status
 
 The v2 implementation currently provides:
 
@@ -277,6 +291,8 @@ The v2 implementation currently provides:
 - enterprise and Project Control resolution;
 - locked-Control versus Default conflict detection;
 - Requirements content-hash approval binding;
+- per-Stage Control enforcement points;
+- hashed Stage Context Receipts covering Policies, Knowledge, Agents, Skills, and Integrations;
 - Delivery Record and audit infrastructure;
 - Domain Hook and Integration permission metadata.
 

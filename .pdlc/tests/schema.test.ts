@@ -16,6 +16,7 @@ import {
   validateProjectDefaultProfile,
   validateRequirementsFlowControl,
   validateStageCatalog,
+  validateStageContextReceipt,
 } from "../core/schema.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
@@ -42,6 +43,20 @@ test("enforces the Harness and project workspace ownership boundary", async () =
 
 test("validates the canonical v2 Delivery Record", async () => {
   assert.equal(validatePocDeliveryRecord(await json(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"))).ok, true);
+});
+
+test("requires evidence when a Stage Context asset is declared used", () => {
+  const result = validateStageContextReceipt({
+    schemaVersion: 1,
+    stage: "requirements-clarification",
+    contextHash: "a".repeat(64),
+    policies: [],
+    knowledge: [{ ref: "product-management.requirements-writing@1.0.0", disposition: "used", notes: "Consulted it.", evidenceRefs: [] }],
+    domainContributions: [],
+    integrations: [],
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert(result.issues.some(({ code }) => code === "TOO_FEW_ITEMS"));
 });
 
 test("rejects production use in a POC", async () => {

@@ -176,7 +176,13 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   record.requirements.approvedAt = "2026-08-28T01:00:00.000Z";
   record.requirements.clarification = { questionsAnswered: 8, coverage: { productContext: "complete", functionalBehavior: "complete", userScenarios: "complete", uxInteraction: "complete", qualityAttributes: "complete", dataIntegrations: "complete", scopeSuccess: "complete" }, openQuestions: [], contradictions: [] };
   record.resolution.controls.applicable = resolved.controls.map(({ ref }) => ref);
-  record.resolution.controls.applications = record.resolution.controls.applicable.map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.` }));
+  record.resolution.controls.applications = record.resolution.controls.applicable.map((control) => ({
+    control,
+    disposition: "satisfied",
+    notes: `Apply ${control}.`,
+    evidenceRefs: [record.requirements.documentRef],
+    approvedBy: "product-owner",
+  }));
   await writeFile(join(workspace.path, "requirements.md"), await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"));
   record.requirements.approvedContentHash = await hashRequirementsDocument(workspace.path, record.requirements.documentRef);
   const ready = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);

@@ -1,7 +1,8 @@
 import { copyFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AuditLog } from "./core/audit.ts";
+import { createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./core/context-receipt.ts";
 import { DeliveryFlowRegistry } from "./core/delivery-flow-registry.ts";
 import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "./core/domain-guidance.ts";
 import { DomainRegistry } from "./core/domain-registry.ts";
@@ -11,17 +12,17 @@ import { IntegrationRegistry } from "./core/integration-registry.ts";
 import { ProjectOverlay } from "./core/project-overlay.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "./core/readiness.ts";
 import { loadRequirementsFlowControl } from "./core/requirements.ts";
-import { validatePocDeliveryRecord } from "./core/schema.ts";
+import { validatePocDeliveryRecord, validateStageContextReceipt } from "./core/schema.ts";
 import { FileStateStore } from "./core/state.ts";
 import { StageRegistry } from "./core/stage-registry.ts";
-import type { PocDeliveryRecord, ValidationIssue } from "./core/types.ts";
+import type { DomainGuidanceResolution, PocDeliveryRecord, StageContextReceipt, ValidationIssue } from "./core/types.ts";
 import { validateConversationEntrypoints } from "./platform-adapters/validate-entrypoints.ts";
 import { validateCorePortability } from "./platform-adapters/validate-portability.ts";
 
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 const HARNESS_ROOT = resolve(MODULE_DIRECTORY, "..");
 
-interface CliOptions { root: string; record?: string; actor?: string }
+interface CliOptions { root: string; record?: string; actor?: string; receipt?: string }
 interface ParsedArguments { command?: string; subcommand?: string; options: CliOptions }
 
 function parseArguments(args: string[], currentDirectory: string): ParsedArguments {
@@ -30,12 +31,13 @@ function parseArguments(args: string[], currentDirectory: string): ParsedArgumen
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === "--help") positional.push("help");
-    else if (["--root", "--record", "--actor"].includes(argument)) {
+    else if (["--root", "--record", "--actor", "--receipt"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Missing value for ${argument}`);
       if (argument === "--root") options.root = resolve(currentDirectory, value);
       else if (argument === "--record") options.record = value;
-      else options.actor = value;
+      else if (argument === "--actor") options.actor = value;
+      else options.receipt = value;
       index += 1;
     } else if (argument.startsWith("--")) throw new PdlcError("INVALID_ARGUMENT", `Unknown option: ${argument}`);
     else positional.push(argument);
@@ -80,6 +82,57 @@ async function readRecord(options: CliOptions): Promise<PocDeliveryRecord> {
   return options.record ? store.readRecord(options.record) : store.readCurrentRecord();
 }
 
+interface ResolvedStageMaterial {
+  deliveryFlow: string;
+  stage: ReturnType<StageRegistry["get"]>;
+  resolved: ReturnType<typeof resolveDomainContext>;
+  domainGuidance: DomainGuidanceResolution;
+  snapshot: StageContextSnapshot;
+  project: ProjectOverlay;
+}
+
+async function resolveStageMaterial(options: CliOptions, stageId: string, record?: PocDeliveryRecord): Promise<ResolvedStageMaterial> {
+  const { stages, domains, integrations, project } = await loadHarnessModel(options.root);
+  const stage = stages.get(stageId);
+  const deliveryFlow = record?.deliveryFlow ?? "poc";
+  const resolved = resolveDomainContext(domains, integrations, project, {
+    deliveryFlow,
+    stages: [stageId],
+    riskTriggers: record?.risk.triggers ?? [],
+    technologies: record?.design.technologies ?? [],
+    domains: record?.design.domains ?? [],
+  });
+  if (resolved.issues.length > 0) throw new PdlcError("CONTEXT_RESOLUTION_FAILED", `Cannot resolve context for Stage ${stageId}`, resolved.issues);
+  const domainGuidance = await resolveDomainGuidance(stages, domains, HARNESS_ROOT, stageId, deliveryFlow);
+  const snapshot = await createStageContextSnapshot({
+    harnessRoot: HARNESS_ROOT,
+    projectRoot: options.root,
+    deliveryFlow,
+    stage: stageId,
+    stageDefinition: stage,
+    controls: resolved.controls,
+    baselines: resolved.baselines,
+    defaults: resolved.defaults,
+    knowledge: resolved.knowledge,
+    project,
+    domainGuidance,
+    integrations: resolved.integrations,
+  });
+  return { deliveryFlow, stage, resolved, domainGuidance, snapshot, project };
+}
+
+function requiredContextIssues(record: PocDeliveryRecord, stages: string[], snapshots: Map<string, StageContextSnapshot>): ValidationIssue[] {
+  const applications = new Map(record.resolution.contextApplications.map((entry) => [entry.stage, entry]));
+  return stages.flatMap((stage) => {
+    const application = applications.get(stage);
+    if (!application) return [{ code: "STAGE_CONTEXT_APPLICATION_MISSING", path: "$.resolution.contextApplications", message: `Stage context has not been applied: ${stage}` }];
+    const snapshot = snapshots.get(stage);
+    return snapshot && application.contextHash !== snapshot.contextHash
+      ? [{ code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets changed after the Stage context was applied: ${stage}` }]
+      : [];
+  });
+}
+
 async function readiness(options: CliOptions, target?: string): Promise<unknown> {
   if (target !== "build") throw new PdlcError("INVALID_ARGUMENT", "Readiness target must be 'build'");
   const original = await readRecord(options);
@@ -122,9 +175,16 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
         defaults: resolution.defaults.map(({ sourceRef, key }) => `${sourceRef}:${key}`),
         knowledge: resolution.knowledge.map(({ ref }) => ref),
         integrations: resolution.integrations.map(({ ref }) => ref),
+        contextApplications: original.resolution.contextApplications,
       },
     };
   }
+
+  const receiptStages = ["requirements-clarification", "build-readiness"];
+  const receiptSnapshots = new Map<string, StageContextSnapshot>();
+  for (const stageId of receiptStages) receiptSnapshots.set(stageId, (await resolveStageMaterial(options, stageId, record)).snapshot);
+  const contextIssues = requiredContextIssues(record, receiptStages, receiptSnapshots);
+  if (contextIssues.length > 0) throw new PdlcError("BUILD_NOT_READY", "Required Stage context has not been applied or is stale", contextIssues);
 
   const policy = await loadRequirementsFlowControl(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
   const result = await assessPocBuildReadiness(record, options.root, resolution.controls, policy, resolution.defaults);
@@ -167,26 +227,16 @@ async function status(options: CliOptions): Promise<unknown> {
 
 async function stageContext(options: CliOptions, stageId?: string): Promise<unknown> {
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Context requires a canonical Stage id");
-  const { stages, domains, integrations, project } = await loadHarnessModel(options.root);
-  stages.get(stageId);
   let record: PocDeliveryRecord | undefined;
   try { record = await readRecord(options); } catch (error) {
     if (!(error instanceof PdlcError) || error.code !== "CURRENT_RECORD_NOT_SET") throw error;
   }
-  const deliveryFlow = record?.deliveryFlow ?? "poc";
-  const resolved = resolveDomainContext(domains, integrations, project, {
-    deliveryFlow,
-    stages: [stageId],
-    riskTriggers: record?.risk.triggers ?? [],
-    technologies: record?.design.technologies ?? [],
-    domains: record?.design.domains ?? [],
-  });
-  if (resolved.issues.length > 0) throw new PdlcError("CONTEXT_RESOLUTION_FAILED", `Cannot resolve context for Stage ${stageId}`, resolved.issues);
-  const domainGuidance = await resolveDomainGuidance(stages, domains, HARNESS_ROOT, stageId, deliveryFlow);
+  const { deliveryFlow, stage, resolved, domainGuidance, snapshot, project } = await resolveStageMaterial(options, stageId, record);
   return {
     ok: true,
     deliveryFlow,
-    stage: stages.get(stageId),
+    stage,
+    contextHash: snapshot.contextHash,
     controls: resolved.controls.map(({ ref, ownerDomain, source, policy }) => ({ ref, ownerDomain, source, rules: policy.rules })),
     baselines: resolved.baselines.map(({ ref, baseline }) => ({ ref, decisions: baseline.decisions })),
     defaults: resolved.defaults,
@@ -199,6 +249,58 @@ async function stageContext(options: CliOptions, stageId?: string): Promise<unkn
       skills: skills.map(({ id, path }) => ({ id, path: relative(HARNESS_ROOT, path) })),
     })),
   };
+}
+
+async function applyStageContext(options: CliOptions, stageId?: string): Promise<unknown> {
+  if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Context apply requires a canonical Stage id");
+  if (!options.receipt) throw new PdlcError("INVALID_ARGUMENT", "Context apply requires --receipt <path>");
+  if (!options.actor?.trim()) throw new PdlcError("INVALID_ARGUMENT", "Context apply requires --actor <identity>");
+  const original = await readRecord(options);
+  let raw: unknown;
+  try {
+    const receiptPath = isAbsolute(options.receipt) ? options.receipt : resolve(options.root, options.receipt);
+    const receiptFromRoot = relative(resolve(options.root), receiptPath);
+    if (receiptFromRoot === ".." || receiptFromRoot.startsWith(`..${sep}`) || isAbsolute(receiptFromRoot)) {
+      throw new Error("Receipt path must remain inside the project workspace");
+    }
+    raw = JSON.parse(await readFile(receiptPath, "utf8")) as unknown;
+  } catch (error) {
+    throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt cannot be read", [{ code: "CONTEXT_RECEIPT_UNREADABLE", path: "--receipt", message: error instanceof Error ? error.message : String(error) }]);
+  }
+  const validation = validateStageContextReceipt(raw);
+  if (!validation.ok) throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt is invalid", validation.issues);
+  const receipt: StageContextReceipt = validation.value;
+  const material = await resolveStageMaterial(options, stageId, original);
+  const issues = validateReceiptAgainstSnapshot(receipt, material.snapshot);
+  if (issues.length > 0) throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt does not match the current resolved context", issues);
+
+  const appliedAt = new Date().toISOString();
+  const application = { ...receipt, actor: options.actor, appliedAt };
+  const contextApplications = original.resolution.contextApplications.filter((entry) => entry.stage !== stageId);
+  contextApplications.push(application);
+  contextApplications.sort((left, right) => left.stage.localeCompare(right.stage));
+  const updated: PocDeliveryRecord = {
+    ...original,
+    revision: original.revision + 1,
+    updatedAt: appliedAt,
+    resolution: { ...original.resolution, contextApplications },
+  };
+  await new FileStateStore(options.root).writeRecord(updated, original.revision);
+  const evidenceRefs = [
+    ...receipt.knowledge.flatMap((entry) => entry.evidenceRefs),
+    ...receipt.domainContributions.flatMap((entry) => entry.evidenceRefs),
+    ...receipt.integrations.flatMap((entry) => entry.evidenceRefs),
+  ];
+  await new AuditLog(options.root).append(new AuditLog(options.root).create(updated, {
+    recordId: updated.id,
+    eventType: "STAGE_CONTEXT_APPLIED",
+    stage: stageId,
+    contextHash: receipt.contextHash,
+    actor: options.actor,
+    riskLevel: updated.risk.level,
+    evidenceRefs: [...new Set(evidenceRefs)],
+  }));
+  return { ok: true, recordId: updated.id, stage: stageId, contextHash: receipt.contextHash, revision: updated.revision, appliedAt };
 }
 
 async function guidance(options: CliOptions, stageId?: string): Promise<unknown> {
@@ -266,7 +368,7 @@ async function integrationList(): Promise<unknown> {
 
 async function validate(options: CliOptions): Promise<unknown> {
   const checks: Record<string, unknown> = {};
-  const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "domain-stage-hooks", "integration-catalog", "integration", "knowledge-metadata", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "stage-catalog"];
+  const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "domain-stage-hooks", "integration-catalog", "integration", "knowledge-metadata", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "stage-catalog", "stage-context-receipt"];
   for (const schemaName of schemaNames) {
     const path = join(HARNESS_ROOT, ".pdlc", "schemas", `${schemaName}.schema.json`);
     const schema = JSON.parse(await readFile(path, "utf8")) as { $schema?: unknown; type?: unknown };
@@ -285,6 +387,8 @@ async function validate(options: CliOptions): Promise<unknown> {
     ...integrations.list().map(({ manifest }) => ({ source: `integration:${manifest.id}@${manifest.version}`, stageIds: manifest.appliesTo.stages })),
     ...project.policies().map(({ policy }) => ({ source: `project-policy:${policy.id}@${policy.version}`, stageIds: policy.appliesTo.stages })),
     ...project.defaults().map(({ profile }) => ({ source: `project-default:${profile.id}@${profile.version}`, stageIds: profile.appliesTo.stages })),
+    ...domains.policies().flatMap(({ policy }) => policy.rules.map((rule) => ({ source: `policy-rule:${policy.id}@${policy.version}#${rule.id}.enforceAt`, stageIds: rule.enforceAt }))),
+    ...project.policies().flatMap(({ policy }) => policy.rules.map((rule) => ({ source: `project-policy-rule:${policy.id}@${policy.version}#${rule.id}.enforceAt`, stageIds: rule.enforceAt }))),
   ]);
   const artifactIssues = stages.list().flatMap((stage) => [...(stage.inputArtifacts ?? []), ...(stage.outputArtifacts ?? [])].flatMap((artifact) => {
     try { domains.artifact(artifact); return []; } catch { return [{ code: "UNKNOWN_ARTIFACT_REF", path: `stage:${stage.id}`, message: `Unknown Artifact Definition: ${artifact}` }]; }
@@ -318,10 +422,11 @@ async function validate(options: CliOptions): Promise<unknown> {
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "readiness build", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["status", "validate", "context <stage>", "context-apply <stage>", "readiness build", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "validate") return { exitCode: 0, output: await validate(parsed.options) };
     if (parsed.command === "context") return { exitCode: 0, output: await stageContext(parsed.options, parsed.subcommand) };
+    if (parsed.command === "context-apply") return { exitCode: 0, output: await applyStageContext(parsed.options, parsed.subcommand) };
     if (parsed.command === "readiness") return { exitCode: 0, output: await readiness(parsed.options, parsed.subcommand) };
     if (parsed.command === "guidance") return { exitCode: 0, output: await guidance(parsed.options, parsed.subcommand) };
     if (parsed.command === "domain" && parsed.subcommand === "list") return { exitCode: 0, output: await domainList() };

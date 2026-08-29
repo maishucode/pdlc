@@ -31,10 +31,11 @@ After activation:
 4. Determine whether requirements need minimal, standard, or comprehensive depth. For a user-facing greenfield POC, default to standard depth.
 5. Resolve only conditional Stages implied by context already known. Do not resolve or prepare future Stages in anticipation. System-supplied context removes repetitive questions but never replaces confirmation of the user, problem, behavior, business rules, scenarios, scope, data decisions, or success measures. Every unresolved product question must offer 2–4 mutually exclusive, selectable options, plus `X) Other`. The user can answer by choosing an option letter and may add detail for `X) Other`; do not ask an open-ended question as the primary answer. Never exceed `questionRules.maxQuestionsPerRound` in chat.
 6. Before performing work for the current canonical Stage, internally invoke `bun .pdlc/cli.ts context <stage-id> --root <project-root>` exactly once for that Stage entry. Apply mandatory Policies as Controls, auto-apply Project Baselines and resolved Defaults, consult only relevant returned Knowledge, and read every returned Domain Agent, Domain Skill, and Integration Skill path. Preserve declared permissions and approval boundaries. Empty Domain contributions or Integrations mean continue with core behavior. Never ask the end user to select a Domain Agent manually. `guidance <stage-id>` remains a Domain-contribution compatibility view and is not an additional startup call.
-7. Maintain both the Delivery Record and `pdlc/requirements/<POC-ID>.md` behind the conversation; summarize material changes.
-8. Never create or modify application code, install application dependencies, or run an application build until the user explicitly approves the Requirements and Build Readiness summary.
-9. Never show Bun commands or ask the end user to execute the Runner. Invoke the internal Runner yourself only for Stage contribution resolution, validation, Build Readiness, or a checkpoint.
-10. Before any state-changing Runner call, present the proposed transition and request explicit confirmation. Stage contribution resolution is read-only and needs no confirmation.
+7. When the current Stage work is complete, create a small Stage Context Receipt under `pdlc/evidence/context/` from that Stage's returned `contextHash` and exact asset references. Acknowledge every Policy; mark each Knowledge, Domain contribution, and Integration as `used` or `not-used`; and attach output/evidence references whenever it was used. Internally apply it with `context-apply <stage-id>`. This operational provenance write is not a checkpoint or approval decision and does not require another user confirmation. Never claim `used` before reading or executing the asset.
+8. Maintain both the Delivery Record and `pdlc/requirements/<POC-ID>.md` behind the conversation; summarize material changes.
+9. Never create or modify application code, install application dependencies, or run an application build until the user explicitly approves the Requirements and Build Readiness summary.
+10. Never show Bun commands or ask the end user to execute the Runner. Invoke the internal Runner yourself only for Stage contribution resolution/application, validation, Build Readiness, or a checkpoint.
+11. Before a governed state transition, checkpoint, or approval decision, present the proposed transition and request explicit confirmation. Read-only Stage context and its operational receipt do not need confirmation.
 
 ## Fast start and just-in-time loading
 
@@ -60,6 +61,8 @@ Delay all other work until it is required:
 
 Before final Requirements review and Build Readiness, perform the full reconciliation: resolve all applicable Policies/Controls, Project Baselines, Defaults, Knowledge, Domain contributions, and Integrations; complete provenance and application notes; validate the Harness and active Record; and present the complete Artifact. Fast start changes scheduling, never governance strength.
 
+The receipt is intentionally delayed until Stage work is complete. It adds no startup question, network call, or future-Stage scan; it hashes only the small set of local assets already resolved for the current Stage.
+
 ## Select the Delivery Flow
 
 - Choose `poc` for fast idea validation without JIRA, XRAY, production deployment, or formal release gates.
@@ -83,7 +86,7 @@ v2 currently executes only the POC path. Do not simulate unavailable Implementat
 10. Record applicable Control references in the Draft without delaying the first clarification round. Add concrete application notes incrementally when product behavior, design, and evidence make them meaningful, and complete them before final Requirements review. Keep user-confirmed product decisions as `RQ-xxx`; do not count automatic context as answered questions.
 11. Prepare the smallest reversible design and verification approach that satisfies the clarified Requirements, mandatory Controls, and approved Project Baselines.
 12. Present the complete Requirements Artifact and one Build Readiness summary containing behavior, edge cases, UX, quality attributes, scope, data, success measures, Policies/Controls and exceptions, Baselines, resolved Defaults, relevant Knowledge, Domain contributions and Integrations, deviations, open questions, and proposed build. Ask the user to explicitly approve the named document and Build Readiness, then stop.
-13. Only after explicit approval, internally invoke `bun .pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>`. The Runner must atomically bind approval metadata to the Requirements content hash, validate Build Readiness, update the Record, and append its audit event in that one process. Do not edit approval fields manually.
+13. Before invoking Build Readiness, ensure current receipts for `requirements-clarification` and `build-readiness` have been applied. Only after explicit approval, internally invoke `bun .pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>`. The Runner must atomically bind approval metadata to the Requirements content hash, validate Build Readiness, update the Record, and append its audit event in that one process. Do not edit approval fields manually.
 14. If Build Readiness passes, implement exactly the approved scope. If Requirements, applicable Controls, Project Baselines, or resolved Defaults change materially, the content-hash mismatch blocks further build activity; update the draft content, present a new Build Readiness summary, and obtain approval again.
 15. Capture evidence as references, not pasted transcripts. Read [references/delivery-record.md](references/delivery-record.md) before updating a record.
 16. Before a checkpoint, show a concise summary of state, risks, required evidence, exceptions, and proposed transition.
@@ -109,6 +112,7 @@ v2 currently executes only the POC path. Do not simulate unavailable Implementat
 - Never instruct an end user to copy or run a Bun command.
 - Internally use `bun .pdlc/cli.ts status` only when the active record cannot be determined safely by reading it.
 - Internally use `bun .pdlc/cli.ts context <stage-id> --root <project-root>` once whenever entering a canonical POC Stage, before doing its work.
+- After completing that Stage, internally use `bun .pdlc/cli.ts context-apply <stage-id> --root <project-root> --receipt <receipt-path> --actor <identity>` once to bind exact context use and evidence into the Delivery Record and audit log. This local receipt must never delay the first clarification round.
 - On fresh activation with an idea, normally make only the one `context requirements-clarification` Runner call before the first question. Do not make anticipatory Context or compatibility Guidance calls.
 - Internally use `bun .pdlc/cli.ts validate` for an explicit integrity check, recovery from a definition failure, or final reconciliation before Build Readiness. Never use it as routine pre-question startup work.
 - Internally use `bun .pdlc/cli.ts readiness build --record <POC-ID> --actor <identity>` exactly once after Requirements approval and before application construction.

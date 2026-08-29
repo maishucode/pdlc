@@ -25,7 +25,9 @@ export type PdlcErrorCode =
   | "DUPLICATE_INTEGRATION"
   | "INTEGRATION_ID_MISMATCH"
   | "INTEGRATION_SKILL_NOT_FOUND"
-  | "INTEGRATION_NOT_FOUND";
+  | "INTEGRATION_NOT_FOUND"
+  | "CONTEXT_RESOLUTION_FAILED"
+  | "CONTEXT_RECEIPT_INVALID";
 
 export class PdlcError extends Error {
   readonly code: PdlcErrorCode;

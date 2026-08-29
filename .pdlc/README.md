@@ -13,6 +13,6 @@ This hidden directory is owned by the Lean PDLC Harness and Runner. Product team
 | `schemas/` | Machine-readable contracts | Harness Engineering |
 | `platform-adapters/` | Thin Codex/Copilot adapter contracts and portability checks | Developer Experience |
 | `tests/` | Conformance and regression tests | Harness Engineering |
-| `runtime/` | Runner-managed Delivery Records, audit events, active pointer, and transient locks | Harness Engineering |
+| `runtime/` | Runner-managed Delivery Records, Stage Context Applications, audit events, active pointer, and transient locks | Harness Engineering |
 
 `cli.ts` is the public internal Runner entry point. Platform adapters must not duplicate shared delivery or governance logic.

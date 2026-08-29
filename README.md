@@ -29,6 +29,7 @@ Before each Stage
 
 Stage execution
   -> reads and produces Domain-owned Artifacts
+  -> applies a hashed Stage Context Receipt after the work is done
   -> updates the Delivery Record and evidence
 ```
 
@@ -112,13 +113,16 @@ Internal Runner operations include:
 bun .pdlc/cli.ts validate
 bun .pdlc/cli.ts status --root <project>
 bun .pdlc/cli.ts context <stage-id> --root <project>
+bun .pdlc/cli.ts context-apply <stage-id> --root <project> --receipt <receipt.json> --actor <identity>
 bun .pdlc/cli.ts readiness build --root <project> --record <id> --actor <identity>
 bun .pdlc/cli.ts domain list
 bun .pdlc/cli.ts domain sync --root <project>
 bun .pdlc/cli.ts integration list
 ```
 
-`context` is the normal Stage-resolution API. It returns Controls, Baselines, Defaults, Knowledge, Domain contributions, and Integrations independently. `guidance` is the narrower Domain-contribution view.
+`context` is the normal Stage-resolution API. It returns Controls, Baselines, Defaults, Knowledge, Domain contributions, Integrations, and a deterministic `contextHash`. It remains read-only and resolves only the requested Stage. After the Stage work, `context-apply` records an evidence-backed receipt for what was applied or intentionally not used. Build Readiness rejects missing or stale receipts for the requirements and readiness Stages. `guidance` is the narrower Domain-contribution view.
+
+This assurance does not add startup questions, network calls, or a full-Harness scan. The Runner hashes only the already-resolved local files for the current Stage, and receipt persistence happens after Stage work rather than before the first clarification round.
 
 ## Adding an asset
 

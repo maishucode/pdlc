@@ -1,5 +1,6 @@
 import {
   CONTROL_DISPOSITIONS,
+  CONTEXT_USE_DISPOSITIONS,
   CONTRIBUTION_MODES,
   CONTROL_ENFORCEMENT_TYPES,
   COVERAGE_STATUSES,
@@ -30,6 +31,7 @@ import {
   type ProjectDefaultProfile,
   type RequirementsFlowControl,
   type StageCatalog,
+  type StageContextReceipt,
   type ValidationIssue,
   type ValidationResult,
 } from "./types.ts";
@@ -140,6 +142,67 @@ function validateEvidenceList(value: unknown, path: string, issues: ValidationIs
   });
 }
 
+function validateStageContextReceiptFields(value: unknown, path: string, issues: ValidationIssue[], stored: boolean): void {
+  const receipt = object(value, path, issues);
+  if (!receipt) return;
+  const allowed = ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "domainContributions", "integrations", ...(stored ? ["actor", "appliedAt"] : [])];
+  exact(receipt, allowed, path, issues);
+  if (receipt.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 1");
+  id(receipt.stage, `${path}.stage`, issues);
+  if (typeof receipt.contextHash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.contextHash)) issue(issues, "INVALID_CONTEXT_HASH", `${path}.contextHash`, "Expected a SHA-256 digest");
+  if (stored) {
+    string(receipt.actor, `${path}.actor`, issues);
+    isoDate(receipt.appliedAt, `${path}.appliedAt`, issues);
+  }
+
+  if (!Array.isArray(receipt.policies)) issue(issues, "EXPECTED_ARRAY", `${path}.policies`, "Expected policies array");
+  else {
+    const refs: string[] = [];
+    receipt.policies.forEach((entry, index) => {
+      const itemPath = `${path}.policies[${index}]`;
+      const item = object(entry, itemPath, issues);
+      if (!item) return;
+      exact(item, ["ref", "notes"], itemPath, issues);
+      if (string(item.ref, `${itemPath}.ref`, issues)) refs.push(item.ref);
+      string(item.notes, `${itemPath}.notes`, issues);
+    });
+    if (new Set(refs).size !== refs.length) issue(issues, "DUPLICATE_CONTEXT_REF", `${path}.policies`, "Policy receipt refs must be unique");
+  }
+
+  validateContextAssets(receipt.knowledge, `${path}.knowledge`, issues, false);
+  validateContextAssets(receipt.domainContributions, `${path}.domainContributions`, issues, true);
+  validateContextAssets(receipt.integrations, `${path}.integrations`, issues, true, true);
+}
+
+function validateContextAssets(value: unknown, path: string, issues: ValidationIssue[], hasSkills: boolean, integration = false): void {
+  if (!Array.isArray(value)) {
+    issue(issues, "EXPECTED_ARRAY", path, "Expected context asset array");
+    return;
+  }
+  const refs: string[] = [];
+  value.forEach((entry, index) => {
+    const itemPath = `${path}[${index}]`;
+    const item = object(entry, itemPath, issues);
+    if (!item) return;
+    const allowed = ["ref", "disposition", "notes", "evidenceRefs", ...(hasSkills ? ["skills"] : []), ...(!integration && hasSkills ? ["agent"] : [])];
+    exact(item, allowed, itemPath, issues);
+    if (string(item.ref, `${itemPath}.ref`, issues)) refs.push(item.ref);
+    if (!CONTEXT_USE_DISPOSITIONS.includes(item.disposition as never)) issue(issues, "INVALID_CONTEXT_DISPOSITION", `${itemPath}.disposition`, "Expected used or not-used");
+    string(item.notes, `${itemPath}.notes`, issues);
+    const minimumEvidence = item.disposition === "used" ? 1 : 0;
+    stringArray(item.evidenceRefs, `${itemPath}.evidenceRefs`, issues, minimumEvidence);
+    if (hasSkills) stringArray(item.skills, `${itemPath}.skills`, issues);
+    if (!integration && hasSkills) string(item.agent, `${itemPath}.agent`, issues);
+  });
+  if (new Set(refs).size !== refs.length) issue(issues, "DUPLICATE_CONTEXT_REF", path, "Context asset refs must be unique");
+}
+
+export function validateStageContextReceipt(value: unknown): ValidationResult<StageContextReceipt> {
+  const issues: ValidationIssue[] = [];
+  validateStageContextReceiptFields(value, "$", issues, false);
+  return result<StageContextReceipt>(value, issues);
+}
+
 export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocDeliveryRecord> {
   const issues: ValidationIssue[] = [];
   const record = object(value, "$", issues);
@@ -220,7 +283,7 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
 
   const resolution = object(record.resolution, "$.resolution", issues);
   if (resolution) {
-    exact(resolution, ["controls", "baselines", "defaults", "knowledge", "integrations"], "$.resolution", issues);
+    exact(resolution, ["controls", "baselines", "defaults", "knowledge", "integrations", "contextApplications"], "$.resolution", issues);
     const controls = object(resolution.controls, "$.resolution.controls", issues);
     if (controls) {
       exact(controls, ["applicable", "exceptions", "applications"], "$.resolution.controls", issues);
@@ -231,13 +294,24 @@ export function validatePocDeliveryRecord(value: unknown): ValidationResult<PocD
         const path = `$.resolution.controls.applications[${index}]`;
         const application = object(entry, path, issues);
         if (!application) return;
-        exact(application, ["control", "disposition", "notes"], path, issues);
+        exact(application, ["control", "disposition", "notes", "evidenceRefs", "approvedBy"], path, issues);
         string(application.control, `${path}.control`, issues);
         if (!CONTROL_DISPOSITIONS.includes(application.disposition as never)) issue(issues, "INVALID_CONTROL_DISPOSITION", `${path}.disposition`, "Expected satisfied or exception");
         string(application.notes, `${path}.notes`, issues);
+        stringArray(application.evidenceRefs, `${path}.evidenceRefs`, issues);
+        string(application.approvedBy, `${path}.approvedBy`, issues, true);
       });
     }
     for (const key of ["baselines", "defaults", "knowledge", "integrations"] as const) stringArray(resolution[key], `$.resolution.${key}`, issues);
+    if (!Array.isArray(resolution.contextApplications)) issue(issues, "EXPECTED_ARRAY", "$.resolution.contextApplications", "Expected context applications array");
+    else {
+      const stages: string[] = [];
+      resolution.contextApplications.forEach((entry, index) => {
+        validateStageContextReceiptFields(entry, `$.resolution.contextApplications[${index}]`, issues, true);
+        if (isObject(entry) && typeof entry.stage === "string") stages.push(entry.stage);
+      });
+      if (new Set(stages).size !== stages.length) issue(issues, "DUPLICATE_STAGE_CONTEXT_APPLICATION", "$.resolution.contextApplications", "Only one current Context Application is allowed per Stage");
+    }
   }
 
   const design = object(record.design, "$.design", issues);
@@ -492,10 +566,11 @@ export function validateControlPolicy(value: unknown): ValidationResult<ControlP
       const path = `$.rules[${index}]`;
       const rule = object(entry, path, issues);
       if (!rule) return;
-      exact(rule, ["id", "statement", "enforcement", "requiredEvidence", "exceptionApprovers", "standardDefault"], path, issues);
+      exact(rule, ["id", "statement", "enforcement", "enforceAt", "requiredEvidence", "exceptionApprovers", "standardDefault"], path, issues);
       if (id(rule.id, `${path}.id`, issues)) ids.push(rule.id);
       string(rule.statement, `${path}.statement`, issues);
       if (!CONTROL_ENFORCEMENT_TYPES.includes(rule.enforcement as never)) issue(issues, "INVALID_CONTROL_ENFORCEMENT", `${path}.enforcement`, "Expected automatic, evidence, or approval");
+      stringArray(rule.enforceAt, `${path}.enforceAt`, issues, 1);
       if (rule.requiredEvidence !== undefined) stringArray(rule.requiredEvidence, `${path}.requiredEvidence`, issues, 1);
       if (rule.exceptionApprovers !== undefined) stringArray(rule.exceptionApprovers, `${path}.exceptionApprovers`, issues, 1);
       if (rule.standardDefault !== undefined) {
@@ -684,8 +759,15 @@ export function validateAuditEvent(value: unknown): ValidationResult<AuditEvent>
   const issues: ValidationIssue[] = [];
   const event = object(value, "$", issues);
   if (!event) return result(value, issues);
+  exact(event, ["schemaVersion", "eventId", "recordId", "eventType", "checkpoint", "stage", "contextHash", "fromStatus", "toStatus", "actor", "timestamp", "riskLevel", "evidenceRefs", "recordHash", "decision", "failureReason"], "$", issues);
   if (event.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
   for (const field of ["eventId", "recordId", "eventType", "actor", "recordHash"] as const) string(event[field], `$.${field}`, issues);
+  for (const field of ["checkpoint", "stage", "fromStatus", "toStatus", "decision", "failureReason"] as const) {
+    if (event[field] !== undefined) string(event[field], `$.${field}`, issues);
+  }
+  if (event.contextHash !== undefined && (typeof event.contextHash !== "string" || !/^[a-f0-9]{64}$/.test(event.contextHash))) issue(issues, "INVALID_CONTEXT_HASH", "$.contextHash", "Expected a SHA-256 digest");
+  if (event.riskLevel !== undefined && !RISK_LEVELS.includes(event.riskLevel as never)) issue(issues, "INVALID_RISK_LEVEL", "$.riskLevel", "Unsupported risk level");
+  if (event.evidenceRefs !== undefined) stringArray(event.evidenceRefs, "$.evidenceRefs", issues);
   isoDate(event.timestamp, "$.timestamp", issues);
   if (typeof event.recordHash === "string" && !/^[a-f0-9]{64}$/.test(event.recordHash)) issue(issues, "INVALID_HASH", "$.recordHash", "Expected a SHA-256 digest");
   return result<AuditEvent>(value, issues);

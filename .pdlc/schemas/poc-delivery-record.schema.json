@@ -89,7 +89,8 @@
         "baselines",
         "defaults",
         "knowledge",
-        "integrations"
+        "integrations",
+        "contextApplications"
       ]
     },
     "design": {

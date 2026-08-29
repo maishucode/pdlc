@@ -48,6 +48,7 @@ export async function assessPocBuildReadiness(
   policy: RequirementsFlowControl,
   standardDefaults: ResolvedStandardDefault[] = [],
 ): Promise<BuildReadinessResult> {
+  const enforcementStage = "build-readiness";
   const issues: ValidationIssue[] = [];
   let requirementsDocument: string | undefined;
 
@@ -137,16 +138,43 @@ export async function assessPocBuildReadiness(
     if (applications.has(application.control)) issues.push(issue("DUPLICATE_CONTROL_APPLICATION", "$.resolution.controls.applications", `Control is applied more than once: ${application.control}`));
     applications.set(application.control, application);
   }
-  for (const ref of record.resolution.controls.applicable) {
+  for (const control of controls) {
+    const ref = control.ref;
+    const enforcedRules = control.policy.rules.filter((rule) => rule.enforceAt.includes(enforcementStage));
+    if (enforcedRules.length === 0) continue;
     const application = applications.get(ref);
     if (!application) {
-      issues.push(issue("CONTROL_APPLICATION_MISSING", "$.resolution.controls.applications", `No application disposition is recorded for ${ref}`));
+      issues.push(issue("CONTROL_APPLICATION_MISSING", "$.resolution.controls.applications", `No ${enforcementStage} application disposition is recorded for ${ref}`));
       continue;
     }
-    if (application.disposition === "exception" && !record.resolution.controls.exceptions.some((entry) => entry.startsWith(`${ref}:`))) {
-      issues.push(issue("CONTROL_EXCEPTION_MISSING", "$.resolution.controls.exceptions", `An approved exception reference is required for ${ref}`));
+    if (application.disposition === "exception") {
+      if (!record.resolution.controls.exceptions.some((entry) => entry.startsWith(`${ref}:`))) {
+        issues.push(issue("CONTROL_EXCEPTION_MISSING", "$.resolution.controls.exceptions", `An approved exception reference is required for ${ref}`));
+      }
+      const approvers = new Set(enforcedRules.flatMap((rule) => rule.exceptionApprovers ?? []));
+      if (!application.approvedBy || (approvers.size > 0 && !approvers.has(application.approvedBy))) {
+        issues.push(issue("CONTROL_EXCEPTION_APPROVER_INVALID", "$.resolution.controls.applications", `Exception for ${ref} must be approved by one of: ${[...approvers].join(", ")}`));
+      }
+    } else {
+      if (enforcedRules.some((rule) => rule.requiredEvidence?.length) && application.evidenceRefs.length === 0) {
+        issues.push(issue("CONTROL_EVIDENCE_MISSING", "$.resolution.controls.applications", `Evidence is required for ${ref} at ${enforcementStage}`));
+      }
+      if (enforcedRules.some((rule) => rule.enforcement === "approval") && !application.approvedBy.trim()) {
+        issues.push(issue("CONTROL_APPROVAL_MISSING", "$.resolution.controls.applications", `An approval identity is required for ${ref} at ${enforcementStage}`));
+      }
+      if (ref === "product-management.requirements-quality@1.0.0" && application.approvedBy !== record.requirements.approvedBy) {
+        issues.push(issue("PRODUCT_CONTROL_APPROVER_MISMATCH", "$.resolution.controls.applications", `Product Control approval must match the approved Requirements owner for ${ref}`));
+      }
+      for (const rule of enforcedRules.filter((entry) => entry.enforcement === "automatic")) {
+        const ruleRef = `${ref}#${rule.id}`;
+        if (ruleRef !== "product-management.requirements-quality@1.0.0#resolve-material-ambiguity") {
+          issues.push(issue("AUTOMATIC_CONTROL_NOT_IMPLEMENTED", "$.resolution.controls.applications", `No automatic evaluator is registered for ${ruleRef}`));
+        }
+      }
     }
-    if (requirementsDocument && !requirementsDocument.includes(ref)) issues.push(issue("CONTROL_NOT_TRACED", "$.requirements.documentRef", `Requirements document does not reference ${ref}`));
+  }
+  if (requirementsDocument) for (const ref of record.resolution.controls.applicable) {
+    if (!requirementsDocument.includes(ref)) issues.push(issue("CONTROL_NOT_TRACED", "$.requirements.documentRef", `Requirements document does not reference ${ref}`));
   }
 
   return {

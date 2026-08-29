@@ -11,6 +11,8 @@
     "recordId": { "type": "string", "minLength": 1 },
     "eventType": { "type": "string", "minLength": 1 },
     "checkpoint": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "contextHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "fromStatus": { "type": "string", "minLength": 1 },
     "toStatus": { "type": "string", "minLength": 1 },
     "actor": { "type": "string", "minLength": 1 },
@@ -22,4 +24,3 @@
     "failureReason": { "type": "string" }
   }
 }
-

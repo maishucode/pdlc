@@ -76,6 +76,47 @@ export interface ControlApplication {
   control: string;
   disposition: ControlDisposition;
   notes: string;
+  evidenceRefs: string[];
+  approvedBy: string;
+}
+
+export const CONTEXT_USE_DISPOSITIONS = ["used", "not-used"] as const;
+export type ContextUseDisposition = (typeof CONTEXT_USE_DISPOSITIONS)[number];
+
+export interface ContextPolicyReceipt {
+  ref: string;
+  notes: string;
+}
+
+export interface ContextAssetReceipt {
+  ref: string;
+  disposition: ContextUseDisposition;
+  notes: string;
+  evidenceRefs: string[];
+}
+
+export interface ContextDomainContributionReceipt extends ContextAssetReceipt {
+  agent: string;
+  skills: string[];
+}
+
+export interface ContextIntegrationReceipt extends ContextAssetReceipt {
+  skills: string[];
+}
+
+export interface StageContextReceipt {
+  schemaVersion: 1;
+  stage: string;
+  contextHash: string;
+  policies: ContextPolicyReceipt[];
+  knowledge: ContextAssetReceipt[];
+  domainContributions: ContextDomainContributionReceipt[];
+  integrations: ContextIntegrationReceipt[];
+}
+
+export interface StageContextApplication extends StageContextReceipt {
+  actor: string;
+  appliedAt: string;
 }
 
 export interface PocDeliveryRecord {
@@ -129,6 +170,7 @@ export interface PocDeliveryRecord {
     defaults: string[];
     knowledge: string[];
     integrations: string[];
+    contextApplications: StageContextApplication[];
   };
   design: {
     summary: string;
@@ -288,6 +330,7 @@ export interface ControlRule {
   enforcement: ControlEnforcementType;
   requiredEvidence?: string[];
   exceptionApprovers?: string[];
+  enforceAt: string[];
   standardDefault?: {
     key: string;
     topic: RequirementsCoverageTopic;
@@ -470,6 +513,8 @@ export interface AuditEvent {
   recordId: string;
   eventType: string;
   checkpoint?: string;
+  stage?: string;
+  contextHash?: string;
   fromStatus?: string;
   toStatus?: string;
   actor: string;

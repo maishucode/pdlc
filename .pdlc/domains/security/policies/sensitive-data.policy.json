@@ -15,6 +15,7 @@
       "id": "approved-data-use",
       "statement": "Use synthetic or approved data unless an explicitly approved control exception and evidence reference permits otherwise.",
       "enforcement": "approval",
+      "enforceAt": ["build-readiness", "security-verification", "release-readiness"],
       "requiredEvidence": ["Data classification and approved data-use evidence"],
       "exceptionApprovers": ["security-governance"],
       "standardDefault": { "key": "security.data-boundary", "topic": "dataIntegrations" }

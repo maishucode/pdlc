@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/stage-context-receipt.schema.json",
+  "title": "Stage Context Receipt",
+  "type": "object",
+  "required": ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "domainContributions", "integrations"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "contextHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "policies": { "type": "array", "items": { "$ref": "#/$defs/policy" } },
+    "knowledge": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
+    "domainContributions": { "type": "array", "items": { "$ref": "#/$defs/domainContribution" } },
+    "integrations": { "type": "array", "items": { "$ref": "#/$defs/integration" } }
+  },
+  "$defs": {
+    "policy": {
+      "type": "object",
+      "required": ["ref", "notes"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "notes": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "assetFields": {
+      "type": "object",
+      "required": ["ref", "disposition", "notes", "evidenceRefs"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "disposition": { "enum": ["used", "not-used"] },
+        "notes": { "type": "string", "minLength": 1 },
+        "evidenceRefs": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "asset": {
+      "allOf": [
+        { "$ref": "#/$defs/assetFields" },
+        {
+          "if": { "properties": { "disposition": { "const": "used" } } },
+          "then": { "properties": { "evidenceRefs": { "minItems": 1 } } }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "domainContribution": {
+      "allOf": [
+        { "$ref": "#/$defs/assetFields" },
+        {
+          "type": "object",
+          "required": ["agent", "skills"],
+          "properties": {
+            "agent": { "type": "string", "minLength": 1 },
+            "skills": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+          }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "used" } } },
+          "then": { "properties": { "evidenceRefs": { "minItems": 1 } } }
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "integration": {
+      "allOf": [
+        { "$ref": "#/$defs/assetFields" },
+        {
+          "type": "object",
+          "required": ["skills"],
+          "properties": {
+            "skills": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+          }
+        },
+        {
+          "if": { "properties": { "disposition": { "const": "used" } } },
+          "then": { "properties": { "evidenceRefs": { "minItems": 1 } } }
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  },
+  "additionalProperties": false
+}
