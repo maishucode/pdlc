@@ -24,6 +24,7 @@ export interface HashedContextAsset {
 export interface HashedDomainContribution extends HashedContextAsset {
   capability: string;
   invocation: "required";
+  permissions: DomainGuidanceResolution["contributions"][number]["permissions"];
   agent: string;
   skills: string[];
 }
@@ -95,6 +96,7 @@ export async function createStageContextSnapshot(input: {
       ref: `${contribution.domain}@${contribution.version}:${contribution.agent.id}`,
       capability: contribution.capability,
       invocation: contribution.invocation,
+      permissions: contribution.permissions,
       agent: contribution.agent.id,
       skills: contribution.skills.map(({ name }) => name).sort(),
       hash: sha256({ capability: contribution.capability, invocation: contribution.invocation, permissions: contribution.permissions, agentContent, skillContents, mode: contribution.mode, handoff: contribution.handoff, approvalBoundary: contribution.approvalBoundary }),
@@ -147,8 +149,14 @@ export function validateReceiptAgainstSnapshot(receipt: StageContextReceipt, sna
     if (entry.agent !== expected.agent) issues.push({ code: "CONTEXT_AGENT_MISMATCH", path: `$.domainContributions[${index}].agent`, message: `Expected Agent ${expected.agent}` });
     if (!sameStrings(entry.skills, expected.skills)) issues.push({ code: "CONTEXT_SKILLS_MISMATCH", path: `$.domainContributions[${index}].skills`, message: "Domain Skill set does not match the resolved Hook" });
     if (entry.capability !== expected.capability) issues.push({ code: "CONTEXT_CAPABILITY_MISMATCH", path: `$.domainContributions[${index}].capability`, message: `Expected capability ${expected.capability}` });
+    if (entry.execution.permissions.filesystem !== expected.permissions.filesystem || entry.execution.permissions.network !== expected.permissions.network || entry.execution.permissions.externalWrites !== expected.permissions.externalWrites) {
+      issues.push({ code: "CONTEXT_PERMISSION_MISMATCH", path: `$.domainContributions[${index}].execution.permissions`, message: "Agent execution permissions do not match the resolved Hook" });
+    }
     const expectedInvocationId = agentInvocationId(snapshot.contextHash, expected);
     if (entry.execution.invocationId !== expectedInvocationId) issues.push({ code: "CONTEXT_INVOCATION_MISMATCH", path: `$.domainContributions[${index}].execution.invocationId`, message: "Agent invocation does not belong to the current Stage context" });
+    if (!entry.execution.platformExecutionRef.startsWith(`github-copilot:agent:${expected.agent}:${expectedInvocationId}:`)) {
+      issues.push({ code: "CONTEXT_EXECUTION_REF_MISMATCH", path: `$.domainContributions[${index}].execution.platformExecutionRef`, message: "Platform execution reference does not match the resolved Agent invocation" });
+    }
   });
   const integrationMap = new Map(snapshot.integrations.map((entry) => [entry.ref, entry]));
   receipt.integrations.forEach((entry, index) => {

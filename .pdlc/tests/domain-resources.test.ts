@@ -59,7 +59,7 @@ test("wires required Domain capabilities to the native Copilot agent tool", asyn
   assert.equal(projectedUxAgent, canonicalUxAgent);
   assert.match(canonicalUxAgent, /disable-model-invocation: false/);
   assert.match(canonicalUxAgent, /user-invocable: false/);
-  for (const field of ["invocationId", "capability", "nativeExecutionRef", "evidenceRefs"]) {
+  for (const field of ["invocationId", "capability", "permissions", "platformExecutionRef", "evidenceRefs"]) {
     assert.match(canonicalUxAgent, new RegExp(field));
   }
 });

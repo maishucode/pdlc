@@ -72,7 +72,7 @@ test("requires evidence when a Stage Context asset is declared used", () => {
   if (!result.ok) assert(result.issues.some(({ code }) => code === "TOO_FEW_ITEMS"));
 });
 
-test("requires completed native execution metadata for Agent capability receipts", () => {
+test("requires completed platform execution metadata for Agent capability receipts", () => {
   const completed = {
     schemaVersion: 2,
     stage: "ux-design",
@@ -91,7 +91,8 @@ test("requires completed native execution metadata for Agent capability receipts
         invocationId: "b".repeat(64),
         platform: "github-copilot",
         status: "completed",
-        nativeExecutionRef: "copilot-tool-call:call-123",
+        platformExecutionRef: `github-copilot:agent:lean-pdlc-ux:${"b".repeat(64)}:call-123`,
+        permissions: { filesystem: "write", network: false, externalWrites: false },
       },
     }],
     integrations: [],

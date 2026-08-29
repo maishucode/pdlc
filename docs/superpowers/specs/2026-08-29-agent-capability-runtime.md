@@ -16,7 +16,7 @@ The UX Domain is the first concrete capability provider. Java, Python, and other
 2. `context <stage>` returns a deterministic invocation contract for each resolved Domain contribution, including a context-bound invocation ID, the exact Agent, exact Skills, platform, mode, handoff, and approval boundary.
 3. The GitHub Copilot main Agent has the native `agent` tool and must delegate each required invocation to the exact custom Agent. It must not emulate the Domain Agent locally.
 4. The delegated Agent must echo the supplied invocation ID in a structured completion envelope and return evidence references.
-5. A Stage Context Receipt must include the matching capability, invocation ID, and completed native execution reference. A required Domain contribution cannot be marked `not-used`.
+5. A Stage Context Receipt must include the matching capability, invocation ID, permissions, and a platform execution reference derived from the native Copilot tool-call or session trace. A required Domain contribution cannot be marked `not-used`.
 6. `context-apply` rejects missing, mismatched, skipped, or incomplete required invocations.
 7. Existing policy, knowledge, integration, approval, and permission boundaries remain unchanged.
 8. Capability IDs are globally unique across active Hook bindings. An invocation ID is stable for the same Stage snapshot and changes when any context-driving input changes.

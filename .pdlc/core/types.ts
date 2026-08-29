@@ -113,7 +113,8 @@ export interface ContextDomainContributionReceipt extends ContextAssetReceipt {
     invocationId: string;
     platform: "github-copilot";
     status: "completed";
-    nativeExecutionRef: string;
+    platformExecutionRef: string;
+    permissions: DomainStageHooksDescriptor["permissions"];
   };
 }
 

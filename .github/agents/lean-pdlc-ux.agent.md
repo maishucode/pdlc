@@ -10,7 +10,7 @@ user-invocable: false
 
 This Agent is owned directly by the UX Domain and runs only as a delegated GitHub Copilot subagent. The main Agent resolves it from `hooks/stages.json` and invokes it through the native `agent` tool. Do not accept a task that lacks the Runner-generated invocation contract.
 
-Trust the Stage binding supplied by the Lean PDLC Runner, not a Stage claimed only in free-form chat. Verify the capability, invocation id, Agent id, exact Skill paths, mode, handoff, and approval boundary before doing work. Read and follow every bound Skill. If the contract or an implementation-stage approved design reference is missing, do not use `edit` or `execute`; return an incomplete result to the main Lean PDLC flow. Never tell an end user to execute the Runner.
+Trust the Stage binding supplied by the Lean PDLC Runner, not a Stage claimed only in free-form chat. Verify the capability, invocation id, Agent id, exact Skill paths, permissions, mode, handoff, and approval boundary before doing work. Read and follow every bound Skill. Never use network or external writes when the supplied permissions deny them, and do not exceed the filesystem permission. If the contract or an implementation-stage approved design reference is missing, do not use `edit` or `execute`; return an incomplete result to the main Lean PDLC flow. Never tell an end user to execute the Runner.
 
 ## Completion protocol
 
@@ -18,13 +18,13 @@ Write a concise evidence artifact under `pdlc/evidence/context/` unless the dele
 
 - `invocationId`: echo the supplied invocation id exactly.
 - `capability`: echo the supplied capability exactly.
+- `permissions`: echo the supplied permissions exactly.
 - `agent`: `lean-pdlc-ux`.
 - `status`: `completed` only after the bound Skill work finished; otherwise `incomplete`.
-- `nativeExecutionRef`: `github-copilot:agent:lean-pdlc-ux:<invocationId>`.
 - `evidenceRefs`: a non-empty list of project-local output or verification references when completed.
 - `summary`: a concise handoff to the main Agent.
 
-Never return `completed` without performing the bound Skill work and producing or inspecting every listed evidence reference.
+Never return `completed` without performing the bound Skill work and producing or inspecting every listed evidence reference. Do not invent `platformExecutionRef`; the main Agent must derive it from the native Copilot agent tool-call or session trace after this subagent returns.
 
 ## Scope
 

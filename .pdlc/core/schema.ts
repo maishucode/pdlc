@@ -208,11 +208,24 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
       if (item.disposition !== "used") issue(issues, "REQUIRED_AGENT_CAPABILITY_SKIPPED", `${itemPath}.disposition`, "A required Agent capability must be executed");
       const execution = object(item.execution, `${itemPath}.execution`, issues);
       if (execution) {
-        exact(execution, ["invocationId", "platform", "status", "nativeExecutionRef"], `${itemPath}.execution`, issues);
+        exact(execution, ["invocationId", "platform", "status", "platformExecutionRef", "permissions"], `${itemPath}.execution`, issues);
         if (typeof execution.invocationId !== "string" || !/^[a-f0-9]{64}$/.test(execution.invocationId)) issue(issues, "INVALID_INVOCATION_ID", `${itemPath}.execution.invocationId`, "Expected a context-bound SHA-256 invocation id");
         if (execution.platform !== "github-copilot") issue(issues, "INVALID_AGENT_PLATFORM", `${itemPath}.execution.platform`, "Expected github-copilot");
         if (execution.status !== "completed") issue(issues, "AGENT_CAPABILITY_INCOMPLETE", `${itemPath}.execution.status`, "Expected completed");
-        string(execution.nativeExecutionRef, `${itemPath}.execution.nativeExecutionRef`, issues);
+        if (string(execution.platformExecutionRef, `${itemPath}.execution.platformExecutionRef`, issues) && typeof item.agent === "string" && typeof execution.invocationId === "string") {
+          const platformExecutionRef = execution.platformExecutionRef;
+          const prefix = `github-copilot:agent:${item.agent}:${execution.invocationId}:`;
+          if (!platformExecutionRef.startsWith(prefix) || platformExecutionRef.length === prefix.length) {
+            issue(issues, "INVALID_PLATFORM_EXECUTION_REF", `${itemPath}.execution.platformExecutionRef`, "Expected a platform Agent execution reference bound to the Agent and invocation id");
+          }
+        }
+        const permissions = object(execution.permissions, `${itemPath}.execution.permissions`, issues);
+        if (permissions) {
+          exact(permissions, ["filesystem", "network", "externalWrites"], `${itemPath}.execution.permissions`, issues);
+          if (!["read", "write"].includes(String(permissions.filesystem))) issue(issues, "INVALID_FILESYSTEM_PERMISSION", `${itemPath}.execution.permissions.filesystem`, "Expected read or write");
+          if (typeof permissions.network !== "boolean") issue(issues, "EXPECTED_BOOLEAN", `${itemPath}.execution.permissions.network`, "Expected a boolean");
+          if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", `${itemPath}.execution.permissions.externalWrites`, "Expected a boolean");
+        }
       }
     }
   });

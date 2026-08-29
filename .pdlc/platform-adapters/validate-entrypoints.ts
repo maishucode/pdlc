@@ -45,7 +45,7 @@ const EXPECTATIONS: EntrypointExpectation[] = [
       "disable-model-invocation: false",
       "user-invocable: false",
       "agent-capability-result",
-      "nativeExecutionRef",
+      "platformExecutionRef",
       "evidenceRefs",
     ],
     maximumBytes: 4_000,

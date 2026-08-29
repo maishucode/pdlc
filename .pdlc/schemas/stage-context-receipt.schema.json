@@ -55,12 +55,22 @@
             "skills": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
             "execution": {
               "type": "object",
-              "required": ["invocationId", "platform", "status", "nativeExecutionRef"],
+              "required": ["invocationId", "platform", "status", "platformExecutionRef", "permissions"],
               "properties": {
                 "invocationId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
                 "platform": { "const": "github-copilot" },
                 "status": { "const": "completed" },
-                "nativeExecutionRef": { "type": "string", "minLength": 1 }
+                "platformExecutionRef": { "type": "string", "pattern": "^github-copilot:agent:[a-z0-9-]+:[a-f0-9]{64}:[A-Za-z0-9][A-Za-z0-9._:-]*$" },
+                "permissions": {
+                  "type": "object",
+                  "required": ["filesystem", "network", "externalWrites"],
+                  "properties": {
+                    "filesystem": { "enum": ["read", "write"] },
+                    "network": { "type": "boolean" },
+                    "externalWrites": { "type": "boolean" }
+                  },
+                  "additionalProperties": false
+                }
               },
               "additionalProperties": false
             }

@@ -24,6 +24,7 @@ interface ContextOutput {
     invocation: "required";
     platform: "github-copilot";
     tool: "agent";
+    permissions: { filesystem: "read" | "write"; network: boolean; externalWrites: boolean };
     agent: { id: string; path: string };
     skills: Array<{ name: string; path: string }>;
     mode: string;
@@ -54,7 +55,8 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
         invocationId: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.invocationId,
         platform: "github-copilot",
         status: "completed",
-        nativeExecutionRef: `test-agent-call:${stage}:${capability}`,
+        platformExecutionRef: `github-copilot:agent:${agent.id}:${output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.invocationId}:call-test-${stage}-${capability}`,
+        permissions: output.requiredAgentInvocations.find((entry) => entry.capability === capability)!.permissions,
       },
     })),
     integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs })),
@@ -756,6 +758,11 @@ test("emits deterministic context-bound GitHub Copilot Agent invocation contract
     invocation: "required",
     platform: "github-copilot",
     tool: "agent",
+    permissions: {
+      filesystem: "write",
+      network: false,
+      externalWrites: false,
+    },
     agent: {
       id: "lean-pdlc-ux",
       path: ".pdlc/domains/ux/agents/lean-pdlc-ux.agent.md",
@@ -790,6 +797,7 @@ test("rejects completed Agent capability receipts with mismatched execution iden
   assert.equal(contextResult.exitCode, 0, JSON.stringify(contextResult.output));
   const output = contextResult.output as ContextOutput;
   const invocation = output.requiredAgentInvocations[0]!;
+  const mismatchedInvocationId = invocation.invocationId.replace(/^./, invocation.invocationId.startsWith("a") ? "b" : "a");
   const receipt = {
     schemaVersion: 2,
     stage: "ux-design",
@@ -805,10 +813,11 @@ test("rejects completed Agent capability receipts with mismatched execution iden
       notes: "Delegated through the native Copilot agent tool.",
       evidenceRefs: ["pdlc/evidence/context/ux-design.md"],
       execution: {
-        invocationId: invocation.invocationId.replace(/^./, invocation.invocationId.startsWith("a") ? "b" : "a"),
+        invocationId: mismatchedInvocationId,
         platform: "github-copilot",
         status: "completed",
-        nativeExecutionRef: "copilot-tool-call:call-123",
+        platformExecutionRef: `github-copilot:agent:${invocation.agent.id}:${mismatchedInvocationId}:call-123`,
+        permissions: invocation.permissions,
       },
     }],
     integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs: ["pdlc/evidence/context/ux-design.md"] })),
@@ -822,10 +831,27 @@ test("rejects completed Agent capability receipts with mismatched execution iden
   assert(details.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"), JSON.stringify(applied.output));
 
   receipt.domainContributions[0]!.execution.invocationId = invocation.invocationId;
+  receipt.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:${invocation.agent.id}:${invocation.invocationId}:call-123`;
   receipt.domainContributions[0]!.capability = "ux-wrong-capability";
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const capabilityMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(capabilityMismatch.exitCode, 2);
   const capabilityDetails = (capabilityMismatch.output as { error: { details: Array<{ code: string }> } }).error.details;
   assert(capabilityDetails.some(({ code }) => code === "CONTEXT_CAPABILITY_MISMATCH"), JSON.stringify(capabilityMismatch.output));
+
+  receipt.domainContributions[0]!.capability = invocation.capability;
+  receipt.domainContributions[0]!.execution.permissions.network = true;
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const permissionMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(permissionMismatch.exitCode, 2);
+  const permissionDetails = (permissionMismatch.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(permissionDetails.some(({ code }) => code === "CONTEXT_PERMISSION_MISMATCH"), JSON.stringify(permissionMismatch.output));
+
+  receipt.domainContributions[0]!.execution.permissions.network = false;
+  receipt.domainContributions[0]!.execution.platformExecutionRef = `github-copilot:agent:wrong-agent:${invocation.invocationId}:call-123`;
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const executionRefMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(executionRefMismatch.exitCode, 2);
+  const executionRefDetails = (executionRefMismatch.output as { error: { details: Array<{ code: string }> } }).error.details;
+  assert(executionRefDetails.some(({ code }) => code === "INVALID_PLATFORM_EXECUTION_REF"), JSON.stringify(executionRefMismatch.output));
 });

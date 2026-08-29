@@ -32,7 +32,7 @@
 - [x] Add failing schema and CLI tests for skipped, missing, and mismatched required invocation metadata.
 - [x] Run the focused tests and confirm they fail for the intended missing validation.
 - [x] Extend the Stage Context Receipt type, validator, JSON Schema, snapshot comparison, and test receipt helper; increment the changed receipt schema version.
-- [x] Require `disposition: "used"`, the matching capability/invocation ID, `platform: "github-copilot"`, `status: "completed"`, and a non-empty native execution reference.
+- [x] Require `disposition: "used"`, the matching capability/invocation ID and permissions, `platform: "github-copilot"`, `status: "completed"`, and a context-bound platform execution reference derived from the native Copilot trace.
 - [x] Run focused tests and commit the passing receipt gate.
 
 ## Task 4: Wire the native Copilot custom-agent delegation UX
