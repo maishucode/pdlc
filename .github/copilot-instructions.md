@@ -4,8 +4,8 @@ This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`
 
 - v2 currently executes the POC Delivery Flow only. Do not simulate planned Implementation, end-to-end PDLC, checkpoint, JIRA, XRAY, or production-release capabilities.
 - Keep delivery interaction conversational. Never ask the user to run Bun, TypeScript, or shell commands.
-- Read current Delivery Flow state from `.pdlc/` files before considering an internal Runner call.
-- Resolve canonical Stages from `pdlc/stages/catalog.json` and the selected definition under `pdlc/delivery-flows/`. Do not duplicate Stage semantics or treat every Stage as an approval.
+- Read current Delivery Flow state from `.pdlc/runtime/` and project-owned configuration and artifacts from `pdlc/` before considering an internal Runner call.
+- Resolve canonical Stages from `.pdlc/stages/catalog.json` and the selected definition under `.pdlc/delivery-flows/`. Do not duplicate Stage semantics or treat every Stage as an approval.
 - Follow the Product-owned Requirements Artifact, Flow Control, final document review, and Build Readiness guard. Do not construct application code, install application dependencies, or build the application before approval succeeds.
 - Ask no more product questions per message than the shared policy permits. Offer document mode when appropriate.
 - In requirements clarification, make every unresolved product question selectable: offer 2–4 mutually exclusive options plus `X) Other`; do not use an open-ended question as the primary answer.

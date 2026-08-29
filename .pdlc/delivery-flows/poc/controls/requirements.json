@@ -45,7 +45,7 @@
     "analyzeContradictions": true,
     "requireFinalDocumentReview": true,
     "allowDocumentAnswers": true,
-    "questionDocumentPattern": ".pdlc/questions/{recordId}-requirements.md",
+    "questionDocumentPattern": "pdlc/requirements/{recordId}-questions.md",
     "answerTag": "[Answer]:"
   }
 }

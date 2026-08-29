@@ -13,7 +13,7 @@ This adopts the useful AI DLC v2 composition idea in a deliberately smaller scop
 ## 1. Create one independent directory
 
 ```text
-pdlc/domains/acme-domain/capabilities/plugins/acme-domain/
+.pdlc/domains/acme-domain/capabilities/plugins/acme-domain/
 ├── plugin.json
 ├── pdlc-stage-bindings.json
 ├── agents/
@@ -23,7 +23,7 @@ pdlc/domains/acme-domain/capabilities/plugins/acme-domain/
         └── SKILL.md
 ```
 
-Do not put Plugin source under `pdlc/examples`, `pdlc/core`, or the main `.github/agents` directory. The owning Domain folder is the authoring source of truth.
+Do not put Plugin source under `.pdlc/examples`, `.pdlc/core`, or the main `.github/agents` directory. The owning Domain folder is the authoring source of truth.
 
 ## 2. Declare the Plugin manifest
 
@@ -104,7 +104,7 @@ Users still start only:
 Before the main Agent performs any canonical Stage, it internally resolves:
 
 ```sh
-bun pdlc/cli.ts context <stage-id> --root <project-root>
+bun .pdlc/cli.ts context <stage-id> --root <project-root>
 ```
 
 The result contains zero or more additive contributions:
@@ -118,8 +118,8 @@ The result contains zero or more additive contributions:
       "plugin": "acme-domain",
       "ownerDomain": "acme-domain",
       "permissions": { "filesystem": "read", "network": false, "externalWrites": false },
-      "agent": { "id": "acme-domain", "path": "pdlc/domains/acme-domain/capabilities/plugins/acme-domain/agents/acme-domain.agent.md" },
-      "skills": [{ "name": "acme-domain-spec", "path": "pdlc/domains/acme-domain/capabilities/plugins/acme-domain/skills/acme-domain-spec/SKILL.md" }],
+      "agent": { "id": "acme-domain", "path": ".pdlc/domains/acme-domain/capabilities/plugins/acme-domain/agents/acme-domain.agent.md" },
+      "skills": [{ "name": "acme-domain-spec", "path": ".pdlc/domains/acme-domain/capabilities/plugins/acme-domain/skills/acme-domain-spec/SKILL.md" }],
       "mode": "draft",
       "handoff": "Return selectable domain questions to the POC requirements flow."
     }
@@ -134,7 +134,7 @@ The main Agent reads those files, performs the Plugin contribution in the curren
 Run this only when the product repository needs the Plugin components visible to VS Code Copilot independently:
 
 ```sh
-bun pdlc/cli.ts plugin sync --root /absolute/path/to/product
+bun .pdlc/cli.ts plugin sync --root /absolute/path/to/product
 ```
 
 The command discovers all enabled POC Plugins and safely copies their Agent and Skill files into:
@@ -149,11 +149,11 @@ Different existing content is never overwritten. This is a platform adapter proj
 ## 7. Validate
 
 ```sh
-bun pdlc/cli.ts plugin list
-bun pdlc/cli.ts context requirements-clarification
-bun pdlc/cli.ts context ux-design
-bun test pdlc/tests
-bun pdlc/cli.ts validate
+bun .pdlc/cli.ts plugin list
+bun .pdlc/cli.ts context requirements-clarification
+bun .pdlc/cli.ts context ux-design
+bun test ./.pdlc/tests
+bun .pdlc/cli.ts validate
 ```
 
 For a new Plugin, add an end-to-end test proving that a normal POC Stage entry discovers the Plugin and returns its owned Agent and Skills. A file-copy-only test is insufficient.

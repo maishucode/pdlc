@@ -58,9 +58,9 @@ function contextTags(record: PocDeliveryRecord): string[] {
 }
 
 async function loadHarnessModel(projectRoot = HARNESS_ROOT) {
-  const stages = await StageRegistry.load(join(HARNESS_ROOT, "pdlc", "stages", "catalog.json"));
-  const deliveryFlows = await DeliveryFlowRegistry.load(join(HARNESS_ROOT, "pdlc", "delivery-flows", "catalog.json"), stages);
-  const domains = await DomainRegistry.load(join(HARNESS_ROOT, "pdlc", "domains"));
+  const stages = await StageRegistry.load(join(HARNESS_ROOT, ".pdlc", "stages", "catalog.json"));
+  const deliveryFlows = await DeliveryFlowRegistry.load(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "catalog.json"), stages);
+  const domains = await DomainRegistry.load(join(HARNESS_ROOT, ".pdlc", "domains"));
   const project = await ProjectOverlay.load(projectRoot, new Set(domains.list().map(({ manifest }) => manifest.id)));
   return { stages, deliveryFlows, domains, project };
 }
@@ -124,7 +124,7 @@ async function readiness(options: CliOptions, target?: string): Promise<unknown>
     };
   }
 
-  const policy = await loadRequirementsFlowControl(join(HARNESS_ROOT, "pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
+  const policy = await loadRequirementsFlowControl(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
   const result = await assessPocBuildReadiness(record, options.root, resolution.controls, policy, resolution.defaults);
   if (!result.ok) throw new PdlcError("BUILD_NOT_READY", "POC requirements or mandatory Controls are not ready for build", result.issues);
   if (options.actor) {
@@ -239,7 +239,7 @@ async function validate(options: CliOptions): Promise<unknown> {
   const checks: Record<string, unknown> = {};
   const schemaNames = ["audit-event", "artifact-definition", "control-policy", "delivery-flow-catalog", "delivery-flow", "domain", "integration-adapter", "knowledge-metadata", "plugin", "poc-delivery-record", "project-baseline", "project-default", "requirements-flow-control", "stage-catalog"];
   for (const schemaName of schemaNames) {
-    const path = join(HARNESS_ROOT, "pdlc", "schemas", `${schemaName}.schema.json`);
+    const path = join(HARNESS_ROOT, ".pdlc", "schemas", `${schemaName}.schema.json`);
     const schema = JSON.parse(await readFile(path, "utf8")) as { $schema?: unknown; type?: unknown };
     if (typeof schema.$schema !== "string" || schema.type !== "object") throw new PdlcError("VALIDATION_FAILED", `Invalid JSON Schema metadata: ${path}`);
   }
@@ -264,10 +264,10 @@ async function validate(options: CliOptions): Promise<unknown> {
 
   const plugins = await discoverPlugins(stages, domains);
   checks.plugins = { ok: true, loaded: plugins.map(({ manifest, bindings }) => ({ ref: `${manifest.id}@${manifest.version}`, ownerDomain: manifest.ownerDomain, stages: bindings.map(({ stage }) => stage) })) };
-  const requirementsControl = await loadRequirementsFlowControl(join(HARNESS_ROOT, "pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
+  const requirementsControl = await loadRequirementsFlowControl(join(HARNESS_ROOT, ".pdlc", "delivery-flows", "poc", "controls", "requirements.json"));
   checks.requirementsFlowControl = { ok: true, loaded: `${requirementsControl.id}@${requirementsControl.version}` };
 
-  const recordSource = options.record ? (isAbsolute(options.record) || options.record.endsWith(".json") ? resolve(options.root, options.record) : new FileStateStore(options.root).recordPath(options.record)) : join(HARNESS_ROOT, "pdlc", "examples", "poc-delivery-record.json");
+  const recordSource = options.record ? (isAbsolute(options.record) || options.record.endsWith(".json") ? resolve(options.root, options.record) : new FileStateStore(options.root).recordPath(options.record)) : join(HARNESS_ROOT, ".pdlc", "examples", "poc-delivery-record.json");
   const recordValidation = validatePocDeliveryRecord(JSON.parse(await readFile(recordSource, "utf8")) as unknown);
   checks.record = { ok: recordValidation.ok, source: recordSource, issues: recordValidation.issues };
   if (!recordValidation.ok) throw new PdlcError("VALIDATION_FAILED", `Invalid Delivery Record: ${recordSource}`, recordValidation.issues);
@@ -276,7 +276,7 @@ async function validate(options: CliOptions): Promise<unknown> {
   checks.resolution = { ok: resolution.issues.length === 0, controls: resolution.controls.map(({ ref }) => ref), defaults: resolution.defaults.map(({ key, sourceRef }) => ({ key, sourceRef })), knowledge: resolution.knowledge.map(({ ref }) => ref), baselines: resolution.baselines.map(({ ref }) => ref), capabilities: resolution.capabilities.map(({ ref }) => ref), issues: resolution.issues };
   if (resolution.issues.length > 0) throw new PdlcError("VALIDATION_FAILED", "Domain context contains unresolved conflicts", resolution.issues);
 
-  const portability = await validateCorePortability(join(HARNESS_ROOT, "pdlc", "core"));
+  const portability = await validateCorePortability(join(HARNESS_ROOT, ".pdlc", "core"));
   checks.portability = portability;
   if (!portability.ok) throw new PdlcError("PORTABILITY_VIOLATION", "Shared Core contains platform-specific content", portability.issues);
   const entrypoints = await validateConversationEntrypoints(HARNESS_ROOT);

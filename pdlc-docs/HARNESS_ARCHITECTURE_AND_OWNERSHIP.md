@@ -72,7 +72,7 @@ An Integration Adapter encapsulates authenticated access to an external system a
 
 ### Project Overlay
 
-The Project Configuration Overlay adds project-specific context under `.pdlc/config/domains/<domain>/`:
+The Project Configuration Overlay adds project-specific context under `pdlc/config/domains/<domain>/`:
 
 - `baseline.json` — approved facts that later Stages should not ask again;
 - `controls/` — cumulative project-specific mandatory rules;
@@ -252,11 +252,11 @@ Control reviewers should be able to trace every effective obligation to its sour
 
 | Review concern | Source of truth |
 |---|---|
-| Harness integrity and non-bypassable rules | `pdlc/core/`, `pdlc/schemas/`, and tests |
-| Flow lifecycle and intrinsic controls | `pdlc/delivery-flows/<flow>/flow.json` and `controls/` |
-| Stage completion semantics | `pdlc/stages/catalog.json` |
-| Enterprise professional Controls | `pdlc/domains/<domain>/controls/` |
-| Project Controls and Baselines | `.pdlc/config/domains/<domain>/` |
+| Harness integrity and non-bypassable rules | `.pdlc/core/`, `.pdlc/schemas/`, and tests |
+| Flow lifecycle and intrinsic controls | `.pdlc/delivery-flows/<flow>/flow.json` and `controls/` |
+| Stage completion semantics | `.pdlc/stages/catalog.json` |
+| Enterprise professional Controls | `.pdlc/domains/<domain>/controls/` |
+| Project Controls and Baselines | `pdlc/config/domains/<domain>/` |
 | Effective applications and exceptions | Delivery Record `resolution.controls` |
 | Evidence and controlled decisions | Delivery Record evidence, Checkpoint data, and append-only audit events |
 
@@ -299,7 +299,7 @@ Ownership metadata explains responsibility. CODEOWNERS enforces review routing. 
 ## 6. Folder contract
 
 ```text
-pdlc/domains/<domain>/
+.pdlc/domains/<domain>/
   domain.json
   artifacts/<artifact>/
     artifact.json
@@ -319,33 +319,37 @@ pdlc/domains/<domain>/
 
 Only create categories that the Domain actually owns.
 
-Project-specific configuration and persistent delivery state use a separate namespace:
+Harness-managed runtime state and project-owned delivery content use separate namespaces:
 
 ```text
 .pdlc/
+  runtime/
+    records/
+    audit/
+
+pdlc/
   config/domains/<domain>/
     baseline.json
     controls/
     defaults/
     knowledge/
-  records/
   requirements/
   evidence/
-  audit/
+  artifacts/
 ```
 
-The Runner creates the transient `.pdlc/locks/` directory and the `.pdlc/current` active-record pointer only when required. They are not part of the empty repository skeleton.
+The Runner creates the transient `.pdlc/runtime/locks/` directory and the `.pdlc/runtime/current` active-record pointer only when required. They are not part of the empty repository skeleton.
 
 ## 7. Configure a Project
 
-Project-specific configuration belongs under `.pdlc/config/` in the product repository. It supplements shared assets under `pdlc/domains/`; it does not copy or replace them.
+Project-specific configuration belongs under `pdlc/config/` in the product repository. It supplements shared assets under `.pdlc/domains/`; it does not copy or replace them.
 
 ### 7.1 Choose the owning Domain
 
 Put each decision under the existing shared Domain that owns the subject. For example:
 
 ```text
-.pdlc/config/domains/solution-architecture/
+pdlc/config/domains/solution-architecture/
   baseline.json
   controls/
     repository-boundaries.policy.json
@@ -355,7 +359,7 @@ Put each decision under the existing shared Domain that owns the subject. For ex
     system-context.md
 ```
 
-The folder name must match a Domain registered under `pdlc/domains/`. The Runner rejects unknown Domain names. If a project needs a genuinely new professional Domain, add it to the shared Harness through the normal governance process instead of inventing a project-only Domain.
+The folder name must match a Domain registered under `.pdlc/domains/`. The Runner rejects unknown Domain names. If a project needs a genuinely new professional Domain, add it to the shared Harness through the normal governance process instead of inventing a project-only Domain.
 
 ### 7.2 Choose the configuration type
 
@@ -398,23 +402,24 @@ locked Control decision
 
 1. Identify the Domain that owns the decision.
 2. Select `baseline`, `controls`, `defaults`, or `knowledge` based on the semantics above.
-3. Start from the [Project Configuration example](../pdlc/examples/project-overlay/README.md) when a structured file is needed.
+3. Start from the [Project Configuration example](../.pdlc/examples/project-overlay/README.md) when a structured file is needed.
 4. Add the smallest configuration necessary and obtain the appropriate project or Domain-owner review.
 5. Ask the Harness Agent to validate the repository. The Agent runs the internal validation and reports unknown Domains, invalid schemas, owner mismatches, and locked-Control conflicts.
 6. Commit the configuration with the product repository. On each Stage entry, the Runner resolves it automatically; users should not be asked to reconfirm an approved baseline or an applied Default.
 
 ### 7.5 Keep configuration separate from delivery state
 
-Only `.pdlc/config/` is authored as project configuration. The other `.pdlc/` paths serve the running Delivery Flow:
+`pdlc/config/` is authored as project configuration. The remaining `pdlc/` folders contain project-owned delivery artifacts, while `.pdlc/runtime/` contains Runner-managed state:
 
 | Path | Ownership |
 |---|---|
-| `.pdlc/records/` | Runner-managed Delivery Records |
-| `.pdlc/requirements/` | Product Requirements Artifacts maintained through clarification and approval |
-| `.pdlc/evidence/` | Build, test, review, and approval evidence |
-| `.pdlc/audit/` | Runner-managed append-only audit events |
-| `.pdlc/current` | Runner-managed active-record pointer, created only when needed |
-| `.pdlc/locks/` | Transient Runner locks; never project configuration |
+| `.pdlc/runtime/records/` | Runner-managed Delivery Records |
+| `pdlc/requirements/` | Product Requirements Artifacts maintained through clarification and approval |
+| `pdlc/evidence/` | Build, test, review, and approval evidence |
+| `.pdlc/runtime/audit/` | Runner-managed append-only audit events |
+| `.pdlc/runtime/current` | Runner-managed active-record pointer, created only when needed |
+| `.pdlc/runtime/locks/` | Transient Runner locks; never project configuration |
+| `pdlc/artifacts/` | Future project-owned Stories, Designs, Plans, and other Artifact instances |
 
 Do not place configuration in a runtime folder, and do not manually edit controlled state or audit fields to simulate a successful transition.
 

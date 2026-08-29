@@ -46,7 +46,7 @@ Say:
 Use document mode for the remaining requirements questions.
 ```
 
-The Agent creates a fillable file under `.pdlc/questions/`. Complete the `[Answer]` fields, then say that the questionnaire is complete. The Agent turns the answers into requirements decisions and presents the finished requirements document for review.
+The Agent creates a fillable file under `pdlc/requirements/`. Complete the `[Answer]` fields, then say that the questionnaire is complete. The Agent turns the answers into requirements decisions and presents the finished requirements document for review.
 
 ## Approve Build Readiness
 

@@ -6,7 +6,7 @@ import test from "node:test";
 import { runCli } from "../cli.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
-const pluginRoot = join(projectRoot, "pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux");
+const pluginRoot = join(projectRoot, ".pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux");
 
 test("keeps the complete UX Plugin inside its owning Domain", async () => {
   const manifest = JSON.parse(await readFile(join(pluginRoot, "plugin.json"), "utf8"));

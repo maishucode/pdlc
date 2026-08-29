@@ -13,14 +13,14 @@ Your product repository
 ├── AGENTS.md                         Shared PDLC boundaries
 ├── .agents/skills/lean-pdlc/         Main Delivery Flow Skill
 ├── .github/                          Copilot adapter and prompt
-├── pdlc/                             Stages, Flows, Domains, schemas, and Runner
+├── .pdlc/                            Harness definitions and Runner state
+│   └── runtime/                      Records, audit, active pointer, and locks
 ├── pdlc-docs/                        Namespaced Harness documentation
-└── .pdlc/                            Project configuration and delivery runtime
+└── pdlc/                             Project-owned delivery workspace
     ├── config/domains/               Optional project configuration overlay
-    ├── records/                      Delivery Records
     ├── requirements/                 Requirements Artifacts
     ├── evidence/                     Delivery evidence
-    └── audit/                        Append-only audit events
+    └── artifacts/                    Future project delivery artifacts
 ```
 
 ## Put Lean PDLC in a project
@@ -45,17 +45,17 @@ AGENTS.md
 .github/agents/lean-pdlc.agent.md
 .github/prompts/pdlc.prompt.md
 .github/workflows/copilot-setup-steps.yml
+.pdlc/
 pdlc/
 pdlc-docs/
-.pdlc/
 ```
 
-Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Controls, Knowledge, and Capabilities before each Stage. Add project-specific context only under `.pdlc/config/domains/`.
+Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Controls, Knowledge, and Capabilities before each Stage. Add project-specific context only under `pdlc/config/domains/`.
 
 Maintainers may project all enabled Plugin Agents and Skills into VS Code-native directories with:
 
 ```sh
-bun pdlc/cli.ts plugin sync --root /absolute/path/to/product
+bun .pdlc/cli.ts plugin sync --root /absolute/path/to/product
 ```
 
 This projection makes Plugin Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Plugin contributions automatically.
@@ -87,8 +87,8 @@ Use the lean-pdlc skill to start a POC that validates whether AI can categorize 
 Maintainers can run these commands from the repository root. They are not commands for delivery users:
 
 ```sh
-bun test pdlc/tests
-bun pdlc/cli.ts validate
+bun test ./.pdlc/tests
+bun .pdlc/cli.ts validate
 ```
 
 For platform-specific troubleshooting, read [GitHub Copilot Adapter Guide](../GITHUB_COPILOT_ADAPTER.md).

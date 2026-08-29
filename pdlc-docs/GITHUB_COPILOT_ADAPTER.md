@@ -16,7 +16,7 @@ The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Domain
 | Custom Agent | `.github/agents/lean-pdlc.agent.md` | Manually selectable Lean PDLC persona and least-required tool set |
 | Prompt File | `.github/prompts/pdlc.prompt.md` | `/pdlc` convenience entry point in supported IDEs |
 | Cloud setup workflow | `.github/workflows/copilot-setup-steps.yml` | Installs Bun and validates the Harness in the Copilot cloud-agent environment |
-| Adapter validation | `pdlc/platform-adapters/validate-entrypoints.ts` | Detects missing, legacy, oversized, or drifted adapter files |
+| Adapter validation | `.pdlc/platform-adapters/validate-entrypoints.ts` | Detects missing, legacy, oversized, or drifted adapter files |
 
 ## 3. Why each component exists
 
@@ -152,8 +152,8 @@ No secrets or MCP servers are required for the Phase 1 POC Delivery Flow.
 Harness maintainers run the configured validation and tests:
 
 ```text
-bun pdlc/cli.ts validate
-bun test pdlc/tests
+bun .pdlc/cli.ts validate
+bun test ./.pdlc/tests
 ```
 
 Validation confirms:

@@ -14,7 +14,7 @@ On every Stage entry, the main Agent asks the Runner for enabled Plugin contribu
 
 ```text
 POC Stage
-  -> discover pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/plugin.json
+  -> discover .pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/plugin.json
   -> match pdlc-stage-bindings.json
   -> read Plugin Agent + bound Skill
   -> perform additive UX work
@@ -26,7 +26,7 @@ The user does not need to select **Lean PDLC UX** manually.
 ## Owned definition
 
 ```text
-pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/
+.pdlc/domains/ux/capabilities/plugins/lean-pdlc-ux/
 ├── plugin.json
 ├── pdlc-stage-bindings.json
 ├── agents/
@@ -52,9 +52,9 @@ The manifest opts into the `poc` Delivery Flow and declares the relative locatio
 ## Maintainer checks
 
 ```sh
-bun pdlc/cli.ts plugin list
-bun pdlc/cli.ts guidance ux-design
-bun pdlc/cli.ts plugin sync --root /absolute/path/to/product
+bun .pdlc/cli.ts plugin list
+bun .pdlc/cli.ts guidance ux-design
+bun .pdlc/cli.ts plugin sync --root /absolute/path/to/product
 ```
 
 `plugin sync` is only the VS Code adapter projection. It copies enabled Plugin Agents and Skills into `.github/`; it is not what integrates the Plugin with the PDLC flow. Stage resolution is the integration point.

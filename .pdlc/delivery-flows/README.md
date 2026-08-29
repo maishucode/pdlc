@@ -12,4 +12,4 @@ v2 provides three registered Delivery Flows:
 - `implementation`: planned and not executable.
 - `pdlc`: planned and not executable.
 
-Canonical Stage semantics remain in `pdlc/stages/catalog.json`; a Flow references Stage ids without redefining their requirements or outputs. Delivery Flow definitions contain no Agent-platform-specific behavior.
+Canonical Stage semantics remain in `.pdlc/stages/catalog.json`; a Flow references Stage ids without redefining their requirements or outputs. Delivery Flow definitions contain no Agent-platform-specific behavior.

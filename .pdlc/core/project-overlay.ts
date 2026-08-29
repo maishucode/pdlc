@@ -32,7 +32,7 @@ export class ProjectOverlay {
   private constructor(readonly domains: ProjectDomainOverlay[]) {}
 
   static async load(projectRoot: string, knownDomains: Set<string>): Promise<ProjectOverlay> {
-    const domainsRoot = join(projectRoot, ".pdlc", "config", "domains");
+    const domainsRoot = join(projectRoot, "pdlc", "config", "domains");
     const directories = await listDirectories(domainsRoot);
     const domains: ProjectDomainOverlay[] = [];
     for (const domain of directories) {

@@ -23,7 +23,7 @@
   },
   "requirements": {
     "artifactType": "product-management.requirements",
-    "documentRef": ".pdlc/requirements/POC-EXAMPLE.md",
+    "documentRef": "pdlc/requirements/POC-EXAMPLE.md",
     "profile": "minimal",
     "status": "draft",
     "clarification": {

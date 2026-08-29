@@ -1,4 +1,4 @@
-.pdlc/locks/
+.pdlc/runtime/locks/
 .pdlc/**/*.tmp
 pocs/**/node_modules/
 pocs/**/dist/

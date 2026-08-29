@@ -12,7 +12,7 @@ Answer whether an idea is feasible or worth productizing through a bounded, non-
 
 When the activation prompt includes an idea, create a minimal Draft, resolve only the `requirements-clarification` Stage context, read its returned Plugin contribution, and ask the first clarification round immediately. Do not wait for complete Control tables, future Stage resolution, full validation, detailed design, or verification planning. Complete those items incrementally and reconcile all of them before Build Readiness.
 
-Requirements clarification is always executed, with a minimal, standard, or comprehensive profile. The Agent loads `pdlc/delivery-flows/poc/controls/requirements.json`, maintains the `product-management.requirements` Artifact through focused conversational rounds, and traces each resolved product question as an `RQ-xxx` decision. The Artifact also discloses applicable Controls, Project Baselines, resolved Defaults, and the lightweight design.
+Requirements clarification is always executed, with a minimal, standard, or comprehensive profile. The Agent loads `.pdlc/delivery-flows/poc/controls/requirements.json`, maintains the `product-management.requirements` Artifact through focused conversational rounds, and traces each resolved product question as an `RQ-xxx` decision. The Artifact also discloses applicable Controls, Project Baselines, resolved Defaults, and the lightweight design.
 
 Role assignment and timebox are defined by `flow.json#controls.deliveryDefaults`, not elicited as product requirements. For the default POC profile, the Build Readiness actor fills Product, Developer, and QA and the timebox is one working day. The Runner materializes the actor assignment during approval.
 

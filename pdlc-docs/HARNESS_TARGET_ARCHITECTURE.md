@@ -451,7 +451,7 @@ The responsibilities are separated as follows:
 | How should Acceptance Criteria be written? | Guidance |
 | How does the Agent detect ambiguity? | Plugin |
 | How many questions may a POC ask in one round? | Delivery Flow Control |
-| Where is a delivery's Requirements Document stored? | `.pdlc/` runtime Artifact |
+| Where is a delivery's Requirements Document stored? | `pdlc/requirements/` project Artifact |
 
 A Stage references Artifact types without copying their internal structure:
 
@@ -489,10 +489,10 @@ Professional owners do not need to participate in every delivery. Their approved
 
 ## 10. Project Overlay
 
-Shared Domains define enterprise-wide rules, knowledge, and capabilities. A project adds approved architecture, project rules, defaults, and local knowledge under `.pdlc/config/` as a sparse configuration overlay.
+Shared Domains define enterprise-wide rules, knowledge, and capabilities. A project adds approved architecture, project rules, defaults, and local knowledge under `pdlc/config/` as a sparse configuration overlay.
 
 ```text
-.pdlc/config/
+pdlc/config/
   project.json
 
   domains/
@@ -836,10 +836,10 @@ An unimplemented control mechanism must be reported as unavailable; it must neve
 
 ## 13. Runtime Data
 
-Shared Harness definitions and delivery runtime data must remain separate.
+Harness-owned definitions, Runner-managed state, and project-owned delivery content must remain separate.
 
-- Shared definitions live under `pdlc/`.
-- Project configuration and delivery state live under `.pdlc/`.
+- Shared definitions and Runner-managed state live under `.pdlc/`.
+- Project configuration and delivery artifacts live under `pdlc/`.
 
 Runtime data includes:
 
@@ -855,14 +855,14 @@ The Delivery Record is the state and decision index for one Delivery Flow. It mu
 
 ## 14. Target Repository Structure
 
-The tree below shows conceptual ownership and grouping. The v2 implementation deliberately keeps the small Core modules flat under `pdlc/core/`; splitting them into `registry/`, `resolvers/`, `enforcement/`, and `runtime/` subfolders is unnecessary until Core size makes that move valuable.
+The tree below shows conceptual ownership and grouping. The v2 implementation deliberately keeps the small Core modules flat under `.pdlc/core/`; splitting them into `registry/`, `resolvers/`, `enforcement/`, and `runtime/` subfolders is unnecessary until Core size makes that move valuable.
 
 ```text
 PDLC/
 ├── AGENTS.md
 ├── README.md
 │
-├── pdlc/
+├── .pdlc/
 │   ├── cli.ts
 │   │
 │   ├── core/
@@ -933,15 +933,19 @@ PDLC/
 │   │   └── delivery-record.schema.json
 │   │
 │   ├── examples/
-│   └── tests/
+│   ├── tests/
+│   └── runtime/
+│       ├── records/
+│       ├── audit/
+│       ├── current
+│       └── locks/
 │
-├── .pdlc/
+├── pdlc/
 │   ├── config/
 │   │   └── domains/
-│   ├── records/
 │   ├── requirements/
 │   ├── evidence/
-│   └── audit/
+│   └── artifacts/
 │
 ├── .agents/
 │   └── skills/
@@ -966,12 +970,13 @@ Not every Harness file belongs to a professional Domain:
 
 | Content | Location | Reason |
 |---|---|---|
-| Runner and Core | `pdlc/core/`, `pdlc/cli.ts` | Platform engine, not professional content |
-| Canonical Stages | `pdlc/stages/` | Shared delivery vocabulary |
-| Delivery Flows | `pdlc/delivery-flows/` | Delivery orchestration |
-| Delivery Roles | `pdlc/roles/` | Per-delivery accountability |
+| Runner and Core | `.pdlc/core/`, `.pdlc/cli.ts` | Platform engine, not professional content |
+| Canonical Stages | `.pdlc/stages/` | Shared delivery vocabulary |
+| Delivery Flows | `.pdlc/delivery-flows/` | Delivery orchestration |
+| Delivery Roles | `.pdlc/roles/` | Per-delivery accountability |
 | Platform Adapters | `.codex/`, `.github/` | Agent platform exposure |
-| Runtime data | `.pdlc/` | Project and delivery instances |
+| Runner-managed state | `.pdlc/runtime/` | Records, audit, active pointer, and locks |
+| Project delivery content | `pdlc/` | Configuration, Requirements, Evidence, and other Artifact instances |
 
 ## 15. Target State of Principle Pack
 
@@ -1101,14 +1106,14 @@ Future evolution must continue to preserve schema validation, Runner tests, and 
 
 | Current area | Target area |
 |---|---|
-| `pdlc/principles/<area>/` | `pdlc/domains/<domain>/controls/` and `knowledge/` |
+| `pdlc/principles/<area>/` | `.pdlc/domains/<domain>/controls/` and `knowledge/` |
 | `pdlc/principles/ownership.json` | Domain manifests plus CODEOWNERS |
 | `pdlc/defaults/harness/` | Owning Domain's `knowledge/defaults/` or Core fallback |
 | `pdlc/templates/` | Artifact-specific templates under the owning Domain |
 | Top-level `plugins/` | Owning Domain's `capabilities/plugins/` |
 | `pdlc/integrations/` implementations | Owning Domain's `capabilities/adapters/` |
 | Integration contracts | Stable Core capability contracts |
-| `.pdlc/project/standards/` | `.pdlc/config/domains/<domain>/` overlay |
+| `.pdlc/project/standards/` | `pdlc/config/domains/<domain>/` overlay |
 | Requirements policy with mixed responsibilities | Artifact schema + Domain Control + Guidance + Flow Control + Plugin |
 
 ## 21. Architectural Constraints

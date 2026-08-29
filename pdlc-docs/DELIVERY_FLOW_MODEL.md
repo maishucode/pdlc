@@ -4,7 +4,7 @@
 
 Delivery Flow is the only lifecycle composition concept. POC, Implementation, and end-to-end PDLC are all Delivery Flows with different Stage sequences and controls.
 
-The Catalog at `pdlc/delivery-flows/catalog.json` is explicit. Adding a directory does not activate a Flow. This prevents unfinished, experimental, or copied definitions from silently becoming available.
+The Catalog at `.pdlc/delivery-flows/catalog.json` is explicit. Adding a directory does not activate a Flow. This prevents unfinished, experimental, or copied definitions from silently becoming available.
 
 ## Stage and Flow responsibilities
 
@@ -30,7 +30,7 @@ Conditional Stages use activation tags. For example, `ux-design` activates for U
 
 ## Adding a Stage
 
-1. Add the reusable definition to `pdlc/stages/catalog.json`.
+1. Add the reusable definition to `.pdlc/stages/catalog.json`.
 2. Give it a stable id, intent, phase, role slots, requirements, outputs, and Artifact references where applicable.
 3. Add it to each relevant Delivery Flow sequence.
 4. Ask each Domain owner whether existing Controls, Knowledge, Plugins, or Adapters apply to the new Stage.
@@ -40,11 +40,11 @@ Do not create a Stage solely to perform context resolution. The Runner resolves 
 
 ## Adding a Delivery Flow
 
-1. Create `pdlc/delivery-flows/<id>/flow.json`.
+1. Create `.pdlc/delivery-flows/<id>/flow.json`.
 2. Compose canonical Stage ids without redefining their semantics.
 3. Mark incomplete Flows `planned` and omit executable controls.
 4. When executable behavior is ready, add statuses, checkpoints, constraints, delivery defaults, Artifact profiles, and required Capabilities; mark it `active`.
-5. Register the definition explicitly in `pdlc/delivery-flows/catalog.json`.
+5. Register the definition explicitly in `.pdlc/delivery-flows/catalog.json`.
 6. Add validation and lifecycle tests.
 
 ## Changing a Flow

@@ -1,10 +1,10 @@
 # Delivery Record reference
 
-Use `pdlc/schemas/poc-delivery-record.schema.json` as the structural contract and `pdlc/examples/poc-delivery-record.json` as the starting shape.
+Use `.pdlc/schemas/poc-delivery-record.schema.json` as the structural contract and `.pdlc/examples/poc-delivery-record.json` as the starting shape.
 
 - Keep `id`, `deliveryFlow`, and checkpoint-controlled state stable.
 - Make the problem, hypothesis, expected outcome, and success criteria concrete and testable.
-- Store the requirements contract at `.pdlc/requirements/<POC-ID>.md`; keep it `draft` until explicit Product approval.
+- Store the requirements contract at `pdlc/requirements/<POC-ID>.md`; keep it `draft` until explicit Product approval.
 - Track answered-question count, coverage status for every policy topic, open questions, and contradictions under `requirements.clarification`. Keep unknown DRAFT business fields empty instead of inserting fictional values.
 - Keep `questionsAnswered` equal to the number of distinct `RQ-xxx` decisions in the Requirements document.
 - Let the Runner record requirements depth, approver, approval timestamp, and approved content hash. Material scope or standard changes create a content-hash mismatch and require a new explicit approval before further build activity.

@@ -15,7 +15,7 @@ export class AuditLog {
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
-    this.path = join(workspaceRoot, ".pdlc", "audit", "events.jsonl");
+    this.path = join(workspaceRoot, ".pdlc", "runtime", "audit", "events.jsonl");
   }
 
   create(record: PocDeliveryRecord, input: NewAuditEvent): AuditEvent {
@@ -64,4 +64,3 @@ export class AuditLog {
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
-

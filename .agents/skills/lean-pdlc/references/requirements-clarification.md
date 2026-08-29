@@ -1,6 +1,6 @@
 # Requirements clarification reference
 
-Use `pdlc/delivery-flows/poc/controls/requirements.json` as the deterministic Flow Control and the Product Management Requirements Artifact Definition and templates as the document contract.
+Use `.pdlc/delivery-flows/poc/controls/requirements.json` as the deterministic Flow Control and the Product Management Requirements Artifact Definition and templates as the document contract.
 
 ## Adaptive depth
 
@@ -42,7 +42,7 @@ Use chat mode by default. If more questions remain than fit in one round, briefl
 
 Use only when `allowDocumentAnswers` is true and the user chooses it.
 
-1. Generate the Flow Control's `questionDocumentPattern` from `pdlc/domains/product-management/artifacts/requirements/templates/questions.md`, replacing `{recordId}` with the active POC ID.
+1. Generate the Flow Control's `questionDocumentPattern` from `.pdlc/domains/product-management/artifacts/requirements/templates/questions.md`, replacing `{recordId}` with the active POC ID.
 2. Include all currently outstanding product questions; document mode is not limited to three questions.
 3. Give every question a stable ID, meaningful mutually exclusive options, `X) Other`, an empty `[Answer]:` tag, and an optional `[Notes]:` tag.
 4. Link the file, explain that the user may fill it directly, and stop. Do not proceed from an unfilled questionnaire.

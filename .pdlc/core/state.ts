@@ -32,7 +32,7 @@ export class FileStateStore {
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
-    this.stateRoot = join(workspaceRoot, ".pdlc");
+    this.stateRoot = join(workspaceRoot, ".pdlc", "runtime");
   }
 
   recordPath(recordId: string): string {

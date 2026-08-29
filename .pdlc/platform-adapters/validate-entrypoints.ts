@@ -42,8 +42,8 @@ const EXPECTATIONS: EntrypointExpectation[] = [
     markers: [
       "copilot-setup-steps:",
       "uses: oven-sh/setup-bun@v2",
-      "bun test pdlc/tests",
-      "bun pdlc/cli.ts validate",
+      "bun test ./.pdlc/tests",
+      "bun .pdlc/cli.ts validate",
     ],
     maximumBytes: 3_000,
   },
@@ -51,13 +51,31 @@ const EXPECTATIONS: EntrypointExpectation[] = [
 
 const FORBIDDEN_LEGACY_PATHS = [
   ".github/agents/lean-pdlc.md",
+  ".pdlc/audit",
+  ".pdlc/config",
+  ".pdlc/current",
+  ".pdlc/evidence",
+  ".pdlc/locks",
   ".pdlc/project",
+  ".pdlc/questions",
+  ".pdlc/records",
+  ".pdlc/requirements",
+  "pdlc/cli.ts",
+  "pdlc/core",
   "pdlc/defaults",
+  "pdlc/delivery-flows",
+  "pdlc/domains",
+  "pdlc/examples",
   "pdlc/harnesses",
   "pdlc/integrations",
   "pdlc/journeys",
+  "pdlc/platform-adapters",
   "pdlc/principles",
+  "pdlc/roles",
+  "pdlc/schemas",
+  "pdlc/stages",
   "pdlc/templates",
+  "pdlc/tests",
   "pdlc/workflows",
   "plugins",
 ];
@@ -88,7 +106,7 @@ export async function validateConversationEntrypoints(workspaceRoot: string): Pr
       issues.push({
         code: "LEGACY_PATH_PRESENT",
         path: legacyPath,
-        message: "Legacy v1 path is present; v2 content must use Delivery Flows, Domains, Artifact templates, or Platform Adapters",
+        message: "Legacy or obsolete path is present; v2 must keep Harness and Runner content under .pdlc and project-owned content under pdlc",
       });
     } catch {
       // The legacy path must remain absent.

@@ -21,7 +21,7 @@ import { validateCorePortability } from "../platform-adapters/validate-portabili
 const projectRoot = resolve(import.meta.dirname, "../..");
 
 async function exampleRecord(): Promise<PocDeliveryRecord> {
-  return JSON.parse(await readFile(join(projectRoot, "pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  return JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
 }
 
 async function temporaryWorkspace(): Promise<{ path: string; cleanup(): Promise<void> }> {
@@ -30,9 +30,9 @@ async function temporaryWorkspace(): Promise<{ path: string; cleanup(): Promise<
 }
 
 async function model(project = projectRoot) {
-  const stages = await StageRegistry.load(join(projectRoot, "pdlc/stages/catalog.json"));
-  const flows = await DeliveryFlowRegistry.load(join(projectRoot, "pdlc/delivery-flows/catalog.json"), stages);
-  const domains = await DomainRegistry.load(join(projectRoot, "pdlc/domains"));
+  const stages = await StageRegistry.load(join(projectRoot, ".pdlc/stages/catalog.json"));
+  const flows = await DeliveryFlowRegistry.load(join(projectRoot, ".pdlc/delivery-flows/catalog.json"), stages);
+  const domains = await DomainRegistry.load(join(projectRoot, ".pdlc/domains"));
   const overlay = await ProjectOverlay.load(project, new Set(domains.list().map(({ manifest }) => manifest.id)));
   return { stages, flows, domains, overlay };
 }
@@ -110,7 +110,7 @@ test("resolves Databricks KB and Adapter as separate assets", async () => {
 test("lets project defaults override Domain defaults but not locked Controls", async (context) => {
   const workspace = await temporaryWorkspace();
   context.after(workspace.cleanup);
-  const defaultsRoot = join(workspace.path, ".pdlc/config/domains/ux/defaults");
+  const defaultsRoot = join(workspace.path, "pdlc/config/domains/ux/defaults");
   await mkdir(defaultsRoot, { recursive: true });
   await writeFile(join(defaultsRoot, "override.json"), JSON.stringify({
     schemaVersion: 1,
@@ -145,7 +145,7 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   const overlay = await ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id)));
   const activeStages = flows.resolve("poc", ["technology:web-ui", "risk:sensitive-data"]).map(({ definition }) => definition.id);
   const resolved = resolveDomainContext(domains, overlay, { deliveryFlow: "poc", stages: activeStages, riskTriggers: record.risk.triggers, technologies: record.design.technologies });
-  const policy = await loadRequirementsFlowControl(join(projectRoot, "pdlc/delivery-flows/poc/controls/requirements.json"));
+  const policy = await loadRequirementsFlowControl(join(projectRoot, ".pdlc/delivery-flows/poc/controls/requirements.json"));
 
   const blocked = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);
   assert(blocked.issues.some(({ code }) => code === "REQUIREMENTS_NOT_APPROVED"));
@@ -156,7 +156,7 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   record.requirements.clarification = { questionsAnswered: 8, coverage: { productContext: "complete", functionalBehavior: "complete", userScenarios: "complete", uxInteraction: "complete", qualityAttributes: "complete", dataIntegrations: "complete", scopeSuccess: "complete" }, openQuestions: [], contradictions: [] };
   record.resolution.controls.applicable = resolved.controls.map(({ ref }) => ref);
   record.resolution.controls.applications = record.resolution.controls.applicable.map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.` }));
-  await writeFile(join(workspace.path, "requirements.md"), await readFile(join(projectRoot, "pdlc/tests/fixtures/ready-requirements.md"), "utf8"));
+  await writeFile(join(workspace.path, "requirements.md"), await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"));
   record.requirements.approvedContentHash = await hashRequirementsDocument(workspace.path, record.requirements.documentRef);
   const ready = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults);
   assert.deepEqual(ready.issues, []);
@@ -176,8 +176,10 @@ test("writes and reads a Delivery Record atomically with optimistic revision con
   context.after(workspace.cleanup);
   const store = new FileStateStore(workspace.path);
   const record = await exampleRecord();
+  assert.equal(store.recordPath(record.id), join(workspace.path, ".pdlc/runtime/records/POC-EXAMPLE.json"));
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
+  assert.equal((await readFile(join(workspace.path, ".pdlc/runtime/current"), "utf8")).trim(), record.id);
   assert.deepEqual(await store.readCurrentRecord(), record);
   const next = { ...record, revision: 1, updatedAt: new Date().toISOString() };
   await assert.rejects(store.writeRecord(next), (error: unknown) => error instanceof PdlcError && error.code === "REVISION_CONFLICT");
@@ -189,6 +191,7 @@ test("prevents concurrent ownership of the same lock", async (context) => {
   const workspace = await temporaryWorkspace();
   context.after(workspace.cleanup);
   const first = await acquireLock(workspace.path, "record-POC-EXAMPLE");
+  assert.equal(first.path, join(workspace.path, ".pdlc/runtime/locks/record-POC-EXAMPLE.lock"));
   try { await assert.rejects(acquireLock(workspace.path, "record-POC-EXAMPLE"), (error: unknown) => error instanceof PdlcError && error.code === "LOCK_HELD"); }
   finally { await first.release(); }
 });
@@ -198,11 +201,12 @@ test("appends auditable events with deterministic record hashes", async (context
   context.after(workspace.cleanup);
   const record = await exampleRecord();
   const audit = new AuditLog(workspace.path);
+  assert.equal(audit.path, join(workspace.path, ".pdlc/runtime/audit/events.jsonl"));
   const event = audit.create(record, { recordId: record.id, eventType: "DELIVERY_FLOW_CREATED", actor: record.assignments.product, riskLevel: record.risk.level });
   await audit.append(event);
   assert.equal((await audit.readAll())[0]?.recordHash.length, 64);
 });
 
 test("shared Core remains platform-portable", async () => {
-  assert.deepEqual(await validateCorePortability(join(projectRoot, "pdlc/core")), { ok: true, issues: [] });
+  assert.deepEqual(await validateCorePortability(join(projectRoot, ".pdlc/core")), { ok: true, issues: [] });
 });

@@ -19,7 +19,7 @@ function safeLockName(name: string): string {
 
 export async function acquireLock(workspaceRoot: string, name: string): Promise<LockHandle> {
   const safeName = safeLockName(name);
-  const lockDirectory = join(workspaceRoot, ".pdlc", "locks");
+  const lockDirectory = join(workspaceRoot, ".pdlc", "runtime", "locks");
   const lockPath = join(lockDirectory, `${safeName}.lock`);
   const token = randomUUID();
   await mkdir(lockDirectory, { recursive: true });
@@ -75,4 +75,3 @@ export async function withLock<T>(
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
-

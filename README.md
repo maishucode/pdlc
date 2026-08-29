@@ -42,7 +42,7 @@ The four context channels remain separate because they have different semantics:
 ## Repository layout
 
 ```text
-pdlc/
+.pdlc/
   stages/catalog.json
   delivery-flows/
     catalog.json
@@ -64,20 +64,22 @@ pdlc/
   core/
   tests/
   cli.ts
+  runtime/
+    records/
+    audit/
 
-.pdlc/
+pdlc/
   config/domains/<domain>/
     baseline.json
     controls/
     defaults/
     knowledge/
-  records/
   requirements/
   evidence/
-  audit/
+  artifacts/
 ```
 
-Every shared asset lives under its owning Domain. This lets an expert team review one folder and see both what it mandates and what it offers.
+The ownership rule is: `.pdlc/` is owned by the Harness and Runner; `pdlc/` is owned by the product project. Every shared professional asset lives under its owning Domain inside `.pdlc/domains/`.
 
 ## Current implementation
 
@@ -100,29 +102,31 @@ The Agent owns Runner calls; end users should not be asked to execute Bun comman
 Internal capabilities include:
 
 ```text
-bun pdlc/cli.ts validate
-bun pdlc/cli.ts status --root <project>
-bun pdlc/cli.ts context <stage-id> --root <project>
-bun pdlc/cli.ts readiness build --root <project> --record <id> --actor <identity>
-bun pdlc/cli.ts plugin list
-bun pdlc/cli.ts plugin sync --root <project>
+bun .pdlc/cli.ts validate
+bun .pdlc/cli.ts status --root <project>
+bun .pdlc/cli.ts context <stage-id> --root <project>
+bun .pdlc/cli.ts readiness build --root <project> --record <id> --actor <identity>
+bun .pdlc/cli.ts plugin list
+bun .pdlc/cli.ts plugin sync --root <project>
 ```
 
 `context` is the normal Stage-resolution API. It returns Controls, Baselines, Defaults, Knowledge, and Capability contributions independently. `guidance` remains a Plugin-only compatibility view.
 
 ## Adding an asset
 
-- New Stage: add it once to `pdlc/stages/catalog.json`, then reference it from registered Delivery Flows and applicable Domain assets.
-- New Delivery Flow: create `pdlc/delivery-flows/<id>/flow.json` and explicitly register it in `pdlc/delivery-flows/catalog.json`.
+- New Stage: add it once to `.pdlc/stages/catalog.json`, then reference it from registered Delivery Flows and applicable Domain assets.
+- New Delivery Flow: create `.pdlc/delivery-flows/<id>/flow.json` and explicitly register it in `.pdlc/delivery-flows/catalog.json`.
 - New Control or Knowledge: place it in the owning Domain and declare applicability metadata.
 - New Plugin: place it under the owning Domain's `capabilities/plugins/` folder and declare permissions and Stage bindings.
-- Project-specific decision: place it under `.pdlc/config/domains/<domain>/`; do not fork shared definitions.
+- Project-specific decision: place it under `pdlc/config/domains/<domain>/`; do not fork shared definitions.
 
 See [Harness Architecture and Ownership](pdlc-docs/HARNESS_ARCHITECTURE_AND_OWNERSHIP.md), [Delivery Flow Model](pdlc-docs/DELIVERY_FLOW_MODEL.md), and [Target Architecture](pdlc-docs/HARNESS_TARGET_ARCHITECTURE.md).
 
 ## Validate
 
 ```bash
-bun test pdlc/tests
-bun pdlc/cli.ts validate
+bun test ./.pdlc/tests
+bun .pdlc/cli.ts validate
 ```
+
+The leading `./` in the test path is required because Bun otherwise treats the hidden Harness directory as a non-path filter.

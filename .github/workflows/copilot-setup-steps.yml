@@ -27,8 +27,7 @@ jobs:
         run: bun --version
 
       - name: Test Harness Core
-        run: bun test pdlc/tests
+        run: bun test ./.pdlc/tests
 
       - name: Validate Harness definitions and Copilot entry points
-        run: bun pdlc/cli.ts validate
-
+        run: bun .pdlc/cli.ts validate

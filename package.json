@@ -4,12 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "pdlc": "bun pdlc/cli.ts",
-    "test": "bun test pdlc/tests",
-    "validate": "bun pdlc/cli.ts validate"
+    "pdlc": "bun .pdlc/cli.ts",
+    "test": "bun test ./.pdlc/tests",
+    "validate": "bun .pdlc/cli.ts validate"
   },
   "engines": {
     "bun": ">=1.0.0"
   }
 }
-

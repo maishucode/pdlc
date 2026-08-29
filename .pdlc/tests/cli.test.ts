@@ -40,7 +40,7 @@ test("rejects unimplemented checkpoint execution deterministically", async () =>
 test("build readiness rejects an unapproved requirements draft", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-readiness-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
-  const record = JSON.parse(await readFile(join(projectRoot, "pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const store = new FileStateStore(workspace);
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
@@ -53,7 +53,7 @@ test("build readiness rejects an unapproved requirements draft", async (context)
 test("build readiness records one approved and content-bound decision", async (context) => {
   const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-approval-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
-  const record = JSON.parse(await readFile(join(projectRoot, "pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.requirements.documentRef = "requirements.md";
   record.requirements.profile = "standard";
   record.requirements.clarification = {
@@ -83,7 +83,7 @@ test("build readiness records one approved and content-bound decision", async (c
   ].map((control) => ({ control, disposition: "satisfied", notes: `Apply ${control}.` }));
   await writeFile(
     join(workspace, "requirements.md"),
-    await readFile(join(projectRoot, "pdlc/tests/fixtures/ready-requirements.md"), "utf8"),
+    await readFile(join(projectRoot, ".pdlc/tests/fixtures/ready-requirements.md"), "utf8"),
   );
   const store = new FileStateStore(workspace);
   await store.writeRecord(record);
