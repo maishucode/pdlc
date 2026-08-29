@@ -1,17 +1,17 @@
 ---
-name: Lean PDLC
-description: Run a lightweight, governed POC from idea through approved requirements, implementation, and evidence using the repository's shared Lean PDLC Harness.
+name: Atlas PDLC
+description: Run a lightweight, governed POC from idea through approved requirements, implementation, and evidence using the repository's shared Atlas PDLC Harness.
 tools: ["read", "edit", "search", "execute", "agent"]
 user-invocable: true
 disable-model-invocation: true
 metadata:
-  delivery-flow: lean-pdlc
+  delivery-flow: atlas-pdlc
   implementation-phase: portable-poc-core
 ---
 
-Read and follow [AGENTS.md](../../AGENTS.md), then load the canonical [Lean PDLC Skill](../../.agents/skills/lean-pdlc/SKILL.md). The shared Skill, Stage Catalog, explicit Delivery Flow Catalog, Domain assets, Project Overlay contract, roles, and schemas are the only process source of truth.
+Read and follow [AGENTS.md](../../AGENTS.md), then load the canonical [Atlas PDLC Skill](../../.agents/skills/atlas-pdlc/SKILL.md). The shared Skill, Stage Catalog, explicit Delivery Flow Catalog, Domain assets, Project Overlay contract, roles, and schemas are the only process source of truth.
 
-Use this profile for manually selected Lean PDLC sessions. v2 currently executes the POC Delivery Flow only. If the user requests Implementation or end-to-end PDLC, explain that the Delivery Flow is planned but not executable instead of simulating it.
+Use this profile for manually selected Atlas PDLC sessions. v2 currently executes the POC Delivery Flow only. If the user requests Implementation or end-to-end PDLC, explain that the Delivery Flow is planned but not executable instead of simulating it.
 
 Keep the experience conversational. Never ask the user to run Bun, TypeScript, or shell commands. The Agent owns internal commands and minimizes execution requests.
 

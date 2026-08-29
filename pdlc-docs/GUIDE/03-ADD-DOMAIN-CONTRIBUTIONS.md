@@ -110,11 +110,13 @@ At Stage entry, the internal `context <stage-id>` call returns:
 }
 ```
 
-The main delivery Agent reads and applies these resources in the same conversation. An unbound Stage continues with core behavior.
+For each returned `requiredAgentInvocations` contract, the main delivery Agent starts the native generic subagent and passes the contract unchanged. The worker reads the Domain Agent file as its role profile plus every exact bound Skill before returning an `agent-capability-result`. The main Agent must not emulate a required contribution in the primary conversation. An unbound Stage continues with core behavior.
 
-## 6. Optional VS Code projection
+The complete contract, receipt, validation, and Java/Python category examples are documented in [the canonical Domain capability authoring guide](../../.pdlc/domains/README.md).
 
-`domain sync` safely projects enabled Domain Agents and Skills into `.github/agents/` and `.github/skills/`. Different existing content is never overwritten. Projection is a platform convenience; Stage resolution always uses the canonical Domain resources.
+## 6. Optional VS Code Skill projection
+
+`domain sync` safely projects enabled Domain Skills into `.github/skills/`. Different existing content is never overwritten. Domain Agent files stay under `.pdlc/domains/` because the runtime uses them as role profiles for generic subagents; custom-Agent discovery is not required. Projection is a platform convenience, and Stage resolution always uses the canonical Domain resources.
 
 ## 7. Validate
 

@@ -1,6 +1,6 @@
 # Domain Capability Authoring
 
-This guide explains how to add a Domain-owned capability, bind it to a canonical Stage, and make Lean PDLC execute it through a native GitHub Copilot subagent.
+This guide explains how to add a Domain-owned capability, bind it to a canonical Stage, and make Atlas PDLC execute it through a native GitHub Copilot subagent.
 
 The UX Domain is the reference implementation. Java, Python, security, architecture, and other expert categories use the same contract.
 
@@ -55,13 +55,13 @@ The UX Domain uses this layout:
 ├── README.md
 ├── domain.json
 ├── agents/
-│   └── lean-pdlc-ux.agent.md
+│   └── atlas-pdlc-ux.agent.md
 ├── skills/
-│   ├── lean-pdlc-ux-spec/
+│   ├── atlas-pdlc-ux-spec/
 │   │   └── SKILL.md
-│   ├── lean-pdlc-ux-react-ui-delivery/
+│   ├── atlas-pdlc-ux-react-ui-delivery/
 │   │   └── SKILL.md
-│   └── lean-pdlc-ux-review/
+│   └── atlas-pdlc-ux-review/
 │       └── SKILL.md
 └── hooks/
     └── stages.json
@@ -104,12 +104,12 @@ Create `.pdlc/domains/<domain-id>/agents/<agent-id>.agent.md`:
 
 ```markdown
 ---
-name: Lean PDLC UX
+name: Atlas PDLC UX
 description: Executes bound UX capabilities as a GitHub Copilot subagent.
 tools: [read, search, edit, execute]
 ---
 
-# Lean PDLC UX
+# Atlas PDLC UX
 
 This file is a role profile read by a generic subagent. It is not a GitHub
 Custom Agent entrypoint and does not need to live under `.github/agents/`.
@@ -141,7 +141,7 @@ Create `.pdlc/domains/<domain-id>/skills/<skill-id>/SKILL.md`:
 
 ```markdown
 ---
-name: lean-pdlc-ux-spec
+name: atlas-pdlc-ux-spec
 description: Creates a compact, implementation-ready UX specification.
 ---
 
@@ -189,8 +189,8 @@ Create `.pdlc/domains/<domain-id>/hooks/stages.json`:
       "stage": "ux-design",
       "capability": "ux-design-spec",
       "invocation": "required",
-      "agent": "lean-pdlc-ux",
-      "skills": ["lean-pdlc-ux-spec"],
+      "agent": "atlas-pdlc-ux",
+      "skills": ["atlas-pdlc-ux-spec"],
       "mode": "draft",
       "handoff": "Draft a reviewable UX specification and textual mockup proposal for product review.",
       "approvalBoundary": "The Domain contribution drafts guidance only; product approval and PDLC state remain outside the Domain Agent."
@@ -239,13 +239,13 @@ The returned `requiredAgentInvocations` entry includes:
     "externalWrites": false
   },
   "agent": {
-    "id": "lean-pdlc-ux",
-    "path": ".pdlc/domains/ux/agents/lean-pdlc-ux.agent.md"
+    "id": "atlas-pdlc-ux",
+    "path": ".pdlc/domains/ux/agents/atlas-pdlc-ux.agent.md"
   },
   "skills": [
     {
-      "name": "lean-pdlc-ux-spec",
-      "path": ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md"
+      "name": "atlas-pdlc-ux-spec",
+      "path": ".pdlc/domains/ux/skills/atlas-pdlc-ux-spec/SKILL.md"
     }
   ],
   "mode": "draft",
@@ -277,7 +277,7 @@ The subagent returns one structured envelope:
     "network": false,
     "externalWrites": false
   },
-  "agent": "lean-pdlc-ux",
+  "agent": "atlas-pdlc-ux",
   "status": "completed",
   "evidenceRefs": ["pdlc/evidence/context/ux-design.md"],
   "summary": "Prepared the UX state model and reviewable design handoff."
@@ -292,10 +292,10 @@ The Domain contribution fragment in a schema-version-2 Receipt looks like this:
 
 ```json
 {
-  "ref": "ux@1.0.0:lean-pdlc-ux",
+  "ref": "ux@1.0.0:atlas-pdlc-ux",
   "capability": "ux-design-spec",
-  "agent": "lean-pdlc-ux",
-  "skills": ["lean-pdlc-ux-spec"],
+  "agent": "atlas-pdlc-ux",
+  "skills": ["atlas-pdlc-ux-spec"],
   "disposition": "used",
   "notes": "Executed the required UX design capability.",
   "evidenceRefs": ["pdlc/evidence/context/ux-design.md"],
@@ -328,8 +328,8 @@ Add another binding when it targets a different canonical Stage:
   "stage": "acceptance-verification",
   "capability": "ux-acceptance-review",
   "invocation": "required",
-  "agent": "lean-pdlc-ux",
-  "skills": ["lean-pdlc-ux-review"],
+  "agent": "atlas-pdlc-ux",
+  "skills": ["atlas-pdlc-ux-review"],
   "mode": "verify",
   "handoff": "Review delivered UX against supplied acceptance criteria.",
   "approvalBoundary": "The contribution reports findings but cannot accept the release."
@@ -346,9 +346,9 @@ The same layout works without Runner changes:
 .pdlc/domains/java-engineering/
 ├── domain.json
 ├── agents/
-│   └── lean-pdlc-java.agent.md
+│   └── atlas-pdlc-java.agent.md
 ├── skills/
-│   └── lean-pdlc-java-service-delivery/
+│   └── atlas-pdlc-java-service-delivery/
 │       └── SKILL.md
 └── hooks/
     └── stages.json
@@ -361,8 +361,8 @@ Example binding:
   "stage": "implementation",
   "capability": "java-service-implementation",
   "invocation": "required",
-  "agent": "lean-pdlc-java",
-  "skills": ["lean-pdlc-java-service-delivery"],
+  "agent": "atlas-pdlc-java",
+  "skills": ["atlas-pdlc-java-service-delivery"],
   "mode": "implement",
   "handoff": "Implement the approved Java service scope and return focused test evidence.",
   "approvalBoundary": "The contribution cannot change approved requirements, dependency policy, or PDLC state."

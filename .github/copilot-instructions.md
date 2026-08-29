@@ -1,6 +1,6 @@
-# Lean PDLC repository entrypoint
+# Atlas PDLC repository entrypoint
 
-This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`. When a request begins with `/pdlc`, selects the Lean PDLC custom Agent, invokes the `lean-pdlc` skill, or naturally asks to start or continue product delivery work, load `.agents/skills/lean-pdlc/SKILL.md`.
+This repository uses the portable Atlas PDLC Harness. Read and follow `AGENTS.md`. When a request begins with `/atlas-pdlc` or the legacy text alias `/pdlc`, selects the Atlas PDLC custom Agent, invokes the `atlas-pdlc` skill, or naturally asks to start or continue product delivery work, load `.agents/skills/atlas-pdlc/SKILL.md`.
 
 - v2 currently executes the POC Delivery Flow, including Build Readiness/Commit, Verify, and Decide. Do not simulate planned Implementation, end-to-end PDLC, JIRA, XRAY, or production-release capabilities.
 - Keep delivery interaction conversational. Never ask the user to run Bun, TypeScript, or shell commands.

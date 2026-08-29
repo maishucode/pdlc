@@ -29,7 +29,7 @@ async function exampleRecord(): Promise<PocDeliveryRecord> {
 }
 
 async function temporaryWorkspace(): Promise<{ path: string; cleanup(): Promise<void> }> {
-  const path = await mkdtemp(join(tmpdir(), "lean-pdlc-test-"));
+  const path = await mkdtemp(join(tmpdir(), "atlas-pdlc-test-"));
   return { path, cleanup: () => rm(path, { recursive: true, force: true }) };
 }
 
@@ -121,7 +121,7 @@ test("loads Domain-owned Artifacts, Policies, Knowledge, Skills, Agents, and Hoo
   assert.equal(domains.artifact("product-management.productization-package").definition.ownerDomain, "product-management");
   assert.equal(domains.get("ux").policies.length, 1);
   assert.equal(domains.get("ux").skills.length, 3);
-  assert.equal(domains.get("ux").agents[0]?.id, "lean-pdlc-ux");
+  assert.equal(domains.get("ux").agents[0]?.id, "atlas-pdlc-ux");
   assert.equal(domains.get("ux").hooks.length, 1);
   assert.equal(domains.get("data-platform").knowledge[0]?.asset.kind, "kb");
   assert.equal(integrations.get("databricks").manifest.kind, "integration");

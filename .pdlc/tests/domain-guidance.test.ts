@@ -33,12 +33,12 @@ test("POC Stage entry automatically composes UX Domain guidance", async () => {
         externalWrites: false,
       },
       agent: {
-        id: "lean-pdlc-ux",
-        path: ".pdlc/domains/ux/agents/lean-pdlc-ux.agent.md",
+        id: "atlas-pdlc-ux",
+        path: ".pdlc/domains/ux/agents/atlas-pdlc-ux.agent.md",
       },
       skills: [{
-        name: "lean-pdlc-ux-spec",
-        path: ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md",
+        name: "atlas-pdlc-ux-spec",
+        path: ".pdlc/domains/ux/skills/atlas-pdlc-ux-spec/SKILL.md",
       }],
       capability: "ux-design-spec",
       invocation: "required",
@@ -61,8 +61,8 @@ test("rejects duplicate Agent capability ids across active Domain Hook bindings"
       stage: "ux-design",
       capability: "duplicate-capability",
       invocation: "required",
-      agent: "lean-pdlc-ux",
-      skills: ["lean-pdlc-ux-spec"],
+      agent: "atlas-pdlc-ux",
+      skills: ["atlas-pdlc-ux-spec"],
       mode: "draft",
       handoff: "Draft UX guidance.",
       approvalBoundary: "Do not approve the Stage.",
@@ -90,10 +90,10 @@ test("an unbound POC Stage continues with core behavior", async () => {
 
 test("requirements, build, and verification Stages resolve their Domain-owned Skills", async () => {
   const expected: Record<string, string> = {
-    "requirements-clarification": "lean-pdlc-ux-spec",
-    implementation: "lean-pdlc-ux-react-ui-delivery",
-    "developer-verification": "lean-pdlc-ux-react-ui-delivery",
-    "acceptance-verification": "lean-pdlc-ux-review",
+    "requirements-clarification": "atlas-pdlc-ux-spec",
+    implementation: "atlas-pdlc-ux-react-ui-delivery",
+    "developer-verification": "atlas-pdlc-ux-react-ui-delivery",
+    "acceptance-verification": "atlas-pdlc-ux-review",
   };
   for (const [stage, skill] of Object.entries(expected)) {
     const result = await runCli(["guidance", stage], projectRoot);

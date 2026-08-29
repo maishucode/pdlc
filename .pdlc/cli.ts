@@ -355,7 +355,7 @@ async function auditSummary(options: RunnerOptions, subcommand?: string): Promis
 export async function runCli(args: string[], currentDirectory = process.cwd()): Promise<{ exitCode: number; output: unknown }> {
   try {
     const parsed = parseArguments(args, currentDirectory);
-    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Lean PDLC Runner v2", commands: ["init --input <draft-record.json> --actor <identity>", "status", "audit summary", "validate", "context <stage>", "context-apply <stage>", "readiness build --check --actor <identity>", "readiness build --actor <identity>", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
+    if (!parsed.command || parsed.command === "help") return { exitCode: 0, output: { name: "Atlas PDLC Runner v2", commands: ["init --input <draft-record.json> --actor <identity>", "status", "audit summary", "validate", "context <stage>", "context-apply <stage>", "readiness build --check --actor <identity>", "readiness build --actor <identity>", "checkpoint verify", "checkpoint decide --outcome park|recommend-productization", "guidance <stage>", "domain list", "domain sync", "integration list"] } };
     if (parsed.command === "init") return { exitCode: 0, output: await initialize(parsed.options) };
     if (parsed.command === "status") return { exitCode: 0, output: await status(parsed.options) };
     if (parsed.command === "audit") return { exitCode: 0, output: await auditSummary(parsed.options, parsed.subcommand) };

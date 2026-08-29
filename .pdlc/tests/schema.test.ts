@@ -80,10 +80,10 @@ test("requires completed platform execution metadata for Agent capability receip
     policies: [],
     knowledge: [],
     domainContributions: [{
-      ref: "ux@1.0.0:lean-pdlc-ux",
+      ref: "ux@1.0.0:atlas-pdlc-ux",
       capability: "ux-design-spec",
-      agent: "lean-pdlc-ux",
-      skills: ["lean-pdlc-ux-spec"],
+      agent: "atlas-pdlc-ux",
+      skills: ["atlas-pdlc-ux-spec"],
       disposition: "used",
       notes: "Delegated to the native UX Agent.",
       evidenceRefs: ["pdlc/evidence/context/ux-design.md"],
@@ -121,13 +121,13 @@ test("requires completed platform execution metadata for Agent capability receip
   if (!wrongExecutor.ok) assert(wrongExecutor.issues.some(({ code }) => code === "INVALID_AGENT_EXECUTOR"));
 
   const customAgentType = structuredClone(completed);
-  customAgentType.domainContributions[0]!.execution.agentType = "lean-pdlc-ux";
+  customAgentType.domainContributions[0]!.execution.agentType = "atlas-pdlc-ux";
   const wrongAgentType = validateStageContextReceipt(customAgentType);
   assert.equal(wrongAgentType.ok, false);
   if (!wrongAgentType.ok) assert(wrongAgentType.issues.some(({ code }) => code === "INVALID_SUBAGENT_TYPE"));
 
   const malformedTrace = structuredClone(completed);
-  malformedTrace.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:agent:lean-pdlc-ux:call-123";
+  malformedTrace.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:agent:atlas-pdlc-ux:call-123";
   const malformed = validateStageContextReceipt(malformedTrace);
   assert.equal(malformed.ok, false);
   if (!malformed.ok) assert(malformed.issues.some(({ code }) => code === "INVALID_PLATFORM_EXECUTION_REF"));
@@ -227,8 +227,8 @@ test("keeps the Requirements questionnaire under the owning Artifact", async () 
 
 test("keeps UX clarification options selectable", async () => {
   const sources = await Promise.all([
-    readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8"),
-    readFile(join(projectRoot, ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, ".agents/skills/atlas-pdlc/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, ".pdlc/domains/ux/skills/atlas-pdlc-ux-spec/SKILL.md"), "utf8"),
   ]);
   for (const source of sources) {
     assert.match(source, /2[–-]4 mutually exclusive, selectable options/i);
@@ -238,7 +238,7 @@ test("keeps UX clarification options selectable", async () => {
 });
 
 test("keeps fresh POC activation on the fast-start path", async () => {
-  const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
+  const skill = await readFile(join(projectRoot, ".agents/skills/atlas-pdlc/SKILL.md"), "utf8");
   assert.match(skill, /Fast start and just-in-time loading/);
   assert.match(skill, /one read-only `context requirements-clarification` Runner call/);
   assert.match(skill, /Do not run full Harness `validate` before the first clarification round/);

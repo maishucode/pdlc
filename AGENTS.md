@@ -1,7 +1,7 @@
-# Lean PDLC repository guidance
+# Atlas PDLC repository guidance
 
-- Use the `lean-pdlc` skill for POC, implementation, or end-to-end product delivery work.
-- Treat a user message beginning with `/pdlc` as a conversational activation request when the client delivers it as text. Parse `/pdlc <delivery-flow> [context]` and load the shared `lean-pdlc` skill.
+- Use the `atlas-pdlc` skill for POC, implementation, or end-to-end product delivery work.
+- Treat a user message beginning with `/atlas-pdlc`, or the legacy text alias `/pdlc`, as a conversational activation request when the client delivers it as text. Parse it as `<command> <delivery-flow> [context]` and load the shared `atlas-pdlc` skill.
 - Never ask an end user to run Bun or the TypeScript Runner. The agent owns internal Runner calls and requests confirmation only at controlled checkpoints.
 - Treat `.pdlc/stages/`, `.pdlc/delivery-flows/`, `.pdlc/domains/`, `.pdlc/integrations/`, `.pdlc/roles/`, and `.pdlc/schemas/` as the shared source of truth. Treat `pdlc/config/domains/<domain>/` as the project-specific configuration overlay.
 - Resolve the selected Delivery Flow from canonical Stage references and delivery-context tags. Never redefine Stage requirements inside a Delivery Flow or platform adapter, and never treat every Stage as a human checkpoint.

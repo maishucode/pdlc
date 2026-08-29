@@ -1,13 +1,13 @@
-# 02. Run a Lean PDLC POC
+# 02. Run an Atlas PDLC POC
 
-This guide is for the person using Lean PDLC in a Copilot conversation. You describe the outcome; the Agent maintains the Delivery Flow artifacts and invokes internal checks when needed.
+This guide is for the person using Atlas PDLC in a Copilot conversation. You describe the outcome; the Agent maintains the Delivery Flow artifacts and invokes internal checks when needed.
 
 ## Start with an idea
 
 Use a short outcome-oriented request:
 
 ```text
-/pdlc poc validate whether support agents can classify customer feedback into billing, access, and product-bug categories.
+/atlas-pdlc poc validate whether support agents can classify customer feedback into billing, access, and product-bug categories.
 ```
 
 The Agent opens a draft POC. The Harness establishes its DRAFT Delivery Record, current selection, and `DELIVERY_FLOW_CREATED` audit event together, so the audit timeline starts at creation. It does not start coding yet.
@@ -78,11 +78,11 @@ The package references the approved Requirements, evidence, Controls and excepti
 Use conversational intents:
 
 ```text
-/pdlc status
-/pdlc audit
-/pdlc audit <POC-ID>
-/pdlc resume <POC-ID>
-/pdlc help
+/atlas-pdlc status
+/atlas-pdlc audit
+/atlas-pdlc audit <POC-ID>
+/atlas-pdlc resume <POC-ID>
+/atlas-pdlc help
 ```
 
 The Agent reports the current Stage and state, available next actions, known blockers, Requirements approval, evidence readiness, applied Policies/Knowledge/Skills, and Productization Package readiness. An action marked unavailable includes the reason, so you do not need to inspect the Delivery Record to discover what remains. Status is read-only and does not create an Audit Event or advance the Delivery Flow.

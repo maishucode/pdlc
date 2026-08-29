@@ -1,9 +1,9 @@
 ---
-name: lean-pdlc
+name: atlas-pdlc
 description: Guide lightweight, risk-based product delivery using canonical Stages, Delivery Flows, Domain-owned Policies, Knowledge, Skills, Agents and Hooks, top-level Integrations, Project Overlays, Delivery Records, and auditable evidence. Use when starting or continuing a POC, implementation, or end-to-end PDLC delivery.
 ---
 
-# Lean PDLC
+# Atlas PDLC
 
 Use the shared Stage Catalog, Delivery Flow definitions, and deterministic TypeScript Runner. Keep routine development conversational and file-based; invoke the Runner only for explicit validation or controlled state transitions.
 
@@ -11,17 +11,18 @@ Use the shared Stage Catalog, Delivery Flow definitions, and deterministic TypeS
 
 Recognize these user intents as equivalent activation requests:
 
-- `/pdlc poc [optional idea]`
-- `$lean-pdlc poc [optional idea]`
+- `/atlas-pdlc poc [optional idea]`
+- `/pdlc poc [optional idea]` (legacy text alias)
+- `$atlas-pdlc poc [optional idea]`
 - “start a POC” or an equivalent request in the user's language
 
-When a message beginning with `/pdlc` reaches the agent as text, interpret it as:
+When a message beginning with `/atlas-pdlc` or `/pdlc` reaches the agent as text, interpret it as:
 
 ```text
-/pdlc <delivery-flow> [optional context]
+/atlas-pdlc <delivery-flow> [optional context]
 ```
 
-The currently executable Delivery Flow is `poc`. `implementation` and `pdlc` are registered but planned. Also recognize `/pdlc resume [POC-ID]`, `/pdlc status`, `/pdlc audit [POC-ID]`, and `/pdlc help` as conversation intents, not Runner commands.
+The currently executable Delivery Flow is `poc`. `implementation` and `pdlc` are registered but planned. Also recognize `resume [POC-ID]`, `status`, `audit [POC-ID]`, and `help` after either command prefix as conversation intents, not Runner commands.
 
 After activation:
 

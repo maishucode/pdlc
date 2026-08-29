@@ -1,6 +1,6 @@
-# Lean PDLC Harness v2
+# Atlas PDLC Harness v2
 
-Lean PDLC is a portable, policy-aware delivery Harness for running POC, implementation, and end-to-end product delivery through one shared model.
+Atlas PDLC is a portable, policy-aware delivery Harness for running POC, implementation, and end-to-end product delivery through one shared model.
 
 The v2 architecture is intentionally small:
 

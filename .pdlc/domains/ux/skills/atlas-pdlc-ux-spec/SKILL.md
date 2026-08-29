@@ -1,5 +1,5 @@
 ---
-name: lean-pdlc-ux-spec
+name: atlas-pdlc-ux-spec
 description: Creates a compact, implementation-ready UX specification for a defined user outcome.
 ---
 

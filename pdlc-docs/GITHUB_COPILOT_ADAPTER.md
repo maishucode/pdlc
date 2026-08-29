@@ -1,8 +1,8 @@
-# Lean PDLC GitHub Copilot Adapter Guide
+# Atlas PDLC GitHub Copilot Adapter Guide
 
 ## 1. Purpose
 
-This guide explains how the Lean PDLC Harness is exposed through GitHub Copilot and how to verify that Copilot can complete the Phase 1 POC Delivery Flow.
+This guide explains how the Atlas PDLC Harness is exposed through GitHub Copilot and how to verify that Copilot can complete the Phase 1 POC Delivery Flow.
 
 The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Domain Control, Knowledge, role, schema, checkpoint, or state logic. Every Copilot surface uses the same shared sources as other supported Agent platforms.
 
@@ -12,9 +12,9 @@ The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Domain
 |---|---|---|
 | Repository instructions | `.github/copilot-instructions.md` | Always-on repository context and control boundaries |
 | Agent instructions | `AGENTS.md` | Shared Agent-level repository rules |
-| Agent Skill | `.agents/skills/lean-pdlc/SKILL.md` | Canonical multi-step PDLC behavior |
-| Custom Agent | `.github/agents/lean-pdlc.agent.md` | Manually selectable Lean PDLC persona and least-required tool set |
-| Prompt File | `.github/prompts/pdlc.prompt.md` | `/pdlc` convenience entry point in supported IDEs |
+| Agent Skill | `.agents/skills/atlas-pdlc/SKILL.md` | Canonical multi-step PDLC behavior |
+| Custom Agent | `.github/agents/atlas-pdlc.agent.md` | Manually selectable Atlas PDLC persona and least-required tool set |
+| Prompt File | `.github/prompts/atlas-pdlc.prompt.md` | `/atlas-pdlc` convenience entry point in supported IDEs |
 | Cloud setup workflow | `.github/workflows/copilot-setup-steps.yml` | Installs Bun and validates the Harness in the Copilot cloud-agent environment |
 | Adapter validation | `.pdlc/platform-adapters/validate-entrypoints.ts` | Detects missing, legacy, oversized, or drifted adapter files |
 
@@ -26,17 +26,17 @@ The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Domain
 
 ### Shared Agent Skill
 
-`.agents/skills/lean-pdlc/` is the canonical Delivery Flow guidance. GitHub supports `.agents/skills/<skill-name>/SKILL.md` as a project Skill location. Copilot loads a relevant Skill when the request matches its description.
+`.agents/skills/atlas-pdlc/` is the canonical Delivery Flow guidance. GitHub supports `.agents/skills/<skill-name>/SKILL.md` as a project Skill location. Copilot loads a relevant Skill when the request matches its description.
 
 ### Custom Agent
 
-The Lean PDLC custom Agent uses the current `.agent.md` filename convention and declares only the `read`, `edit`, `search`, and `execute` tool aliases required for a POC.
+The Atlas PDLC custom Agent uses the current `.agent.md` filename convention and declares the `read`, `edit`, `search`, `execute`, and `agent` tool aliases required for a POC. The `agent` alias lets the main flow invoke each required capability through a native generic subagent.
 
 It is user-invocable but has automatic model invocation disabled. This prevents normal coding conversations from unexpectedly switching into a governed PDLC Delivery Flow. Users select it deliberately.
 
 ### Prompt File
 
-The `/pdlc` Prompt File is an IDE convenience. Prompt Files are not the portability baseline because they are unavailable on GitHub.com and Copilot CLI. If Prompt Files are not supported, users select the custom Agent or ask naturally to use the Lean PDLC Skill.
+The `/atlas-pdlc` Prompt File is an IDE convenience. Prompt Files are not the portability baseline because they are unavailable on GitHub.com and Copilot CLI. If Prompt Files are not supported, users select the custom Agent or ask naturally to use the Atlas PDLC Skill.
 
 ### Cloud-agent setup
 
@@ -54,11 +54,11 @@ The setup workflow must be present on the default branch before Copilot cloud ag
 
 | Surface | Recommended entry point | Prompt File | Custom Agent | Shared Skill |
 |---|---|---:|---:|---:|
-| VS Code Copilot Chat | `/pdlc poc <idea>` | Yes | Yes | Yes |
-| Visual Studio | `/pdlc poc <idea>` or select Lean PDLC | Yes | Yes | Yes |
-| JetBrains Copilot Chat | Select Lean PDLC or use the customization editor | Preview | Preview | Preview |
-| GitHub Copilot CLI | `/agent`, select Lean PDLC, then enter the POC request | No | Yes | Yes |
-| GitHub.com Copilot cloud agent | Select Lean PDLC when assigning or starting the task | No | Yes | Yes |
+| VS Code Copilot Chat | `/atlas-pdlc poc <idea>` | Yes | Yes | Yes |
+| Visual Studio | `/atlas-pdlc poc <idea>` or select Atlas PDLC | Yes | Yes | Yes |
+| JetBrains Copilot Chat | Select Atlas PDLC or use the customization editor | Preview | Preview | Preview |
+| GitHub Copilot CLI | `/agent`, select Atlas PDLC, then enter the POC request | No | Yes | Yes |
+| GitHub.com Copilot cloud agent | Select Atlas PDLC when assigning or starting the task | No | Yes | Yes |
 | GitHub.com Copilot Chat | Natural-language repository question | No | No dedicated Agent session | Repository instructions only |
 
 Feature availability can depend on organization policy and the installed Copilot version. The shared Skill and repository instructions are the required baseline; Prompt Files are optional convenience.
@@ -68,12 +68,14 @@ Feature availability can depend on organization policy and the installed Copilot
 ### VS Code or Visual Studio
 
 ```text
-/pdlc poc validate whether AI can categorize synthetic customer feedback
+/atlas-pdlc poc validate whether AI can categorize synthetic customer feedback
 ```
 
-Text after `/pdlc` is passed as Delivery Flow intent and context. If no intent is supplied, the prompt explains `poc`, `resume`, `status`, and `help`.
+Text after `/atlas-pdlc` is passed as Delivery Flow intent and context. If no intent is supplied, the prompt explains `poc`, `resume`, `status`, and `help`.
 
-Alternatively, select **Lean PDLC** from the custom Agent picker and enter:
+`/pdlc` remains a text compatibility alias for existing integrations. It is not a second Prompt File; new usage should prefer `/atlas-pdlc`.
+
+Alternatively, select **Atlas PDLC** from the custom Agent picker and enter:
 
 ```text
 poc validate whether AI can categorize synthetic customer feedback
@@ -82,18 +84,18 @@ poc validate whether AI can categorize synthetic customer feedback
 ### Copilot CLI
 
 1. Enter `/agent`.
-2. Select **Lean PDLC**.
+2. Select **Atlas PDLC**.
 3. Enter the POC idea or use `resume`, `status`, or `help`.
 
 Natural language also works when Skills are enabled:
 
 ```text
-Use the lean-pdlc skill to start a POC that validates whether AI can categorize synthetic customer feedback.
+Use the atlas-pdlc skill to start a POC that validates whether AI can categorize synthetic customer feedback.
 ```
 
 ### Copilot cloud agent on GitHub.com
 
-Select the repository and the **Lean PDLC** custom Agent, then submit a bounded POC task. The cloud setup workflow prepares Bun and validates the Harness before the Agent starts.
+Select the repository and the **Atlas PDLC** custom Agent, then submit a bounded POC task. The cloud setup workflow prepares Bun and validates the Harness before the Agent starts.
 
 ## 6. Expected POC behavior
 
@@ -168,22 +170,22 @@ Validation confirms:
 
 ### VS Code check
 
-1. Confirm `/pdlc` appears in the Chat slash-command picker.
-2. Confirm **Lean PDLC** appears in the Agent picker.
+1. Confirm `/atlas-pdlc` appears in the Chat slash-command picker.
+2. Confirm **Atlas PDLC** appears in the Agent picker.
 3. Start a test POC and verify that no more than three product questions appear in one response.
 4. Confirm that no application code is created before Requirements and Build Readiness approval.
 5. Inspect Agent Debug Logs if prompt, Agent, or Skill discovery fails.
 
 ### Copilot CLI check
 
-1. Confirm `/agent` lists **Lean PDLC**.
+1. Confirm `/agent` lists **Atlas PDLC**.
 2. Start a clean POC.
 3. Confirm the shared Skill is used and the Agent does not ask the user to run the Runner.
 
 ### Copilot cloud-agent check
 
 1. Confirm the setup session installs Bun and passes Harness tests and validation.
-2. Select the Lean PDLC custom Agent.
+2. Select the Atlas PDLC custom Agent.
 3. Start a bounded POC task.
 4. Confirm the task stops at Build Readiness if approval is unavailable in the delegated session.
 

@@ -148,7 +148,7 @@ ${record.resolution.controls.exceptions.map((ref) => `- Exception: \`${ref}\``).
 }
 
 test("status is safe when no record is active", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-cli-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-cli-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["status", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0);
@@ -160,7 +160,7 @@ test("status is safe when no record is active", async (context) => {
 });
 
 test("audit summary is safe when no record is active", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-audit-empty-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-audit-empty-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["audit", "summary", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0);
@@ -172,7 +172,7 @@ test("audit summary is safe when no record is active", async (context) => {
 });
 
 test("initializes a POC record, current pointer, and creation audit event together", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const result = await initializeRecord(workspace, record, "pdlc-agent");
@@ -193,7 +193,7 @@ test("initializes a POC record, current pointer, and creation audit event togeth
 });
 
 test("rejects an invalid initial record without writing runtime state", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-invalid-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-invalid-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "COMMITTED";
@@ -208,7 +208,7 @@ test("rejects an invalid initial record without writing runtime state", async (c
 });
 
 test("rejects non-canonical context classifications during initialization", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-tags-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-tags-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.design.technologies = ["web"];
@@ -224,7 +224,7 @@ test("rejects non-canonical context classifications during initialization", asyn
 });
 
 test("loads legacy approved records and requires controlled contract rebinding", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-legacy-contract-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-legacy-contract-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "COMMITTED";
@@ -246,7 +246,7 @@ test("loads legacy approved records and requires controlled contract rebinding",
 });
 
 test("rolls back record and current pointer when creation audit persistence fails", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-rollback-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-rollback-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.id = "POC-NEW";
@@ -283,7 +283,7 @@ test("explains that Commit is owned by Build Readiness", async () => {
 });
 
 test("parks a verified POC without requiring a Productization Package", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-park-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-park-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "VERIFIED";
@@ -322,7 +322,7 @@ test("parks a verified POC without requiring a Productization Package", async (c
 });
 
 test("rolls back a checkpoint when its audit event cannot be persisted", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-checkpoint-rollback-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-checkpoint-rollback-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "VERIFIED";
@@ -349,7 +349,7 @@ test("rolls back a checkpoint when its audit event cannot be persisted", async (
 });
 
 test("build readiness rejects an unapproved requirements draft", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-readiness-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-readiness-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -361,7 +361,7 @@ test("build readiness rejects an unapproved requirements draft", async (context)
 });
 
 test("build readiness records one approved and content-bound decision", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-approval-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-approval-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.requirements.documentRef = "requirements.md";
@@ -624,7 +624,7 @@ test("build readiness records one approved and content-bound decision", async (c
 });
 
 test("status and validate detect receipts made stale by a context-driving change", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-stale-status-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-stale-status-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -655,7 +655,7 @@ test("status and validate detect receipts made stale by a context-driving change
 });
 
 test("status and validate reject tampered stored Agent execution identity", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-tampered-agent-receipt-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-tampered-agent-receipt-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -685,7 +685,7 @@ test("status and validate reject tampered stored Agent execution identity", asyn
 });
 
 test("loads legacy Stage applications and requires capability re-execution", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-legacy-agent-receipt-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-legacy-agent-receipt-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -726,7 +726,7 @@ test("loads legacy Stage applications and requires capability re-execution", asy
 });
 
 test("status and validate reject stored Agent receipts whose evidence was removed", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-removed-agent-evidence-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-removed-agent-evidence-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -749,7 +749,7 @@ test("status and validate reject stored Agent receipts whose evidence was remove
 });
 
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-context-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-context-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
@@ -769,7 +769,7 @@ test("resolves Stage context without writing runtime state and rejects stale rec
 });
 
 test("emits deterministic context-bound GitHub Copilot Agent invocation contracts", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-agent-invocation-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-agent-invocation-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
 
   const first = await runCli(["context", "ux-design", "--root", workspace], workspace);
@@ -796,12 +796,12 @@ test("emits deterministic context-bound GitHub Copilot Agent invocation contract
       externalWrites: false,
     },
     agent: {
-      id: "lean-pdlc-ux",
-      path: ".pdlc/domains/ux/agents/lean-pdlc-ux.agent.md",
+      id: "atlas-pdlc-ux",
+      path: ".pdlc/domains/ux/agents/atlas-pdlc-ux.agent.md",
     },
     skills: [{
-      name: "lean-pdlc-ux-spec",
-      path: ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md",
+      name: "atlas-pdlc-ux-spec",
+      path: ".pdlc/domains/ux/skills/atlas-pdlc-ux-spec/SKILL.md",
     }],
     mode: "draft",
     handoff: "Draft a reviewable UX specification and textual mockup proposal for product review.",
@@ -820,7 +820,7 @@ test("emits deterministic context-bound GitHub Copilot Agent invocation contract
 });
 
 test("rejects completed Agent capability receipts with mismatched execution identity", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-agent-receipt-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-agent-receipt-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -837,7 +837,7 @@ test("rejects completed Agent capability receipts with mismatched execution iden
     policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref}.` })),
     knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs: ["pdlc/evidence/context/ux-design.md"] })),
     domainContributions: [{
-      ref: "ux@1.0.0:lean-pdlc-ux",
+      ref: "ux@1.0.0:atlas-pdlc-ux",
       capability: invocation.capability,
       agent: invocation.agent.id,
       skills: invocation.skills.map(({ name }) => name),
@@ -881,7 +881,7 @@ test("rejects completed Agent capability receipts with mismatched execution iden
   assert(permissionDetails.some(({ code }) => code === "CONTEXT_PERMISSION_MISMATCH"), JSON.stringify(permissionMismatch.output));
 
   receipt.domainContributions[0]!.execution.permissions.network = false;
-  receipt.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:agent:lean-pdlc-ux:call-123";
+  receipt.domainContributions[0]!.execution.platformExecutionRef = "github-copilot:agent:atlas-pdlc-ux:call-123";
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const executionRefMismatch = await runCli(["context-apply", "ux-design", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(executionRefMismatch.exitCode, 2);

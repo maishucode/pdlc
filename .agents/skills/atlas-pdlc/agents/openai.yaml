@@ -1,0 +1,4 @@
+interface:
+  display_name: "Atlas PDLC"
+  short_description: "Risk-based Delivery Flow with explicit checkpoints"
+  default_prompt: "Use $atlas-pdlc to start or continue a controlled product Delivery Flow."

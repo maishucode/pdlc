@@ -1,4 +1,4 @@
-# Lean PDLC Harness v2 Target Architecture
+# Atlas PDLC Harness v2 Target Architecture
 
 > Status: implemented architecture baseline on the `v2` branch. The POC Delivery Flow is executable; Implementation and end-to-end PDLC remain registered but planned.
 

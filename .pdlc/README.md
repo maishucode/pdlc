@@ -1,6 +1,6 @@
 # Shared Harness source
 
-This hidden directory is owned by the Lean PDLC Harness and Runner. Product teams author project configuration and delivery artifacts under the visible `pdlc/` workspace instead of editing Harness files here.
+This hidden directory is owned by the Atlas PDLC Harness and Runner. Product teams author project configuration and delivery artifacts under the visible `pdlc/` workspace instead of editing Harness files here.
 
 | Directory | Purpose | Primary owner |
 |---|---|---|

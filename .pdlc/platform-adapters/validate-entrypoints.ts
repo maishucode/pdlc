@@ -11,26 +11,26 @@ interface EntrypointExpectation {
 const EXPECTATIONS: EntrypointExpectation[] = [
   {
     path: "AGENTS.md",
-    markers: ["/pdlc", "lean-pdlc", "Never ask an end user to run Bun"],
+    markers: ["/atlas-pdlc", "legacy text alias `/pdlc`", "atlas-pdlc", "Never ask an end user to run Bun"],
   },
   {
-    path: ".agents/skills/lean-pdlc/SKILL.md",
-    markers: ["## Activate conversationally", "/pdlc <delivery-flow>", "Never show Bun commands"],
+    path: ".agents/skills/atlas-pdlc/SKILL.md",
+    markers: ["## Activate conversationally", "/atlas-pdlc <delivery-flow>", "Never show Bun commands"],
   },
   {
     path: ".github/copilot-instructions.md",
-    markers: [".agents/skills/lean-pdlc/SKILL.md", "When a request begins with `/pdlc`", "v2 currently executes the POC Delivery Flow, including Build Readiness/Commit, Verify, and Decide"],
+    markers: [".agents/skills/atlas-pdlc/SKILL.md", "When a request begins with `/atlas-pdlc` or the legacy text alias `/pdlc`", "v2 currently executes the POC Delivery Flow, including Build Readiness/Commit, Verify, and Decide"],
     maximumBytes: 2_500,
   },
   {
-    path: ".github/prompts/pdlc.prompt.md",
-    markers: ["name: pdlc", "agent: \"agent\"", "tools: [\"read\", \"edit\", \"search\", \"execute\", \"agent\"]", "../../.agents/skills/lean-pdlc/SKILL.md", "Do not expose or ask the user to run Bun"],
+    path: ".github/prompts/atlas-pdlc.prompt.md",
+    markers: ["name: atlas-pdlc", "agent: \"agent\"", "tools: [\"read\", \"edit\", \"search\", \"execute\", \"agent\"]", "../../.agents/skills/atlas-pdlc/SKILL.md", "Do not expose or ask the user to run Bun"],
     maximumBytes: 3_000,
   },
   {
-    path: ".github/agents/lean-pdlc.agent.md",
+    path: ".github/agents/atlas-pdlc.agent.md",
     markers: [
-      "../../.agents/skills/lean-pdlc/SKILL.md",
+      "../../.agents/skills/atlas-pdlc/SKILL.md",
       "tools: [\"read\", \"edit\", \"search\", \"execute\", \"agent\"]",
       "user-invocable: true",
       "disable-model-invocation: true",
@@ -53,7 +53,7 @@ const EXPECTATIONS: EntrypointExpectation[] = [
 ];
 
 const FORBIDDEN_LEGACY_PATHS = [
-  ".github/agents/lean-pdlc.md",
+  ".github/agents/atlas-pdlc.md",
   ".pdlc/audit",
   ".pdlc/config",
   ".pdlc/current",

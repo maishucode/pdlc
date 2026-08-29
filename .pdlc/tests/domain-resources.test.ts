@@ -14,8 +14,8 @@ test("keeps UX Skills, Agent, and Stage Hooks directly in its Domain", async () 
   assert.equal(hooks.enabled, true);
   assert.deepEqual(hooks.deliveryFlows, ["poc"]);
   assert.deepEqual(hooks.permissions, { filesystem: "write", network: false, externalWrites: false });
-  await readFile(join(uxRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
-  for (const skill of ["lean-pdlc-ux-spec", "lean-pdlc-ux-react-ui-delivery", "lean-pdlc-ux-review"]) {
+  await readFile(join(uxRoot, "agents/atlas-pdlc-ux.agent.md"), "utf8");
+  for (const skill of ["atlas-pdlc-ux-spec", "atlas-pdlc-ux-react-ui-delivery", "atlas-pdlc-ux-review"]) {
     const contents = await readFile(join(uxRoot, "skills", skill, "SKILL.md"), "utf8");
     assert.match(contents, new RegExp(`name: ${skill}`));
   }
@@ -30,16 +30,16 @@ test("lists direct Domain resources without Plugin wrappers", async () => {
     artifacts: 0,
     policies: 1,
     knowledge: 2,
-    skills: ["lean-pdlc-ux-react-ui-delivery", "lean-pdlc-ux-review", "lean-pdlc-ux-spec"],
-    agents: ["lean-pdlc-ux"],
+    skills: ["atlas-pdlc-ux-react-ui-delivery", "atlas-pdlc-ux-review", "atlas-pdlc-ux-spec"],
+    agents: ["atlas-pdlc-ux"],
     hooks: 1,
     stages: ["requirements-clarification", "ux-design", "implementation", "developer-verification", "acceptance-verification"],
   });
 });
 
 test("requires the main POC entry point to compose Domain resources at every Stage", async () => {
-  const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
-  const agent = await readFile(join(projectRoot, ".github/agents/lean-pdlc.agent.md"), "utf8");
+  const skill = await readFile(join(projectRoot, ".agents/skills/atlas-pdlc/SKILL.md"), "utf8");
+  const agent = await readFile(join(projectRoot, ".github/agents/atlas-pdlc.agent.md"), "utf8");
   assert.match(skill, /context <stage-id>/);
   assert.match(skill, /Never ask the end user to select a Domain Agent manually/);
   assert.match(agent, /Domain contributions extend this Agent; they do not replace it/);
@@ -50,9 +50,9 @@ test("requires the main POC entry point to compose Domain resources at every Sta
 });
 
 test("wires required Domain capabilities to a generic native Copilot subagent", async () => {
-  const mainAgent = await readFile(join(projectRoot, ".github/agents/lean-pdlc.agent.md"), "utf8");
-  const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
-  const canonicalUxAgent = await readFile(join(uxRoot, "agents/lean-pdlc-ux.agent.md"), "utf8");
+  const mainAgent = await readFile(join(projectRoot, ".github/agents/atlas-pdlc.agent.md"), "utf8");
+  const skill = await readFile(join(projectRoot, ".agents/skills/atlas-pdlc/SKILL.md"), "utf8");
+  const canonicalUxAgent = await readFile(join(uxRoot, "agents/atlas-pdlc-ux.agent.md"), "utf8");
 
   assert.match(mainAgent, /tools: \["read", "edit", "search", "execute", "agent"\]/);
   assert.match(mainAgent, /requiredAgentInvocations/);
@@ -62,7 +62,7 @@ test("wires required Domain capabilities to a generic native Copilot subagent", 
   assert.match(mainAgent, /github-copilot:subagent:/);
   assert.match(skill, /task\(agent_type=contract\.agentType/);
   assert.match(skill, /agent-capability-result/);
-  await assert.rejects(access(join(projectRoot, ".github/agents/lean-pdlc-ux.agent.md")));
+  await assert.rejects(access(join(projectRoot, ".github/agents/atlas-pdlc-ux.agent.md")));
   assert.match(canonicalUxAgent, /generic GitHub Copilot subagent/i);
   assert.match(canonicalUxAgent, /role profile/i);
   for (const field of ["invocationId", "capability", "permissions", "platformExecutionRef", "evidenceRefs"]) {
@@ -71,18 +71,18 @@ test("wires required Domain capabilities to a generic native Copilot subagent", 
 });
 
 test("syncs Skills without requiring a Domain custom-agent projection", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-domain-sync-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-domain-sync-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   await cp(join(projectRoot, ".pdlc"), join(workspace, ".pdlc"), { recursive: true });
-  await assert.rejects(access(join(workspace, ".github/agents/lean-pdlc-ux.agent.md")));
+  await assert.rejects(access(join(workspace, ".github/agents/atlas-pdlc-ux.agent.md")));
   const first = await runCli(["domain", "sync", "--root", workspace], projectRoot);
   assert.equal(first.exitCode, 0, JSON.stringify(first.output));
   assert.deepEqual((first.output as { installed: string[] }).installed, [
-    ".github/skills/lean-pdlc-ux-react-ui-delivery/SKILL.md",
-    ".github/skills/lean-pdlc-ux-review/SKILL.md",
-    ".github/skills/lean-pdlc-ux-spec/SKILL.md",
+    ".github/skills/atlas-pdlc-ux-react-ui-delivery/SKILL.md",
+    ".github/skills/atlas-pdlc-ux-review/SKILL.md",
+    ".github/skills/atlas-pdlc-ux-spec/SKILL.md",
   ]);
-  await assert.rejects(access(join(workspace, ".github/agents/lean-pdlc-ux.agent.md")));
+  await assert.rejects(access(join(workspace, ".github/agents/atlas-pdlc-ux.agent.md")));
   const resolved = await runCli(["context", "requirements-clarification", "--root", workspace], projectRoot);
   assert.equal(resolved.exitCode, 0, JSON.stringify(resolved.output));
   const invocation = (resolved.output as { requiredAgentInvocations: Array<{ agent: { path: string }; skills: Array<{ path: string }> }> }).requiredAgentInvocations[0]!;

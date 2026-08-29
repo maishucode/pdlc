@@ -1,17 +1,17 @@
-# 01. Start Here: Install Lean PDLC Harness
+# 01. Start Here: Install Atlas PDLC Harness
 
-This guide is for product owners and engineers who want to use Lean PDLC with GitHub Copilot.
+This guide is for product owners and engineers who want to use Atlas PDLC with GitHub Copilot.
 
 ## What you install
 
-Lean PDLC is **project content**, not a compiled application. Clone or copy this repository into the project that should use it, commit the selected files, then let Copilot read the repository instructions and Skill.
+Atlas PDLC is **project content**, not a compiled application. Clone or copy this repository into the project that should use it, commit the selected files, then let Copilot read the repository instructions and Skill.
 
 There is no required release build, `dist/` directory, server, hook, or background process. Bun is only an internal maintainer/Agent runtime for deterministic validation and Build Readiness; delivery users do not run it.
 
 ```text
 Your product repository
 ├── AGENTS.md                         Shared PDLC boundaries
-├── .agents/skills/lean-pdlc/         Main Delivery Flow Skill
+├── .agents/skills/atlas-pdlc/         Main Delivery Flow Skill
 ├── .github/                          Copilot adapter and prompt
 ├── .pdlc/                            Harness definitions and Runner state
 │   └── runtime/                      Records, audit, active pointer, and locks
@@ -23,7 +23,7 @@ Your product repository
     └── artifacts/                    Future project delivery artifacts
 ```
 
-## Put Lean PDLC in a project
+## Put Atlas PDLC in a project
 
 ### Option A: start from this repository
 
@@ -34,16 +34,16 @@ git clone https://github.com/maishucode/pdlc.git my-poc
 cd my-poc
 ```
 
-### Option B: add Lean PDLC to an existing product repository
+### Option B: add Atlas PDLC to an existing product repository
 
 Copy the following version-controlled paths into the product repository, preserving their paths:
 
 ```text
 AGENTS.md
-.agents/skills/lean-pdlc/
+.agents/skills/atlas-pdlc/
 .github/copilot-instructions.md
-.github/agents/lean-pdlc.agent.md
-.github/prompts/pdlc.prompt.md
+.github/agents/atlas-pdlc.agent.md
+.github/prompts/atlas-pdlc.prompt.md
 .github/workflows/copilot-setup-steps.yml
 .pdlc/
 pdlc/
@@ -62,35 +62,37 @@ The included `.github/CODEOWNERS.template` is intentionally inactive because its
 
 Until those steps are complete, `ownerDomain`, owner, approver, and maintainer metadata remains useful for validation and accountability, but GitHub does not enforce review routing.
 
-Maintainers may project all enabled Domain Agents and Skills into VS Code-native directories with:
+Maintainers may project all enabled Domain Skills into the VS Code-native Skills directory with:
 
 ```sh
 bun .pdlc/cli.ts domain sync --root /absolute/path/to/product
 ```
 
-This projection makes Domain Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Domain contributions automatically.
+This projection installs Skills under `.github/skills/`. Domain Agent files remain canonical role profiles under `.pdlc/domains/`; the main Atlas PDLC Agent invokes a generic subagent, which reads the bound role profile and exact Skills automatically.
 
 ## Enable GitHub Copilot
 
-Open the product repository in VS Code with GitHub Copilot enabled. Copilot reads the repository instructions and discovers the Lean PDLC custom Agent and shared Skill from the files above.
+Open the product repository in VS Code with GitHub Copilot enabled. Copilot reads the repository instructions and discovers the Atlas PDLC custom Agent and shared Skill from the files above.
 
 Use one of these entry points:
 
 ```text
-/pdlc poc validate whether AI can categorize customer feedback
+/atlas-pdlc poc validate whether AI can categorize customer feedback
 ```
 
-Or select **Lean PDLC** in the Copilot Agent picker and send:
+Or select **Atlas PDLC** in the Copilot Agent picker and send:
 
 ```text
 poc validate whether AI can categorize customer feedback
 ```
 
-If the IDE does not show `/pdlc`, use natural language:
+If the IDE does not show `/atlas-pdlc`, use natural language:
 
 ```text
-Use the lean-pdlc skill to start a POC that validates whether AI can categorize customer feedback.
+Use the atlas-pdlc skill to start a POC that validates whether AI can categorize customer feedback.
 ```
+
+Existing text-based integrations may continue sending `/pdlc` as a compatibility alias, but new usage should prefer `/atlas-pdlc`.
 
 ## Confirm the installation
 

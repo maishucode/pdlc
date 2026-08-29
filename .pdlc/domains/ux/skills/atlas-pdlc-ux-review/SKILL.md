@@ -1,5 +1,5 @@
 ---
-name: lean-pdlc-ux-review
+name: atlas-pdlc-ux-review
 description: Reviews a UX artifact or implementation against supplied requirements and evidence.
 ---
 
