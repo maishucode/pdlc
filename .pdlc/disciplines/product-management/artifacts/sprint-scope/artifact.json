@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management.sprint-scope",
+  "name": "Sprint Scope",
+  "description": "A versioned snapshot of the Epic, Sprint, selected Stories, and their approved content hashes.",
+  "ownerDiscipline": "product-management",
+  "version": "1.0.0",
+  "format": "json",
+  "schemaRef": "schema.json",
+  "profiles": ["default"],
+  "examples": ["examples/example-sprint-scope.json"]
+}

@@ -1,24 +1,29 @@
 import { randomUUID } from "node:crypto";
-import { appendFile, mkdir, readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { PdlcError } from "./errors.ts";
 import { sha256 } from "./hash.ts";
+import { ProjectPaths } from "./project-paths.ts";
 import { validateAuditEvent } from "./schema.ts";
-import type { AuditEvent, PocDeliveryRecord } from "./types.ts";
+import type { AuditEvent, BaseDeliveryRecord } from "./types.ts";
 import { withLock } from "./lock.ts";
 
 export type NewAuditEvent = Omit<AuditEvent, "schemaVersion" | "eventId" | "timestamp" | "recordHash">;
 
 export class AuditLog {
   readonly workspaceRoot: string;
-  readonly path: string;
+  readonly paths: ProjectPaths;
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
-    this.path = join(workspaceRoot, ".pdlc", "runtime", "audit", "events.jsonl");
+    this.paths = new ProjectPaths(workspaceRoot);
   }
 
-  create(record: PocDeliveryRecord, input: NewAuditEvent): AuditEvent {
+  pathFor(recordId: string): string {
+    return this.paths.audit(recordId);
+  }
+
+  create(record: BaseDeliveryRecord, input: NewAuditEvent): AuditEvent {
     return {
       schemaVersion: 1,
       eventId: randomUUID(),
@@ -33,21 +38,35 @@ export class AuditLog {
     if (!validation.ok) {
       throw new PdlcError("VALIDATION_FAILED", "Refusing to append an invalid audit event", validation.issues);
     }
-    await mkdir(dirname(this.path), { recursive: true });
-    await withLock(this.workspaceRoot, "audit-log", async () => {
-      await appendFile(this.path, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
+    const path = this.pathFor(event.recordId);
+    await mkdir(dirname(path), { recursive: true });
+    await withLock(this.workspaceRoot, `audit-${event.recordId}`, async () => {
+      await appendFile(path, `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: 0o600 });
     });
   }
 
-  async readAll(): Promise<AuditEvent[]> {
-    let contents: string;
+  async readAll(recordId?: string): Promise<AuditEvent[]> {
+    if (recordId) return this.readFile(this.pathFor(recordId));
+    let files: string[];
     try {
-      contents = await readFile(this.path, "utf8");
+      files = (await readdir(this.paths.auditRoot)).filter((file) => file.endsWith(".jsonl")).sort();
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") return [];
       throw error;
     }
-    return contents
+    const groups = await Promise.all(files.map((file) => this.readFile(join(this.paths.auditRoot, file))));
+    return groups.flat().sort((left, right) => left.timestamp.localeCompare(right.timestamp) || left.eventId.localeCompare(right.eventId));
+  }
+
+  private async readFile(path: string): Promise<AuditEvent[]> {
+    let contents: string;
+    try {
+      contents = await readFile(path, "utf8");
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") return [];
+      throw error;
+    }
+    const events = contents
       .split("\n")
       .filter(Boolean)
       .map((line, index) => {
@@ -58,6 +77,13 @@ export class AuditLog {
         }
         return validation.value;
       });
+    const expectedRecordId = basename(path, ".jsonl");
+    events.forEach((event, index) => {
+      if (event.recordId !== expectedRecordId) {
+        throw new PdlcError("AUDIT_RECORD_MISMATCH", `Audit event at line ${index + 1} belongs to ${event.recordId}, not ${expectedRecordId}`);
+      }
+    });
+    return events;
   }
 }
 

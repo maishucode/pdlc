@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "solution-architecture.poc-design-defaults",
+  "title": "POC design and verification defaults",
+  "description": "Overrideable defaults that keep experimental delivery proportionate.",
+  "ownerDiscipline": "solution-architecture",
+  "version": "1.0.0",
+  "kind": "default",
+  "appliesTo": { "deliveryFlows": ["poc"], "stages": ["solution-design", "test-strategy", "build-readiness"] },
+  "defaults": [
+    {
+      "key": "architecture.minimum-design",
+      "title": "Use the smallest design that supports a decision",
+      "topic": "qualityAttributes",
+      "statement": "Document material boundaries, dependencies, data flow, failure behavior, and trade-offs without creating artifacts that do not support a delivery decision.",
+      "rationale": "A bounded experiment needs sufficient clarity without unnecessary ceremony.",
+      "controlRefs": []
+    },
+    {
+      "key": "quality.test-evidence-baseline",
+      "title": "Use proportionate automated and manual evidence",
+      "topic": "qualityAttributes",
+      "statement": "Automate core discipline, persistence, and critical interaction behavior, then manually walk through the approved acceptance criteria.",
+      "rationale": "The POC remains lightweight while preserving repeatable evidence for core behavior.",
+      "controlRefs": []
+    },
+    {
+      "key": "quality.performance-baseline",
+      "title": "Use a qualitative POC performance boundary",
+      "topic": "qualityAttributes",
+      "statement": "Unless the hypothesis depends on a measurable threshold, normal POC interactions must show no obvious lag during verification.",
+      "rationale": "A numeric target is needed only when performance materially affects the product decision.",
+      "controlRefs": []
+    }
+  ]
+}

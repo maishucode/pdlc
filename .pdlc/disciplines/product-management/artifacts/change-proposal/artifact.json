@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management.change-proposal",
+  "name": "Delivery Change Proposal",
+  "description": "A classified request to change approved requirements, Story content, or Sprint Scope with downstream impact recorded before application.",
+  "ownerDiscipline": "product-management",
+  "version": "1.0.0",
+  "format": "json",
+  "schemaRef": "schema.json",
+  "profiles": ["default"],
+  "examples": ["examples/example-change-proposal.json"]
+}

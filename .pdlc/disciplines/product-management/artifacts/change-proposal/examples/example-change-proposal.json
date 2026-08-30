@@ -1,0 +1,13 @@
+{
+  "artifactType": "product-management.change-proposal",
+  "id": "CHANGE-1",
+  "type": "requirements-change",
+  "status": "impact-assessed",
+  "storyIds": ["STORY-LOGIN-1"],
+  "reason": "A security constraint discovered during implementation changes the acceptance criteria.",
+  "impact": "Update the Story and Sprint Scope hashes; downstream work using this Story must rebase.",
+  "proposedBy": "developer@example.com",
+  "createdAt": "2026-08-30T00:00:00.000Z",
+  "approvedBy": "",
+  "approvedAt": ""
+}

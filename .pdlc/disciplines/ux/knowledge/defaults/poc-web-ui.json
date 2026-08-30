@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "ux.poc-web-ui-defaults",
+  "title": "POC web UI defaults",
+  "description": "Overrideable verification defaults for a lightweight, non-production web POC.",
+  "ownerDiscipline": "ux",
+  "version": "1.0.0",
+  "kind": "default",
+  "appliesTo": {
+    "deliveryFlows": ["poc"],
+    "stages": ["test-strategy", "build-readiness"],
+    "technologies": ["web-ui"]
+  },
+  "defaults": [
+    {
+      "key": "quality.browser-baseline",
+      "title": "Use a lightweight browser compatibility baseline",
+      "topic": "qualityAttributes",
+      "statement": "Unless the product context requires broader support, verify the POC in the latest stable Chrome release at one 390px mobile viewport and one 1280px desktop viewport.",
+      "rationale": "This provides a consistent, low-cost responsive check for a non-production web POC.",
+      "controlRefs": ["ux.experience-quality@1.0.0#responsive-baseline"]
+    }
+  ]
+}

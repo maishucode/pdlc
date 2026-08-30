@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "project-web-ui-fixture",
-  "domain": "solution-architecture",
+  "discipline": "solution-architecture",
   "version": "1.0.0",
   "appliesTo": {
     "deliveryFlows": ["poc", "implementation", "pdlc"],

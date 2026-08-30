@@ -173,7 +173,7 @@ export function buildPocStatusSummary(
     if (record.requirements.clarification.contradictions.length > 0) blockers.push({ code: "CONTRADICTIONS", area: "requirements", message: `${record.requirements.clarification.contradictions.length} requirements contradiction(s) remain.` });
     for (const control of pendingControls) blockers.push({ code: "CONTROL_PENDING", area: "controls", message: `Control has no recorded disposition: ${control}` });
     if (contextWasValidated) appendContextIssues();
-    else for (const stage of buildReadinessContextStages().filter((stage) => !contextStages.has(stage))) blockers.push({ code: "CONTEXT_NOT_APPLIED", area: "context", message: `Stage context is not yet applied: ${stage}` });
+    else for (const stage of buildReadinessContextStages(record).filter((stage) => !contextStages.has(stage))) blockers.push({ code: "CONTEXT_NOT_APPLIED", area: "context", message: `Stage context is not yet applied: ${stage}` });
   }
   if (record.status === "COMMITTED") {
     if (!tests.ready) blockers.push({ code: "TEST_EVIDENCE_MISSING", area: "evidence", message: "Test evidence is missing." });
@@ -239,7 +239,7 @@ export function buildPocStatusSummary(
     .filter(({ disposition }) => disposition === "used")
     .map(({ ref }) => ({ ref, stage: application.stage })));
   const skillEntries = record.resolution.contextApplications.flatMap((application) => [
-    ...application.domainContributions.filter(({ disposition }) => disposition === "used").flatMap(({ skills }) => skills.map((ref) => ({ ref, stage: application.stage }))),
+    ...application.disciplineContributions.filter(({ disposition }) => disposition === "used").flatMap(({ skills }) => skills.map((ref) => ({ ref, stage: application.stage }))),
     ...application.integrations.filter(({ disposition }) => disposition === "used").flatMap(({ skills }) => skills.map((ref) => ({ ref, stage: application.stage }))),
   ]);
   return {

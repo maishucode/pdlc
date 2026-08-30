@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "discipline": "ux",
+  "version": "1.0.0",
+  "deliveryFlows": ["poc"],
+  "enabled": true,
+  "permissions": {
+    "filesystem": "write",
+    "network": false,
+    "externalWrites": false
+  },
+  "bindings": [
+    {
+      "stage": "requirements-clarification",
+      "agent": "lean-pdlc-ux",
+      "skills": ["lean-pdlc-ux-spec"],
+      "mode": "draft",
+      "handoff": "Draft user-flow questions and a UX state inventory for product clarification.",
+      "approvalBoundary": "The Discipline contribution drafts guidance only; requirements approval and PDLC state remain outside the Discipline Agent."
+    },
+    {
+      "stage": "ux-design",
+      "agent": "lean-pdlc-ux",
+      "skills": ["lean-pdlc-ux-spec"],
+      "mode": "draft",
+      "handoff": "Draft a reviewable UX specification and textual mockup proposal for product review.",
+      "approvalBoundary": "The Discipline contribution drafts guidance only; product approval and PDLC state remain outside the Discipline Agent."
+    },
+    {
+      "stage": "implementation",
+      "agent": "lean-pdlc-ux",
+      "skills": ["lean-pdlc-ux-react-ui-delivery"],
+      "mode": "implement",
+      "handoff": "Implement the approved UX state matrix in existing React conventions and report focused test evidence.",
+      "approvalBoundary": "The Discipline Agent may edit scoped React UI code and tests but cannot approve requirements, gates, or PDLC state."
+    },
+    {
+      "stage": "developer-verification",
+      "agent": "lean-pdlc-ux",
+      "skills": ["lean-pdlc-ux-react-ui-delivery"],
+      "mode": "verify",
+      "handoff": "Run the smallest relevant existing test and report evidence for the approved React UI behavior.",
+      "approvalBoundary": "The Discipline Agent reports verification evidence only; PDLC acceptance, gates, and state remain outside the Discipline contribution."
+    },
+    {
+      "stage": "acceptance-verification",
+      "agent": "lean-pdlc-ux",
+      "skills": ["lean-pdlc-ux-review"],
+      "mode": "verify",
+      "handoff": "Review the delivered UX against supplied acceptance criteria and report evidence-backed findings.",
+      "approvalBoundary": "The Discipline Agent reports findings only; PDLC acceptance, gates, and state remain outside the Discipline contribution."
+    }
+  ]
+}

@@ -1,22 +1,27 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 import { runCli } from "../cli.ts";
 import { FileStateStore } from "../core/state.ts";
 import { AuditLog } from "../core/audit.ts";
 import { hashApprovedBuildContract } from "../core/approval-contract.ts";
 import { hashRequirementsDocument } from "../core/readiness.ts";
+import { sha256 } from "../core/hash.ts";
 import type { PocDeliveryRecord } from "../core/types.ts";
+import type { RequirementsAnalysisRecord } from "../delivery-flows/product-requirements-analysis/types.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
+const execFile = promisify(execFileCallback);
 
 interface ContextOutput {
   contextHash: string;
   controls: Array<{ ref: string }>;
   knowledge: Array<{ ref: string }>;
-  domainContributions: Array<{ domain: string; version: string; agent: { id: string }; skills: Array<{ name: string }> }>;
+  disciplineContributions: Array<{ discipline: string; version: string; agent: { id: string }; skills: Array<{ name: string }> }>;
   integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
 }
 
@@ -30,8 +35,8 @@ async function applyContextReceipt(workspace: string, stage: string, actor = "pd
     contextHash: output.contextHash,
     policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref} while performing ${stage}.` })),
     knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs })),
-    domainContributions: output.domainContributions.map(({ domain, version, agent, skills }) => ({
-      ref: `${domain}@${version}:${agent.id}`,
+    disciplineContributions: output.disciplineContributions.map(({ discipline, version, agent, skills }) => ({
+      ref: `${discipline}@${version}:${agent.id}`,
       agent: agent.id,
       skills: skills.map(({ name }) => name),
       disposition: "used",
@@ -53,11 +58,21 @@ async function initializeRecord(workspace: string, record: PocDeliveryRecord, ac
     await mkdir(dirname(requirementsPath), { recursive: true });
     await writeFile(requirementsPath, `# ${record.id} Requirements\n`);
   }
-  const inbox = join(workspace, ".pdlc", "runtime", "inbox");
+  const inbox = join(workspace, "pdlc", ".state", "inbox");
   await mkdir(inbox, { recursive: true });
   const input = join(inbox, `${record.id}.json`);
   await writeFile(input, JSON.stringify(record));
-  return runCli(["init", "--root", workspace, "--input", `.pdlc/runtime/inbox/${record.id}.json`, "--actor", actor], workspace);
+  return runCli(["init", "--root", workspace, "--input", `pdlc/.state/inbox/${record.id}.json`, "--actor", actor], workspace);
+}
+
+async function initializeRequirementsRecord(workspace: string, record: RequirementsAnalysisRecord, actor = "product-owner"): Promise<Awaited<ReturnType<typeof runCli>>> {
+  const requirementsPath = join(workspace, record.requirements.documentRef);
+  await mkdir(dirname(requirementsPath), { recursive: true });
+  await writeFile(requirementsPath, `# ${record.id} Requirements\n`);
+  const inbox = join(workspace, "pdlc/.state/inbox");
+  await mkdir(inbox, { recursive: true });
+  await writeFile(join(inbox, `${record.id}.json`), JSON.stringify(record));
+  return runCli(["init", "--root", workspace, "--input", `pdlc/.state/inbox/${record.id}.json`, "--actor", actor], workspace);
 }
 
 async function bindApprovedContract(workspace: string, record: PocDeliveryRecord): Promise<void> {
@@ -163,7 +178,46 @@ test("initializes a POC record, current pointer, and creation audit event togeth
   const events = await new AuditLog(workspace).readAll();
   assert.equal(events.length, 1);
   assert.deepEqual({ type: events[0]?.eventType, to: events[0]?.toStatus, stage: events[0]?.stage }, { type: "DELIVERY_FLOW_CREATED", to: "DRAFT", stage: "requirements-clarification" });
-  await assert.rejects(readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8"));
+  await assert.rejects(readFile(join(workspace, "pdlc/.state/inbox", `${record.id}.json`), "utf8"));
+});
+
+test("initializes and reports a project requirements analysis record", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-requirements-init-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/requirements-analysis-record.json"), "utf8")) as RequirementsAnalysisRecord;
+  record.id = "REQ-CLI";
+  record.requirements.documentRef = "pdlc/requirements/REQ-CLI.md";
+  const initialized = await initializeRequirementsRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  assert.equal((status.output as { deliveryFlow?: string }).deliveryFlow, "product-requirements-analysis");
+  assert.deepEqual((status.output as { availableActions?: Array<{ checkpoint: string }> }).availableActions?.map(({ checkpoint }) => checkpoint), ["requirements-approve"]);
+});
+
+test("approves requirements analysis only after required Stage context is applied", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-requirements-approve-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/requirements-analysis-record.json"), "utf8")) as RequirementsAnalysisRecord;
+  record.id = "REQ-APPROVE";
+  record.requirements.documentRef = "pdlc/requirements/REQ-APPROVE.md";
+  assert.equal((await initializeRequirementsRecord(workspace, record)).exitCode, 0);
+  const blocked = await runCli(["checkpoint", "requirements-approve", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(blocked.exitCode, 2);
+  assert.equal((blocked.output as { error: { code: string } }).error.code, "CHECKPOINT_NOT_READY");
+  for (const stage of ["requirements-clarification", "requirements-analysis", "acceptance-criteria-definition", "data-integration-boundaries", "risk-classification", "requirements-approval"]) {
+    await applyContextReceipt(workspace, stage, "product-owner", [record.requirements.documentRef]);
+  }
+  const store = new FileStateStore(workspace);
+  const current = await store.readRecord<RequirementsAnalysisRecord>(record.id);
+  const complete = Object.fromEntries(Object.keys(current.requirements.clarification.coverage).map((topic) => [topic, "complete"])) as RequirementsAnalysisRecord["requirements"]["clarification"]["coverage"];
+  await store.writeRecord({ ...current, revision: current.revision + 1, updatedAt: new Date().toISOString(), requirements: { ...current.requirements, clarification: { ...current.requirements.clarification, questionsAnswered: 7, coverage: complete } } }, current.revision);
+  const approved = await runCli(["checkpoint", "requirements-approve", "--root", workspace, "--actor", "product-owner"], workspace);
+  assert.equal(approved.exitCode, 0, JSON.stringify(approved.output));
+  const final = await store.readRecord<RequirementsAnalysisRecord>(record.id);
+  assert.equal(final.status, "REQUIREMENTS_APPROVED");
+  assert.equal(final.requirements.approvedBy, "product-owner");
+  assert.equal(final.requirements.approvedContentHash.length, 64);
 });
 
 test("rejects an invalid initial record without writing runtime state", async (context) => {
@@ -178,7 +232,7 @@ test("rejects an invalid initial record without writing runtime state", async (c
   await assert.rejects(store.readRecord(record.id));
   await assert.rejects(store.currentRecordId());
   assert.deepEqual(await new AuditLog(workspace).readAll(), []);
-  assert.equal(JSON.parse(await readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8")).status, "COMMITTED");
+  assert.equal(JSON.parse(await readFile(join(workspace, "pdlc/.state/inbox", `${record.id}.json`), "utf8")).status, "COMMITTED");
 });
 
 test("rejects non-canonical context classifications during initialization", async (context) => {
@@ -186,7 +240,7 @@ test("rejects non-canonical context classifications during initialization", asyn
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.design.technologies = ["web"];
-  record.design.domains = ["domain:ux"];
+  record.design.disciplines = ["discipline:ux"];
   record.risk.triggers = ["Sensitive Data"];
   const result = await initializeRecord(workspace, record);
   assert.equal(result.exitCode, 2);
@@ -227,32 +281,38 @@ test("rolls back record and current pointer when creation audit persistence fail
   record.requirements.documentRef = "pdlc/requirements/POC-NEW.md";
   const previous = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   previous.id = "POC-PREVIOUS";
+  previous.status = "PARKED";
+  previous.decision.outcome = "park";
+  previous.decision.rationale = "Retained as the previous completed POC.";
+  previous.decision.followUp = "Start the next POC.";
   previous.requirements.documentRef = "pdlc/requirements/POC-PREVIOUS.md";
   const store = new FileStateStore(workspace);
   await store.writeRecord(previous);
   await store.setCurrentRecord(previous.id);
-  await mkdir(join(workspace, ".pdlc", "runtime"), { recursive: true });
-  await writeFile(join(workspace, ".pdlc", "runtime", "audit"), "block audit directory creation");
+  await mkdir(join(workspace, "pdlc"), { recursive: true });
+  await writeFile(join(workspace, "pdlc", "audit"), "block audit directory creation");
   const result = await initializeRecord(workspace, record);
   assert.equal(result.exitCode, 1);
   await assert.rejects(store.readRecord(record.id));
   assert.equal(await store.currentRecordId(), previous.id);
   assert.equal((await store.readCurrentRecord()).id, previous.id);
-  assert.equal(JSON.parse(await readFile(join(workspace, ".pdlc/runtime/inbox", `${record.id}.json`), "utf8")).id, record.id);
+  assert.equal(JSON.parse(await readFile(join(workspace, "pdlc/.state/inbox", `${record.id}.json`), "utf8")).id, record.id);
 });
 
 test("validate checks all v2 Harness assets", async () => {
   const result = await runCli(["validate"]);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   assert.equal((result.output as { ok: boolean }).ok, true);
+  const loaded = (result.output as { checks: { flowRuntime: { loaded: Array<{ id: string; configuration?: { requirementsFlowControl?: string } }> } } }).checks.flowRuntime.loaded;
+  assert.equal(loaded.find(({ id }) => id === "poc")?.configuration?.requirementsFlowControl, "poc-requirements@1.1.0");
 });
 
-test("explains that Commit is owned by Build Readiness", async () => {
+test("requires an active Flow record before resolving a checkpoint", async () => {
   const result = await runCli(["checkpoint", "commit"]);
   assert.equal(result.exitCode, 2);
   assert.equal(
     (result.output as { error: { code: string } }).error.code,
-    "INVALID_ARGUMENT",
+    "CURRENT_RECORD_NOT_SET",
   );
 });
 
@@ -311,7 +371,7 @@ test("rolls back a checkpoint when its audit event cannot be persisted", async (
   const store = new FileStateStore(workspace);
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
-  await writeFile(join(workspace, ".pdlc", "runtime", "audit"), "block audit directory creation");
+  await writeFile(join(workspace, "pdlc", "audit"), "block audit directory creation");
 
   const result = await runCli(["checkpoint", "decide", "--root", workspace, "--actor", "owner@example.com", "--outcome", "park"], workspace);
   assert.equal(result.exitCode, 2);
@@ -380,6 +440,7 @@ test("build readiness records one approved and content-bound decision", async (c
   const store = new FileStateStore(workspace);
 
   await applyContextReceipt(workspace, "requirements-clarification");
+  await applyContextReceipt(workspace, "ux-design");
   await applyContextReceipt(workspace, "build-readiness");
 
   const readyStatus = await runCli(["status", "--root", workspace], workspace);
@@ -392,7 +453,7 @@ test("build readiness records one approved and content-bound decision", async (c
     applied: { policies: unknown[]; knowledge: unknown[]; skills: unknown[] };
     productizationPackage: { state: string };
   };
-  assert.deepEqual({ status: readySummary.record.status, stage: readySummary.record.stage }, { status: "DRAFT", stage: "build-readiness" });
+  assert.deepEqual({ status: readySummary.record.status, stage: readySummary.record.stage }, { status: "DRAFT", stage: "requirements-approval" });
   assert.deepEqual(readySummary.blockers, []);
   assert.equal(readySummary.nextActions.find(({ id }) => id === "request-build-readiness")?.available, true);
   assert.equal(readySummary.requirements.approved, false);
@@ -405,7 +466,7 @@ test("build readiness records one approved and content-bound decision", async (c
   const validation = await runCli(["validate", "--root", workspace], workspace);
   assert.equal(validation.exitCode, 0, JSON.stringify(validation.output));
   const validationChecks = (validation.output as { checks: { record: { source: string }; contextApplications: { ok: boolean } } }).checks;
-  assert.equal(validationChecks.record.source, join(workspace, ".pdlc/runtime/records", `${record.id}.json`));
+  assert.equal(validationChecks.record.source, join(workspace, "pdlc/records", `${record.id}.json`));
   assert.equal(validationChecks.contextApplications.ok, true);
 
   const beforeCheck = await store.readRecord(record.id);
@@ -436,7 +497,7 @@ test("build readiness records one approved and content-bound decision", async (c
   });
   assert.equal(approved.idea.timebox, "1 working day");
   const events = await new AuditLog(workspace).readAll();
-  assert.deepEqual(events.map(({ eventType }) => eventType), ["DELIVERY_FLOW_CREATED", "STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "CHECKPOINT_APPROVED"]);
+  assert.deepEqual(events.map(({ eventType }) => eventType), ["DELIVERY_FLOW_CREATED", "STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "STAGE_CONTEXT_APPLIED", "CHECKPOINT_APPROVED"]);
   assert.deepEqual(events.at(-1) && { checkpoint: events.at(-1)?.checkpoint, from: events.at(-1)?.fromStatus, to: events.at(-1)?.toStatus }, { checkpoint: "commit", from: "DRAFT", to: "COMMITTED" });
 
   const contractChanged: PocDeliveryRecord = {
@@ -612,7 +673,7 @@ test("status and validate detect receipts made stale by a context-driving change
     ...current,
     revision: current.revision + 1,
     updatedAt: new Date().toISOString(),
-    design: { ...current.design, domains: ["ux"] },
+    design: { ...current.design, disciplines: ["ux"] },
   }, current.revision);
 
   const status = await runCli(["status", "--root", workspace], workspace);
@@ -634,7 +695,7 @@ test("resolves Stage context without writing runtime state and rejects stale rec
   const result = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
   assert.deepEqual((result.output as { roles: Array<{ id: string }> }).roles.map(({ id }) => id), ["product", "developer", "qa"]);
-  await assert.rejects(readFile(join(workspace, ".pdlc/runtime/current"), "utf8"));
+  await assert.rejects(readFile(join(workspace, "pdlc/.state/current"), "utf8"));
 
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const store = new FileStateStore(workspace);
@@ -642,7 +703,7 @@ test("resolves Stage context without writing runtime state and rejects stale rec
   await store.setCurrentRecord(record.id);
   const output = result.output as ContextOutput;
   const receiptPath = "stale-receipt.json";
-  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 1, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], domainContributions: [], integrations: [] }));
+  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 1, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], disciplineContributions: [], integrations: [] }));
   const applied = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(applied.exitCode, 2);
   assert.equal((applied.output as { error: { code: string } }).error.code, "CONTEXT_RECEIPT_INVALID");

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
 import { PdlcError } from "./errors.ts";
+import { ProjectPaths } from "./project-paths.ts";
 
 export interface LockHandle {
   readonly name: string;
@@ -19,8 +19,9 @@ function safeLockName(name: string): string {
 
 export async function acquireLock(workspaceRoot: string, name: string): Promise<LockHandle> {
   const safeName = safeLockName(name);
-  const lockDirectory = join(workspaceRoot, ".pdlc", "runtime", "locks");
-  const lockPath = join(lockDirectory, `${safeName}.lock`);
+  const paths = new ProjectPaths(workspaceRoot);
+  const lockDirectory = paths.locksRoot;
+  const lockPath = paths.lock(safeName);
   const token = randomUUID();
   await mkdir(lockDirectory, { recursive: true });
 

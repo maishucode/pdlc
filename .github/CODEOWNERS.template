@@ -19,19 +19,21 @@
 /.pdlc/roles/                                   @your-org/pdlc-governance
 /.pdlc/platform-adapters/                       @your-org/developer-experience @your-org/pdlc-harness-engineering
 /.pdlc/integrations/                             @your-org/pdlc-harness-engineering @your-org/enterprise-integration-platform
-/.pdlc/domains/*/policies/                       @your-org/pdlc-governance
-/.pdlc/domains/*/skills/                         @your-org/pdlc-harness-engineering
-/.pdlc/domains/*/agents/                         @your-org/pdlc-harness-engineering
-/.pdlc/domains/*/hooks/                          @your-org/pdlc-harness-engineering
+/.pdlc/disciplines/*/policies/                       @your-org/pdlc-governance
+/.pdlc/disciplines/*/skills/                         @your-org/pdlc-harness-engineering
+/.pdlc/disciplines/*/agents/                         @your-org/pdlc-harness-engineering
+/.pdlc/disciplines/*/hooks/                          @your-org/pdlc-harness-engineering
 
-/.pdlc/domains/product-management/              @your-org/product-governance
-/.pdlc/domains/solution-architecture/            @your-org/solution-architecture
-/.pdlc/domains/ux/                               @your-org/ux-governance
-/.pdlc/domains/security/                         @your-org/security
-/.pdlc/domains/data-platform/                    @your-org/data-platform
-/.pdlc/runtime/                                  @your-org/pdlc-harness-engineering
-
-/pdlc/config/                                    @your-org/project-architecture
+/.pdlc/disciplines/product-management/              @your-org/product-governance
+/.pdlc/disciplines/solution-architecture/            @your-org/solution-architecture
+/.pdlc/disciplines/ux/                               @your-org/ux-governance
+/.pdlc/disciplines/security/                         @your-org/security
+/.pdlc/disciplines/data-platform/                    @your-org/data-platform
+/pdlc/                                         @your-org/project-architecture
+/pdlc/disciplines/*/policies/                  @your-org/project-architecture @your-org/pdlc-governance
+/pdlc/disciplines/*/knowledge/                 @your-org/project-architecture
 /pdlc/requirements/                              @your-org/product-governance
 /pdlc/evidence/                                  @your-org/developer-experience @your-org/quality
 /pdlc/artifacts/                                 @your-org/product-governance @your-org/developer-experience
+/pdlc/records/                                   @your-org/product-governance @your-org/pdlc-harness-engineering
+/pdlc/audit/                                     @your-org/product-governance @your-org/pdlc-harness-engineering

@@ -1,24 +1,30 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import test from "node:test";
 import { AuditLog } from "../core/audit.ts";
 import { buildPocAuditSummary } from "../core/audit-summary.ts";
 import { DeliveryFlowRegistry } from "../core/delivery-flow-registry.ts";
-import { DomainRegistry } from "../core/domain-registry.ts";
-import { resolveDomainContext } from "../core/domain-resolver.ts";
+import { assessContractChange, assessDeliveryContract } from "../delivery-flows/product-requirements-analysis/delivery-contract.ts";
+import { DisciplineRegistry } from "../core/discipline-registry.ts";
+import { resolveDisciplineContext } from "../core/discipline-resolver.ts";
 import { PdlcError } from "../core/errors.ts";
+import { FlowEngine } from "../core/flow-engine.ts";
+import { HarnessContext } from "../core/harness-context.ts";
 import { IntegrationRegistry } from "../core/integration-registry.ts";
+import { sha256 } from "../core/hash.ts";
 import { acquireLock } from "../core/lock.ts";
 import { ProjectOverlay } from "../core/project-overlay.ts";
-import { POC_SECURITY_RISK_TRIGGERS } from "../core/poc-progress.ts";
+import { currentPocStage, POC_SECURITY_RISK_TRIGGERS } from "../core/poc-progress.ts";
 import { RoleRegistry } from "../core/role-registry.ts";
 import { assessPocBuildReadiness, hashRequirementsDocument } from "../core/readiness.ts";
 import { loadRequirementsFlowControl } from "../core/requirements.ts";
 import { FileStateStore } from "../core/state.ts";
 import { StageRegistry } from "../core/stage-registry.ts";
+import { migrateLegacyStorage } from "../core/storage-migration.ts";
 import type { PocDeliveryRecord } from "../core/types.ts";
+import type { RequirementsAnalysisRecord } from "../delivery-flows/product-requirements-analysis/types.ts";
 import { DECLARED_CAPABILITIES } from "../platform-adapters/capabilities.ts";
 import { validateCorePortability } from "../platform-adapters/validate-portability.ts";
 
@@ -26,6 +32,10 @@ const projectRoot = resolve(import.meta.dirname, "../..");
 
 async function exampleRecord(): Promise<PocDeliveryRecord> {
   return JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+}
+
+async function requirementsRecord(): Promise<RequirementsAnalysisRecord> {
+  return JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/requirements-analysis-record.json"), "utf8")) as RequirementsAnalysisRecord;
 }
 
 async function temporaryWorkspace(): Promise<{ path: string; cleanup(): Promise<void> }> {
@@ -37,10 +47,10 @@ async function model(project = projectRoot) {
   const roles = await RoleRegistry.load(join(projectRoot, ".pdlc/roles/catalog.json"));
   const stages = await StageRegistry.load(join(projectRoot, ".pdlc/stages/catalog.json"), roles);
   const flows = await DeliveryFlowRegistry.load(join(projectRoot, ".pdlc/delivery-flows/catalog.json"), stages);
-  const domains = await DomainRegistry.load(join(projectRoot, ".pdlc/domains"));
+  const disciplines = await DisciplineRegistry.load(join(projectRoot, ".pdlc/disciplines"));
   const integrations = await IntegrationRegistry.load(join(projectRoot, ".pdlc/integrations/catalog.json"));
-  const overlay = await ProjectOverlay.load(project, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  return { roles, stages, flows, domains, integrations, overlay };
+  const overlay = await ProjectOverlay.load(project, new Set(disciplines.list().map(({ manifest }) => manifest.id)));
+  return { roles, stages, flows, disciplines, integrations, overlay };
 }
 
 test("loads registered Roles and derives Delivery Flow accountability dynamically", async () => {
@@ -92,7 +102,7 @@ test("adds a new Role through catalogs without changing Core code", async (conte
 
 test("loads only explicitly cataloged Delivery Flows and resolves conditional Stages", async () => {
   const { stages, flows } = await model();
-  assert.deepEqual(flows.catalog.flows.map(({ id }) => id), ["poc", "implementation", "pdlc"]);
+  assert.deepEqual(flows.catalog.flows.map(({ id }) => id), ["poc", "product-requirements-analysis", "implementation", "pdlc"]);
   assert.equal(stages.list().length, 29);
   assert.equal(flows.get("pdlc").stageSequence.length, 29);
   assert.equal(flows.get("poc").stageSequence.length, 10);
@@ -114,23 +124,66 @@ test("loads only explicitly cataloged Delivery Flows and resolves conditional St
   assert.equal(flows.resolve("poc", ["risk:sensitive-data"]).some(({ definition }) => definition.id === "security-verification"), true);
 });
 
-test("loads Domain-owned Artifacts, Policies, Knowledge, Skills, Agents, and Hooks", async () => {
-  const { domains, integrations } = await model();
-  assert.deepEqual(domains.list().map(({ manifest }) => manifest.id), ["data-platform", "product-management", "security", "solution-architecture", "ux"]);
-  assert.equal(domains.artifact("product-management.requirements").definition.ownerDomain, "product-management");
-  assert.equal(domains.artifact("product-management.productization-package").definition.ownerDomain, "product-management");
-  assert.equal(domains.get("ux").policies.length, 1);
-  assert.equal(domains.get("ux").skills.length, 3);
-  assert.equal(domains.get("ux").agents[0]?.id, "lean-pdlc-ux");
-  assert.equal(domains.get("ux").hooks.length, 1);
-  assert.equal(domains.get("data-platform").knowledge[0]?.asset.kind, "kb");
+test("navigates every material POC Stage from recorded progress", async () => {
+  const record = await exampleRecord();
+  const apply = (stage: string): void => {
+    record.resolution.contextApplications.push({
+      schemaVersion: 1,
+      stage,
+      contextHash: "a".repeat(64),
+      policies: [],
+      knowledge: [],
+      disciplineContributions: [],
+      integrations: [],
+      actor: "pdlc-agent",
+      appliedAt: "2026-08-30T00:00:00.000Z",
+    });
+  };
+  assert.equal(currentPocStage(record), "requirements-clarification");
+  Object.keys(record.requirements.clarification.coverage).forEach((topic) => {
+    record.requirements.clarification.coverage[topic as keyof typeof record.requirements.clarification.coverage] = "complete";
+  });
+  record.requirements.clarification.openQuestions = [];
+  assert.equal(currentPocStage(record), "solution-design");
+  record.design.summary = "A reversible browser experiment.";
+  record.design.technologies = ["web-ui"];
+  assert.equal(currentPocStage(record), "ux-design");
+  apply("ux-design");
+  assert.equal(currentPocStage(record), "build-readiness");
+  apply("build-readiness");
+  assert.equal(currentPocStage(record), "requirements-approval");
+
+  record.status = "COMMITTED";
+  assert.equal(currentPocStage(record), "implementation");
+  record.evidence.build = [{ kind: "file", ref: "pdlc/evidence/build.txt", description: "Build evidence." }];
+  apply("implementation");
+  assert.equal(currentPocStage(record), "developer-verification");
+  record.evidence.tests = [{ kind: "file", ref: "pdlc/evidence/tests.txt", description: "Test evidence." }];
+  apply("developer-verification");
+  record.risk.triggers = ["sensitive-data"];
+  assert.equal(currentPocStage(record), "security-verification");
+  record.evidence.security = [{ kind: "file", ref: "pdlc/evidence/security.txt", description: "Security evidence." }];
+  apply("security-verification");
+  assert.equal(currentPocStage(record), "acceptance-verification");
+});
+
+test("loads Discipline-owned Artifacts, Policies, Knowledge, Skills, Agents, and Hooks", async () => {
+  const { disciplines, integrations } = await model();
+  assert.deepEqual(disciplines.list().map(({ manifest }) => manifest.id), ["data-platform", "product-management", "security", "solution-architecture", "ux"]);
+  assert.equal(disciplines.artifact("product-management.requirements").definition.ownerDiscipline, "product-management");
+  assert.equal(disciplines.artifact("product-management.productization-package").definition.ownerDiscipline, "product-management");
+  assert.equal(disciplines.get("ux").policies.length, 1);
+  assert.equal(disciplines.get("ux").skills.length, 3);
+  assert.equal(disciplines.get("ux").agents[0]?.id, "lean-pdlc-ux");
+  assert.equal(disciplines.get("ux").hooks.length, 1);
+  assert.equal(disciplines.get("data-platform").knowledge[0]?.asset.kind, "kb");
   assert.equal(integrations.get("databricks").manifest.kind, "integration");
 });
 
 test("resolves mandatory Controls separately from guidance and defaults", async () => {
-  const { flows, domains, integrations, overlay } = await model();
+  const { flows, disciplines, integrations, overlay } = await model();
   const stages = flows.resolve("poc", ["technology:web-ui", "risk:sensitive-data"]).map(({ definition }) => definition.id);
-  const result = resolveDomainContext(domains, integrations, overlay, {
+  const result = resolveDisciplineContext(disciplines, integrations, overlay, {
     deliveryFlow: "poc",
     stages,
     riskTriggers: ["sensitive-data"],
@@ -151,29 +204,29 @@ test("resolves mandatory Controls separately from guidance and defaults", async 
 });
 
 test("resolves every active POC Stage independently", async () => {
-  const { flows, domains, integrations, overlay } = await model();
+  const { flows, disciplines, integrations, overlay } = await model();
   const stages = flows.resolve("poc", ["technology:web-ui"]).map(({ definition }) => definition.id);
   for (const stage of stages) {
-    const result = resolveDomainContext(domains, integrations, overlay, {
+    const result = resolveDisciplineContext(disciplines, integrations, overlay, {
       deliveryFlow: "poc",
       stages: [stage],
       technologies: ["web-ui", "react"],
-      domains: ["ux"],
+      disciplines: ["ux"],
     });
     assert.deepEqual(result.issues, [], `${stage}: ${JSON.stringify(result.issues)}`);
   }
 });
 
 test("resolves Databricks Knowledge and Integration as separate assets", async () => {
-  const { domains, integrations, overlay } = await model();
-  const result = resolveDomainContext(domains, integrations, overlay, {
+  const { disciplines, integrations, overlay } = await model();
+  const result = resolveDisciplineContext(disciplines, integrations, overlay, {
     deliveryFlow: "implementation",
     stages: ["data-integration-boundaries", "solution-design", "implementation"],
     technologies: ["databricks"],
   });
   assert(result.knowledge.some(({ ref, asset }) => ref === "data-platform.databricks-connectivity@1.0.0" && asset.kind === "kb"));
   assert(result.integrations.some(({ ref }) => ref === "databricks@1.0.0"));
-  const poc = resolveDomainContext(domains, integrations, overlay, {
+  const poc = resolveDisciplineContext(disciplines, integrations, overlay, {
     deliveryFlow: "poc",
     stages: ["data-integration-boundaries", "implementation"],
     technologies: ["databricks"],
@@ -181,15 +234,15 @@ test("resolves Databricks Knowledge and Integration as separate assets", async (
   assert.deepEqual(poc.integrations, []);
 });
 
-test("lets project defaults override Domain defaults but not locked Controls", async (context) => {
+test("lets project defaults override Discipline defaults but not locked Controls", async (context) => {
   const workspace = await temporaryWorkspace();
   context.after(workspace.cleanup);
-  const defaultsRoot = join(workspace.path, "pdlc/config/domains/ux/defaults");
+  const defaultsRoot = join(workspace.path, "pdlc/disciplines/ux/defaults");
   await mkdir(defaultsRoot, { recursive: true });
   await writeFile(join(defaultsRoot, "override.json"), JSON.stringify({
     schemaVersion: 1,
     id: "ux-project-overrides",
-    domain: "ux",
+    discipline: "ux",
     version: "1.0.0",
     appliesTo: { deliveryFlows: ["poc"], stages: ["ux-design", "build-readiness"], technologies: ["web-ui"] },
     defaults: [
@@ -197,21 +250,78 @@ test("lets project defaults override Domain defaults but not locked Controls", a
       { key: "ux.visual-foundation", title: "Attempted palette override", topic: "uxInteraction", statement: "Use a red palette.", rationale: "Project preference.", controlRefs: ["ux.experience-quality@1.0.0#approved-visual-foundation"] },
     ],
   }, null, 2));
-  const { domains, integrations } = await model();
-  const overlay = await ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id)));
-  const result = resolveDomainContext(domains, integrations, overlay, { deliveryFlow: "poc", stages: ["ux-design", "build-readiness"], technologies: ["web-ui"] });
+  const { disciplines, integrations } = await model();
+  const overlay = await ProjectOverlay.load(workspace.path, new Set(disciplines.list().map(({ manifest }) => manifest.id)));
+  const result = resolveDisciplineContext(disciplines, integrations, overlay, { deliveryFlow: "poc", stages: ["ux-design", "build-readiness"], technologies: ["web-ui"] });
   assert.equal(result.defaults.find(({ key }) => key === "quality.browser-baseline")?.sourceLayer, "project");
-  assert.equal(result.defaults.find(({ key }) => key === "ux.visual-foundation")?.sourceLayer, "domain");
+  assert.equal(result.defaults.find(({ key }) => key === "ux.visual-foundation")?.sourceLayer, "discipline");
   assert(result.issues.some(({ code }) => code === "CONTROL_CONSTRAINT_OVERRIDE"));
+});
+
+test("resolves only applicable project Knowledge from its owning Discipline", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  const knowledgeRoot = join(workspace.path, "pdlc/disciplines/solution-architecture/knowledge/guidance");
+  await mkdir(knowledgeRoot, { recursive: true });
+  await writeFile(join(knowledgeRoot, "system-context.json"), JSON.stringify({
+    schemaVersion: 1,
+    id: "solution-architecture.project-system-context",
+    title: "Project system context",
+    description: "Project-local architecture guidance.",
+    ownerDiscipline: "solution-architecture",
+    version: "1.0.0",
+    kind: "guidance",
+    appliesTo: { deliveryFlows: ["poc"], stages: ["solution-design"] },
+    contentRef: "system-context.md",
+  }, null, 2));
+  await writeFile(join(knowledgeRoot, "system-context.md"), "# System context\n\nUse the approved project boundary.\n");
+
+  const { disciplines, integrations } = await model();
+  const overlay = await ProjectOverlay.load(workspace.path, new Set(disciplines.list().map(({ manifest }) => manifest.id)));
+  const design = resolveDisciplineContext(disciplines, integrations, overlay, { deliveryFlow: "poc", stages: ["solution-design"] });
+  const requirements = resolveDisciplineContext(disciplines, integrations, overlay, { deliveryFlow: "poc", stages: ["requirements-clarification"] });
+
+  assert(design.knowledge.some(({ ref, source }) => ref === "project:solution-architecture.project-system-context@1.0.0" && source === "project"));
+  assert(!requirements.knowledge.some(({ ref }) => ref === "project:solution-architecture.project-system-context@1.0.0"));
+
+  const harness = await HarnessContext.load(projectRoot, workspace.path);
+  const designSnapshot = await harness.resolveStage("solution-design");
+  const requirementsSnapshot = await harness.resolveStage("requirements-clarification");
+  assert(designSnapshot.snapshot.knowledge.some(({ ref }) => ref === "project:solution-architecture.project-system-context@1.0.0"));
+  assert(!requirementsSnapshot.snapshot.knowledge.some(({ ref }) => ref === "project:solution-architecture.project-system-context@1.0.0"));
+});
+
+test("rejects unowned or unstructured project Knowledge", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  const knowledgeRoot = join(workspace.path, "pdlc/disciplines/solution-architecture/knowledge");
+  await mkdir(knowledgeRoot, { recursive: true });
+  await writeFile(join(knowledgeRoot, "loose-note.md"), "# Unscoped note\n");
+  const { disciplines } = await model();
+  await assert.rejects(
+    ProjectOverlay.load(workspace.path, new Set(disciplines.list().map(({ manifest }) => manifest.id))),
+    (error: unknown) => error instanceof PdlcError && error.code === "VALIDATION_FAILED" && error.message.includes("unsupported entries"),
+  );
+});
+
+test("fails closed when the legacy project Overlay path is still present", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  await mkdir(join(workspace.path, "pdlc/config/disciplines/solution-architecture"), { recursive: true });
+  const { disciplines } = await model();
+  await assert.rejects(
+    ProjectOverlay.load(workspace.path, new Set(disciplines.list().map(({ manifest }) => manifest.id))),
+    (error: unknown) => error instanceof PdlcError && error.code === "LEGACY_PROJECT_OVERLAY_PATH" && error.message.includes("pdlc/disciplines"),
+  );
 });
 
 test("rejects the obsolete project controls folder", async (context) => {
   const workspace = await temporaryWorkspace();
   context.after(workspace.cleanup);
-  await mkdir(join(workspace.path, "pdlc/config/domains/ux/controls"), { recursive: true });
-  const { domains } = await model();
+  await mkdir(join(workspace.path, "pdlc/disciplines/ux/controls"), { recursive: true });
+  const { disciplines } = await model();
   await assert.rejects(
-    ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id))),
+    ProjectOverlay.load(workspace.path, new Set(disciplines.list().map(({ manifest }) => manifest.id))),
     (error: unknown) => error instanceof PdlcError && error.code === "VALIDATION_FAILED" && error.message.includes("Rename it to policies/"),
   );
 });
@@ -226,10 +336,10 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
   record.design.decisions = ["Use local browser state only."];
   record.design.technologies = ["web-ui", "react"];
   record.risk.triggers = ["sensitive-data"];
-  const { flows, domains, integrations } = await model();
-  const overlay = await ProjectOverlay.load(workspace.path, new Set(domains.list().map(({ manifest }) => manifest.id)));
+  const { flows, disciplines, integrations } = await model();
+  const overlay = await ProjectOverlay.load(workspace.path, new Set(disciplines.list().map(({ manifest }) => manifest.id)));
   const activeStages = flows.resolve("poc", ["technology:web-ui", "risk:sensitive-data"]).map(({ definition }) => definition.id);
-  const resolved = resolveDomainContext(domains, integrations, overlay, { deliveryFlow: "poc", stages: activeStages, riskTriggers: record.risk.triggers, technologies: record.design.technologies });
+  const resolved = resolveDisciplineContext(disciplines, integrations, overlay, { deliveryFlow: "poc", stages: activeStages, riskTriggers: record.risk.triggers, technologies: record.design.technologies });
   const policy = await loadRequirementsFlowControl(join(projectRoot, ".pdlc/delivery-flows/poc/controls/requirements.json"));
 
   const blocked = await assessPocBuildReadiness(record, workspace.path, resolved.controls, policy, resolved.defaults, flows.requiredRoles("poc", ["technology:web-ui", "risk:sensitive-data"]));
@@ -267,10 +377,10 @@ test("writes and reads a Delivery Record atomically with optimistic revision con
   context.after(workspace.cleanup);
   const store = new FileStateStore(workspace.path);
   const record = await exampleRecord();
-  assert.equal(store.recordPath(record.id), join(workspace.path, ".pdlc/runtime/records/POC-EXAMPLE.json"));
+  assert.equal(store.recordPath(record.id), join(workspace.path, "pdlc/records/POC-EXAMPLE.json"));
   await store.writeRecord(record);
   await store.setCurrentRecord(record.id);
-  assert.equal((await readFile(join(workspace.path, ".pdlc/runtime/current"), "utf8")).trim(), record.id);
+  assert.equal((await readFile(join(workspace.path, "pdlc/.state/current"), "utf8")).trim(), record.id);
   assert.deepEqual(await store.readCurrentRecord(), record);
   const next = { ...record, revision: 1, updatedAt: new Date().toISOString() };
   await assert.rejects(store.writeRecord(next), (error: unknown) => error instanceof PdlcError && error.code === "REVISION_CONFLICT");
@@ -282,7 +392,7 @@ test("prevents concurrent ownership of the same lock", async (context) => {
   const workspace = await temporaryWorkspace();
   context.after(workspace.cleanup);
   const first = await acquireLock(workspace.path, "record-POC-EXAMPLE");
-  assert.equal(first.path, join(workspace.path, ".pdlc/runtime/locks/record-POC-EXAMPLE.lock"));
+  assert.equal(first.path, join(workspace.path, "pdlc/.state/locks/record-POC-EXAMPLE.lock"));
   try { await assert.rejects(acquireLock(workspace.path, "record-POC-EXAMPLE"), (error: unknown) => error instanceof PdlcError && error.code === "LOCK_HELD"); }
   finally { await first.release(); }
 });
@@ -292,12 +402,114 @@ test("appends auditable events with deterministic record hashes", async (context
   context.after(workspace.cleanup);
   const record = await exampleRecord();
   const audit = new AuditLog(workspace.path);
-  assert.equal(audit.path, join(workspace.path, ".pdlc/runtime/audit/events.jsonl"));
+  assert.equal(audit.pathFor(record.id), join(workspace.path, "pdlc/audit/POC-EXAMPLE.jsonl"));
   const event = audit.create(record, { recordId: record.id, eventType: "DELIVERY_FLOW_CREATED", actor: record.assignments.product, riskLevel: record.risk.level });
   await audit.append(event);
   assert.equal((await audit.readAll())[0]?.recordHash.length, 64);
 });
 
+test("migrates legacy Harness runtime into project-owned per-record storage", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  const record = await exampleRecord();
+  const event = new AuditLog(workspace.path).create(record, { recordId: record.id, eventType: "DELIVERY_FLOW_CREATED", actor: "owner", riskLevel: "low" });
+  const legacyRecord = structuredClone(record) as unknown as Record<string, unknown>;
+  legacyRecord.schemaVersion = 2;
+  delete legacyRecord.source;
+  const legacy = join(workspace.path, ".pdlc/runtime");
+  await mkdir(join(legacy, "records"), { recursive: true });
+  await mkdir(join(legacy, "audit"), { recursive: true });
+  await writeFile(join(legacy, "records", `${record.id}.json`), JSON.stringify(legacyRecord));
+  await writeFile(join(legacy, "current"), `${record.id}\n`);
+  await writeFile(join(legacy, "audit/events.jsonl"), `${JSON.stringify(event)}\n`);
+  const migrated = await migrateLegacyStorage(workspace.path);
+  assert.equal(migrated.migrated, true);
+  assert.deepEqual(migrated.records, [record.id]);
+  const upgraded = await new FileStateStore(workspace.path).readRecord(record.id);
+  assert.equal(upgraded.id, record.id);
+  assert.equal(upgraded.schemaVersion, 3);
+  assert.deepEqual(upgraded.source, { baseRevision: "", derivedFromRecord: "", deliveredRevision: "" });
+  assert.equal((await new AuditLog(workspace.path).readAll(record.id)).length, 1);
+  await assert.rejects(readFile(legacy, "utf8"));
+});
+
+test("binds downstream work to scoped Story hashes and detects selected Story changes", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  const record = await requirementsRecord();
+  const storyRef = "pdlc/artifacts/stories/STORY-ONE.md";
+  const scopeRef = "pdlc/artifacts/scopes/sprint-1.json";
+  await mkdir(join(workspace.path, "pdlc/artifacts/stories"), { recursive: true });
+  await mkdir(join(workspace.path, "pdlc/artifacts/scopes"), { recursive: true });
+  await writeFile(join(workspace.path, storyRef), "# Story One\n");
+  await writeFile(join(workspace.path, scopeRef), JSON.stringify({ artifactType: "product-management.sprint-scope", version: 1 }));
+  record.status = "SCOPED";
+  record.source.deliveredRevision = "abcdef1";
+  record.stories = [{ localId: "STORY-ONE", artifactRef: storyRef, externalKey: "", revision: 1, contentHash: sha256("# Story One\n"), requirementRefs: ["FR-1"], acceptanceCriteria: ["It works"], dependencies: [] }];
+  record.scope = { artifactType: "product-management.sprint-scope", documentRef: scopeRef, version: 1, previousScopeHash: "", scopeHash: sha256(JSON.stringify({ artifactType: "product-management.sprint-scope", version: 1 })), epicRef: "EPIC-1", sprint: { id: "S1", name: "Sprint 1", capturedAt: "2026-08-30T00:00:00.000Z" }, storyIds: ["STORY-ONE"], approvedBy: "product", approvedAt: "2026-08-30T00:00:00.000Z" };
+  const assessed = await assessDeliveryContract(workspace.path, record, ["STORY-ONE"]);
+  assert.equal(assessed.ok, true, JSON.stringify(assessed.issues));
+  const previous = assessed.contract!;
+  const current = { ...previous, scopeHash: "b".repeat(64), stories: [{ ...previous.stories[0]!, revision: 2, contentHash: "c".repeat(64) }] };
+  const changed = assessContractChange(previous, current);
+  assert(changed.issues.some(({ code }) => code === "SELECTED_STORY_CHANGED"));
+});
+
 test("shared Core remains platform-portable", async () => {
   assert.deepEqual(await validateCorePortability(join(projectRoot, ".pdlc/core")), { ok: true, issues: [] });
+});
+
+test("executes a newly declared Delivery Flow without changing Core or CLI", async (context) => {
+  const workspace = await temporaryWorkspace();
+  context.after(workspace.cleanup);
+  const harnessRoot = join(workspace.path, "harness");
+  const deliveryRoot = join(workspace.path, "project");
+  await cp(join(projectRoot, ".pdlc"), join(harnessRoot, ".pdlc"), {
+    recursive: true,
+    filter: (source) => basename(source) !== "node_modules",
+  });
+  await mkdir(deliveryRoot, { recursive: true });
+
+  const catalogPath = join(harnessRoot, ".pdlc/delivery-flows/catalog.json");
+  const catalog = JSON.parse(await readFile(catalogPath, "utf8")) as { flows: Array<{ id: string; definition: string }> };
+  catalog.flows.push({ id: "architecture-review", definition: "architecture-review/flow.json" });
+  await writeFile(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`);
+  await mkdir(join(harnessRoot, ".pdlc/delivery-flows/architecture-review"), { recursive: true });
+  await writeFile(join(harnessRoot, ".pdlc/delivery-flows/architecture-review/flow.json"), JSON.stringify({
+    schemaVersion: 2,
+    id: "architecture-review",
+    name: "Architecture Review",
+    description: "Configuration-only executable Flow used to prove engine extensibility.",
+    status: "active",
+    stageSequence: [{ stageId: "solution-design", inclusion: "required" }],
+    controls: {
+      initialStatus: "DRAFT",
+      terminalStatuses: ["APPROVED"],
+      checkpoints: [{ id: "approve", from: ["DRAFT"], to: "APPROVED", ownerRole: "developer" }],
+      deliveryDefaults: { roleAssignmentMode: "approval-actor-all-roles", timebox: "2 hours", collectDuringRequirements: false },
+      constraints: { productionUse: false, externalIntegrations: [], allowSinglePersonAllRoles: true },
+    },
+  }));
+
+  const engine = await FlowEngine.load(harnessRoot, deliveryRoot);
+  const initialized = await engine.initialize({
+    schemaVersion: 1,
+    id: "ARCH-ONE",
+    deliveryFlow: "architecture-review",
+    status: "DRAFT",
+    title: "Review the service boundary",
+    revision: 0,
+    createdAt: "2026-08-30T00:00:00.000Z",
+    updatedAt: "2026-08-30T00:00:00.000Z",
+    assignments: {},
+    source: { baseRevision: "", derivedFromRecord: "", deliveredRevision: "" },
+    decisionContext: { option: "modular-monolith" },
+  }, "architect@example.com");
+  assert.equal(initialized.record.status, "DRAFT");
+  const approved = await engine.checkpoint({ root: deliveryRoot, actor: "architect@example.com" }, "approve") as { to: string; revision: number };
+  assert.deepEqual(approved, { ok: true, recordId: "ARCH-ONE", checkpoint: "approve", from: "DRAFT", to: "APPROVED", revision: 1 });
+  assert.equal((await engine.activeRecords()).length, 0);
+  assert.equal((await new AuditLog(deliveryRoot).readAll("ARCH-ONE")).length, 2);
+  await unlink(join(deliveryRoot, "pdlc/.state/current"));
+  assert.equal((await engine.status({}) as { initialized: boolean }).initialized, false);
 });

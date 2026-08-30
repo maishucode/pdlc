@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "id": "REQ-EXAMPLE",
+  "deliveryFlow": "product-requirements-analysis",
+  "status": "DRAFT",
+  "title": "Example product requirements analysis",
+  "revision": 0,
+  "createdAt": "2026-08-30T00:00:00.000Z",
+  "updatedAt": "2026-08-30T00:00:00.000Z",
+  "assignments": {
+    "product": "",
+    "developer": "",
+    "qa": ""
+  },
+  "source": {
+    "baseRevision": "",
+    "derivedFromRecord": "",
+    "deliveredRevision": ""
+  },
+  "requirements": {
+    "artifactType": "product-management.requirements",
+    "documentRef": "pdlc/requirements/REQ-EXAMPLE.md",
+    "profile": "comprehensive",
+    "status": "draft",
+    "clarification": {
+      "questionsAnswered": 0,
+      "coverage": {
+        "productContext": "pending",
+        "functionalBehavior": "pending",
+        "userScenarios": "pending",
+        "uxInteraction": "pending",
+        "qualityAttributes": "pending",
+        "dataIntegrations": "pending",
+        "scopeSuccess": "pending"
+      },
+      "openQuestions": [],
+      "contradictions": []
+    },
+    "approvedBy": "",
+    "approvedAt": "",
+    "approvedContentHash": "",
+    "approvedContractHash": ""
+  },
+  "risk": {
+    "level": "low",
+    "triggers": []
+  },
+  "resolution": {
+    "controls": {
+      "applicable": [],
+      "exceptions": [],
+      "applications": []
+    },
+    "baselines": [],
+    "defaults": [],
+    "knowledge": [],
+    "integrations": [],
+    "contextApplications": []
+  },
+  "design": {
+    "summary": "",
+    "decisions": [],
+    "technologies": [],
+    "disciplines": []
+  },
+  "stories": [],
+  "scope": {
+    "artifactType": "product-management.sprint-scope",
+    "documentRef": "",
+    "version": 0,
+    "previousScopeHash": "",
+    "scopeHash": "",
+    "epicRef": "",
+    "sprint": {
+      "id": "",
+      "name": "",
+      "capturedAt": ""
+    },
+    "storyIds": [],
+    "approvedBy": "",
+    "approvedAt": ""
+  },
+  "changes": []
+}

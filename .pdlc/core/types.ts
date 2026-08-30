@@ -72,7 +72,7 @@ export interface Applicability {
   stages?: string[];
   riskTriggers?: string[];
   technologies?: string[];
-  domains?: string[];
+  disciplines?: string[];
 }
 
 export interface EvidenceRef {
@@ -105,7 +105,7 @@ export interface ContextAssetReceipt {
   evidenceRefs: string[];
 }
 
-export interface ContextDomainContributionReceipt extends ContextAssetReceipt {
+export interface ContextDisciplineContributionReceipt extends ContextAssetReceipt {
   agent: string;
   skills: string[];
 }
@@ -120,7 +120,7 @@ export interface StageContextReceipt {
   contextHash: string;
   policies: ContextPolicyReceipt[];
   knowledge: ContextAssetReceipt[];
-  domainContributions: ContextDomainContributionReceipt[];
+  disciplineContributions: ContextDisciplineContributionReceipt[];
   integrations: ContextIntegrationReceipt[];
 }
 
@@ -129,16 +129,29 @@ export interface StageContextApplication extends StageContextReceipt {
   appliedAt: string;
 }
 
-export interface PocDeliveryRecord {
-  schemaVersion: 2;
+export interface DeliverySourceLineage {
+  baseRevision: string;
+  derivedFromRecord: string;
+  deliveredRevision: string;
+}
+
+export interface BaseDeliveryRecord {
+  schemaVersion: number;
   id: string;
-  deliveryFlow: "poc";
-  status: PocStatus;
+  deliveryFlow: DeliveryFlowId;
+  status: string;
   title: string;
   revision: number;
   createdAt: string;
   updatedAt: string;
   assignments: Record<string, string>;
+  source: DeliverySourceLineage;
+}
+
+export interface PocDeliveryRecord extends BaseDeliveryRecord {
+  schemaVersion: 3;
+  deliveryFlow: "poc";
+  status: PocStatus;
   idea: {
     problem: string;
     hypothesis: string;
@@ -187,7 +200,7 @@ export interface PocDeliveryRecord {
     summary: string;
     decisions: string[];
     technologies: string[];
-    domains: string[];
+    disciplines: string[];
   };
   evidence: {
     tests: EvidenceRef[];
@@ -206,6 +219,71 @@ export interface PocDeliveryRecord {
     };
   };
 }
+
+export const REQUIREMENTS_ANALYSIS_STATUSES = ["DRAFT", "REQUIREMENTS_APPROVED", "WORK_ITEMS_PREPARED", "SCOPED"] as const;
+export type RequirementsAnalysisStatus = (typeof REQUIREMENTS_ANALYSIS_STATUSES)[number];
+
+export interface StorySnapshot {
+  localId: string;
+  artifactRef: string;
+  externalKey: string;
+  revision: number;
+  contentHash: string;
+  requirementRefs: string[];
+  acceptanceCriteria: string[];
+  dependencies: string[];
+}
+
+export interface SprintScopeBinding {
+  artifactType: "product-management.sprint-scope";
+  documentRef: string;
+  version: number;
+  previousScopeHash: string;
+  scopeHash: string;
+  epicRef: string;
+  sprint: {
+    id: string;
+    name: string;
+    capturedAt: string;
+  };
+  storyIds: string[];
+  approvedBy: string;
+  approvedAt: string;
+}
+
+export const CHANGE_TYPES = ["implementation-defect", "clarification", "requirements-change", "scope-change"] as const;
+export type ChangeType = (typeof CHANGE_TYPES)[number];
+export const CHANGE_STATUSES = ["proposed", "impact-assessed", "approved", "applied", "rejected"] as const;
+export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
+
+export interface DeliveryChange {
+  id: string;
+  type: ChangeType;
+  status: ChangeStatus;
+  storyIds: string[];
+  reason: string;
+  impact: string;
+  proposedBy: string;
+  createdAt: string;
+  approvedBy: string;
+  approvedAt: string;
+}
+
+export interface RequirementsAnalysisRecord extends BaseDeliveryRecord {
+  schemaVersion: 1;
+  deliveryFlow: "product-requirements-analysis";
+  status: RequirementsAnalysisStatus;
+  requirements: PocDeliveryRecord["requirements"];
+  risk: PocDeliveryRecord["risk"];
+  resolution: PocDeliveryRecord["resolution"];
+  design: PocDeliveryRecord["design"];
+  stories: StorySnapshot[];
+  scope: SprintScopeBinding;
+  changes: DeliveryChange[];
+}
+
+export type DeliveryRecord = PocDeliveryRecord | RequirementsAnalysisRecord;
+export type ContextualDeliveryRecord = Pick<DeliveryRecord, "deliveryFlow" | "risk" | "resolution" | "design">;
 
 export interface RequirementsDepthPolicy {
   minimumAnsweredQuestions: number;
@@ -271,9 +349,9 @@ export interface DeliveryFlowControls {
   terminalStatuses: string[];
   checkpoints: DeliveryFlowCheckpoint[];
   deliveryDefaults: {
-    roleAssignmentMode: "approval-actor-all-roles";
+    roleAssignmentMode: string;
     timebox: string;
-    collectDuringRequirements: false;
+    collectDuringRequirements: boolean;
     requirementsProfile?: RequirementsDepth;
   };
   constraints: {
@@ -281,6 +359,15 @@ export interface DeliveryFlowControls {
     externalIntegrations: string[];
     allowSinglePersonAllRoles: boolean;
   };
+}
+
+export interface DeliveryFlowRuntime {
+  /** Optional Flow-owned module exporting `deliveryFlowExecutor`. */
+  executor?: string;
+  /** Optional Record schema, relative to the Harness `.pdlc/` root. */
+  recordSchema?: string;
+  /** Additional Runner actions accepted by `action <id>`. */
+  actions?: string[];
 }
 
 export interface DeliveryFlowDefinition {
@@ -291,6 +378,7 @@ export interface DeliveryFlowDefinition {
   status: DeliveryFlowStatus;
   stageSequence: DeliveryFlowStageRef[];
   controls?: DeliveryFlowControls;
+  runtime?: DeliveryFlowRuntime;
 }
 
 export interface ExecutableDeliveryFlowDefinition extends DeliveryFlowDefinition {
@@ -306,7 +394,7 @@ export interface DeliveryFlowCheckpoint {
   ownerRole: RoleSlot;
 }
 
-export interface DomainManifest {
+export interface DisciplineManifest {
   schemaVersion: 1;
   id: string;
   name: string;
@@ -330,7 +418,7 @@ export interface ArtifactDefinition {
   id: string;
   name: string;
   description: string;
-  ownerDomain: string;
+  ownerDiscipline: string;
   version: string;
   format: "markdown" | "json" | "reference";
   schemaRef?: string;
@@ -357,7 +445,7 @@ export interface ControlPolicy {
   id: string;
   title: string;
   description: string;
-  ownerDomain: string;
+  ownerDiscipline: string;
   version: string;
   appliesTo: Applicability;
   rules: ControlRule[];
@@ -377,7 +465,7 @@ export interface KnowledgeAsset {
   id: string;
   title: string;
   description: string;
-  ownerDomain: string;
+  ownerDiscipline: string;
   version: string;
   kind: KnowledgeKind;
   appliesTo: Applicability;
@@ -392,27 +480,27 @@ export interface ResolvedStandardDefault {
   statement: string;
   rationale: string;
   sourceRef: string;
-  sourceLayer: "domain" | "project" | "harness";
+  sourceLayer: "discipline" | "project" | "harness";
   locked: boolean;
   controlRefs: string[];
   shadowedSources: string[];
 }
 
-export const DOMAIN_GUIDANCE_MODES = ["draft", "implement", "verify"] as const;
-export type DomainGuidanceMode = (typeof DOMAIN_GUIDANCE_MODES)[number];
+export const DISCIPLINE_GUIDANCE_MODES = ["draft", "implement", "verify"] as const;
+export type DisciplineGuidanceMode = (typeof DISCIPLINE_GUIDANCE_MODES)[number];
 
-export interface DomainStageHookBinding {
+export interface DisciplineStageHookBinding {
   stage: string;
   agent: string;
   skills: string[];
-  mode: DomainGuidanceMode;
+  mode: DisciplineGuidanceMode;
   handoff: string;
   approvalBoundary: string;
 }
 
-export interface DomainStageHooksDescriptor {
+export interface DisciplineStageHooksDescriptor {
   schemaVersion: 1;
-  domain: string;
+  discipline: string;
   version: string;
   deliveryFlows: string[];
   enabled: boolean;
@@ -421,7 +509,7 @@ export interface DomainStageHooksDescriptor {
     network: boolean;
     externalWrites: boolean;
   };
-  bindings: DomainStageHookBinding[];
+  bindings: DisciplineStageHookBinding[];
 }
 
 export interface IntegrationCatalogEntry {
@@ -457,33 +545,33 @@ export interface IntegrationManifest {
   };
 }
 
-export interface DiscoveredDomainHooks {
-  domain: string;
-  descriptor: DomainStageHooksDescriptor;
+export interface DiscoveredDisciplineHooks {
+  discipline: string;
+  descriptor: DisciplineStageHooksDescriptor;
   root: string;
-  bindings: DomainStageHookBinding[];
+  bindings: DisciplineStageHookBinding[];
 }
 
-export interface DomainGuidanceContribution {
-  domain: string;
+export interface DisciplineGuidanceContribution {
+  discipline: string;
   version: string;
-  permissions: DomainStageHooksDescriptor["permissions"];
+  permissions: DisciplineStageHooksDescriptor["permissions"];
   agent: { id: string; path: string };
   skills: Array<{ name: string; path: string }>;
-  mode: DomainGuidanceMode;
+  mode: DisciplineGuidanceMode;
   handoff: string;
   approvalBoundary: string;
 }
 
-export interface DomainGuidanceResolution {
+export interface DisciplineGuidanceResolution {
   deliveryFlow: string;
   stage: StageDefinition;
-  contributions: DomainGuidanceContribution[];
+  contributions: DisciplineGuidanceContribution[];
 }
 
 export interface ProjectBaseline {
   schemaVersion: 1;
-  domain: string;
+  discipline: string;
   status: "approved";
   approvedBy: string;
   approvedAt: string;
@@ -494,7 +582,7 @@ export interface ProjectBaseline {
 export interface ProjectDefaultProfile {
   schemaVersion: 1;
   id: string;
-  domain: string;
+  discipline: string;
   version: string;
   appliesTo: Applicability;
   defaults: StandardDefaultEntry[];
@@ -502,7 +590,7 @@ export interface ProjectDefaultProfile {
 
 export interface ResolvedControl {
   ref: string;
-  ownerDomain: string;
+  ownerDiscipline: string;
   policy: ControlPolicy;
   matchedStages: string[];
   source: "enterprise" | "project";
@@ -510,15 +598,16 @@ export interface ResolvedControl {
 
 export interface ResolvedKnowledge {
   ref: string;
-  ownerDomain: string;
+  ownerDiscipline: string;
   asset: KnowledgeAsset;
   matchedStages: string[];
+  source: "enterprise" | "project";
   contentPath?: string;
 }
 
 export interface ResolvedBaseline {
   ref: string;
-  domain: string;
+  discipline: string;
   baseline: ProjectBaseline;
 }
 

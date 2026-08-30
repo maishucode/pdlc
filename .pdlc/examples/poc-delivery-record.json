@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "id": "POC-EXAMPLE",
   "deliveryFlow": "poc",
   "status": "DRAFT",
@@ -11,6 +11,11 @@
     "product": "owner@example.com",
     "developer": "owner@example.com",
     "qa": "owner@example.com"
+  },
+  "source": {
+    "baseRevision": "",
+    "derivedFromRecord": "",
+    "deliveredRevision": ""
   },
   "idea": {
     "problem": "Describe the user or business problem that needs evidence.",
@@ -74,7 +79,7 @@
     "summary": "",
     "decisions": [],
     "technologies": [],
-    "domains": []
+    "disciplines": []
   },
   "evidence": {
     "tests": [],

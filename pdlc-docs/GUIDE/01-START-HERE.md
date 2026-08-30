@@ -13,14 +13,16 @@ Your product repository
 ├── AGENTS.md                         Shared PDLC boundaries
 ├── .agents/skills/lean-pdlc/         Main Delivery Flow Skill
 ├── .github/                          Copilot adapter and prompt
-├── .pdlc/                            Harness definitions and Runner state
-│   └── runtime/                      Records, audit, active pointer, and locks
+├── .pdlc/                            Reusable Harness definitions and Runner code
 ├── pdlc-docs/                        Namespaced Harness documentation
 └── pdlc/                             Project-owned delivery workspace
-    ├── config/domains/               Optional project configuration overlay
+    ├── disciplines/                  Optional project Discipline overlays and Knowledge
     ├── requirements/                 Requirements Artifacts
     ├── evidence/                     Delivery evidence
-    └── artifacts/                    Future project delivery artifacts
+    ├── artifacts/                    Project delivery artifacts
+    ├── records/                      Versioned Delivery Records
+    ├── audit/                        Per-record append-only audit logs
+    └── .state/                       Ignored inbox, current pointer, and locks
 ```
 
 ## Put Lean PDLC in a project
@@ -50,7 +52,7 @@ pdlc/
 pdlc-docs/
 ```
 
-Then commit them with the product. Domain definitions remain separate from Core, and the Runner resolves applicable Policies/Controls, Knowledge, Domain contributions, and Integrations before each Stage. Add project-specific context only under `pdlc/config/domains/`.
+Then commit them with the product. Discipline definitions remain separate from Core, and the Runner resolves applicable Policies/Controls, Knowledge, Discipline contributions, and Integrations before each Stage. Add project-specific context only under `pdlc/disciplines/`.
 
 ### Enable ownership review routing
 
@@ -60,15 +62,15 @@ The included `.github/CODEOWNERS.template` is intentionally inactive because its
 2. save the result as `.github/CODEOWNERS`;
 3. protect the relevant branch and require CODEOWNER review for governed paths.
 
-Until those steps are complete, `ownerDomain`, owner, approver, and maintainer metadata remains useful for validation and accountability, but GitHub does not enforce review routing.
+Until those steps are complete, `ownerDiscipline`, owner, approver, and maintainer metadata remains useful for validation and accountability, but GitHub does not enforce review routing.
 
-Maintainers may project all enabled Domain Agents and Skills into VS Code-native directories with:
+Maintainers may project all enabled Discipline Agents and Skills into VS Code-native directories with:
 
 ```sh
-bun .pdlc/cli.ts domain sync --root /absolute/path/to/product
+bun .pdlc/cli.ts discipline sync --root /absolute/path/to/product
 ```
 
-This projection makes Domain Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Domain contributions automatically.
+This projection makes Discipline Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Discipline contributions automatically.
 
 ## Enable GitHub Copilot
 
@@ -97,7 +99,7 @@ Use the lean-pdlc skill to start a POC that validates whether AI can categorize 
 Maintainers can run these commands from the repository root. They are not commands for delivery users:
 
 ```sh
-bun test ./.pdlc/tests
+bun run --cwd .pdlc test
 bun .pdlc/cli.ts validate
 ```
 

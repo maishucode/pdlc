@@ -1,17 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { PdlcError } from "./errors.ts";
-import { validatePocDeliveryRecord } from "./schema.ts";
-import type { PocDeliveryRecord } from "./types.ts";
+import { ProjectPaths, safeRecordId } from "./project-paths.ts";
+import { validateDeliveryRecordEnvelope } from "./schema.ts";
+import type { BaseDeliveryRecord } from "./types.ts";
 import { withLock } from "./lock.ts";
-
-function safeRecordId(recordId: string): string {
-  if (!/^POC-[A-Z0-9][A-Z0-9-]*$/.test(recordId)) {
-    throw new PdlcError("INVALID_RECORD_ID", `Unsafe or invalid POC record id: ${recordId}`);
-  }
-  return recordId;
-}
 
 async function atomicWrite(path: string, content: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -29,17 +23,19 @@ async function atomicWrite(path: string, content: string): Promise<void> {
 export class FileStateStore {
   readonly workspaceRoot: string;
   readonly stateRoot: string;
+  readonly paths: ProjectPaths;
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
-    this.stateRoot = join(workspaceRoot, ".pdlc", "runtime");
+    this.paths = new ProjectPaths(workspaceRoot);
+    this.stateRoot = this.paths.stateRoot;
   }
 
   recordPath(recordId: string): string {
-    return join(this.stateRoot, "records", `${safeRecordId(recordId)}.json`);
+    return this.paths.record(recordId);
   }
 
-  async readRecord(recordId: string): Promise<PocDeliveryRecord> {
+  async readRecord<T extends BaseDeliveryRecord = BaseDeliveryRecord>(recordId: string): Promise<T> {
     const path = this.recordPath(recordId);
     let parsed: unknown;
     try {
@@ -50,20 +46,20 @@ export class FileStateStore {
       }
       throw error;
     }
-    const validation = validatePocDeliveryRecord(parsed);
+    const validation = validateDeliveryRecordEnvelope(parsed);
     if (!validation.ok) {
       throw new PdlcError("VALIDATION_FAILED", `Delivery Record is invalid: ${recordId}`, validation.issues);
     }
-    return validation.value;
+    return validation.value as T;
   }
 
-  async writeRecord(record: PocDeliveryRecord, expectedRevision?: number): Promise<void> {
-    const validation = validatePocDeliveryRecord(record);
+  async writeRecord(record: BaseDeliveryRecord, expectedRevision?: number): Promise<void> {
+    const validation = validateDeliveryRecordEnvelope(record);
     if (!validation.ok) {
       throw new PdlcError("VALIDATION_FAILED", `Refusing to write invalid Delivery Record: ${record.id}`, validation.issues);
     }
     await withLock(this.workspaceRoot, `record-${record.id}`, async () => {
-      let existing: PocDeliveryRecord | undefined;
+      let existing: BaseDeliveryRecord | undefined;
       try {
         existing = await this.readRecord(record.id);
       } catch (error) {
@@ -88,8 +84,8 @@ export class FileStateStore {
     });
   }
 
-  async restoreRecordAfterFailedMutation(record: PocDeliveryRecord, expectedCurrentRevision: number): Promise<void> {
-    const validation = validatePocDeliveryRecord(record);
+  async restoreRecordAfterFailedMutation(record: BaseDeliveryRecord, expectedCurrentRevision: number): Promise<void> {
+    const validation = validateDeliveryRecordEnvelope(record);
     if (!validation.ok) {
       throw new PdlcError("VALIDATION_FAILED", `Refusing to restore invalid Delivery Record: ${record.id}`, validation.issues);
     }
@@ -109,16 +105,43 @@ export class FileStateStore {
     const safeId = safeRecordId(recordId);
     await this.readRecord(safeId);
     await withLock(this.workspaceRoot, "current-record", async () => {
-      await atomicWrite(join(this.stateRoot, "current"), `${safeId}\n`);
+      await atomicWrite(this.paths.currentRecord, `${safeId}\n`);
     });
   }
 
-  async currentRecordId(): Promise<string> {
+  async listRecords(): Promise<BaseDeliveryRecord[]> {
+    let files: string[];
+    try {
+      files = await readdir(this.paths.recordsRoot);
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") return [];
+      throw error;
+    }
+    const ids = files
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.slice(0, -".json".length))
+      .sort();
+    return Promise.all(ids.map((recordId) => this.readRecord(recordId)));
+  }
+
+  async activeRecords(isTerminal?: (record: BaseDeliveryRecord) => boolean | Promise<boolean>): Promise<BaseDeliveryRecord[]> {
+    const records = await this.listRecords();
+    if (!isTerminal) return records;
+    const terminal = await Promise.all(records.map((record) => isTerminal(record)));
+    return records.filter((_, index) => !terminal[index]);
+  }
+
+  async currentRecordId(isTerminal?: (record: BaseDeliveryRecord) => boolean | Promise<boolean>): Promise<string> {
     let value: string;
     try {
-      value = (await readFile(join(this.stateRoot, "current"), "utf8")).trim();
+      value = (await readFile(this.paths.currentRecord, "utf8")).trim();
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") {
+        const active = await this.activeRecords(isTerminal);
+        if (active.length === 1) return active[0]!.id;
+        if (active.length > 1) {
+          throw new PdlcError("MULTIPLE_ACTIVE_RECORDS", "Multiple active Delivery Records exist; select one explicitly", active.map(({ id, status }) => ({ id, status })));
+        }
         throw new PdlcError("CURRENT_RECORD_NOT_SET", "No active Delivery Record is selected");
       }
       throw error;
@@ -126,8 +149,8 @@ export class FileStateStore {
     return safeRecordId(value);
   }
 
-  async readCurrentRecord(): Promise<PocDeliveryRecord> {
-    return this.readRecord(await this.currentRecordId());
+  async readCurrentRecord<T extends BaseDeliveryRecord = BaseDeliveryRecord>(isTerminal?: (record: BaseDeliveryRecord) => boolean | Promise<boolean>): Promise<T> {
+    return this.readRecord<T>(await this.currentRecordId(isTerminal));
   }
 }
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management.requirements",
+  "name": "Requirements",
+  "description": "The Product-owned build contract that defines intended behavior, acceptance conditions, boundaries, and applicable standards.",
+  "ownerDiscipline": "product-management",
+  "version": "1.0.0",
+  "format": "markdown",
+  "schemaRef": "schema.json",
+  "profiles": ["minimal", "standard", "comprehensive"],
+  "defaultTemplate": "templates/default.md",
+  "examples": ["examples/example-requirements.md"]
+}

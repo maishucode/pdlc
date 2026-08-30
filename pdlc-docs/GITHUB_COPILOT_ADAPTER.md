@@ -4,7 +4,7 @@
 
 This guide explains how the Lean PDLC Harness is exposed through GitHub Copilot and how to verify that Copilot can complete the Phase 1 POC Delivery Flow.
 
-The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Domain Control, Knowledge, role, schema, checkpoint, or state logic. Every Copilot surface uses the same shared sources as other supported Agent platforms.
+The adapter is intentionally thin. It does not copy Stage, Delivery Flow, Discipline Control, Knowledge, role, schema, checkpoint, or state logic. Every Copilot surface uses the same shared sources as other supported Agent platforms.
 
 ## 2. Adapter components
 
@@ -46,7 +46,7 @@ Copilot cloud agent works in an ephemeral GitHub Actions environment. The setup 
 2. Installs the repository-aligned Bun version.
 3. Confirms Bun is available.
 4. Runs the Harness regression tests.
-5. Validates schemas, the canonical Stage Catalog, explicit Delivery Flow registration, Domain assets and references, Project Overlay resolution, portability, and Copilot entry points.
+5. Validates schemas, the canonical Stage Catalog, explicit Delivery Flow registration, Discipline assets and references, Project Overlay resolution, portability, and Copilot entry points.
 
 The setup workflow must be present on the default branch before Copilot cloud agent will use it.
 
@@ -153,7 +153,7 @@ Harness maintainers run the configured validation and tests:
 
 ```text
 bun .pdlc/cli.ts validate
-bun test ./.pdlc/tests
+bun run --cwd .pdlc test
 ```
 
 Validation confirms:
@@ -189,7 +189,7 @@ Validation confirms:
 
 ## 10. Known Phase 1 limitations
 
-- Only the POC Delivery Flow is executable.
+- The POC and local Product Requirements Analysis Delivery Flows are executable. Implementation, PDLC, and external JIRA/XRAY writes remain unavailable.
 - Prompt Files are IDE-only and remain a preview feature.
 - Custom Agent support in some IDEs is still preview-dependent.
 - Commit, Verify, and Decide are implemented by the shared Runner; adapter-specific interactive checkpoint behavior still requires validation on each supported Copilot surface.

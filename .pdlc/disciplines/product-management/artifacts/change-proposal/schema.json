@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/artifacts/product-management.change-proposal.schema.json",
+  "title": "Delivery Change Proposal",
+  "type": "object",
+  "required": ["artifactType", "id", "type", "status", "storyIds", "reason", "impact", "proposedBy", "createdAt"],
+  "properties": {
+    "artifactType": { "const": "product-management.change-proposal" },
+    "id": { "type": "string", "minLength": 1 },
+    "type": { "enum": ["implementation-defect", "clarification", "requirements-change", "scope-change"] },
+    "status": { "enum": ["proposed", "impact-assessed", "approved", "applied", "rejected"] },
+    "storyIds": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "reason": { "type": "string", "minLength": 1 },
+    "impact": { "type": "string" },
+    "proposedBy": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "approvedBy": { "type": "string" },
+    "approvedAt": { "type": "string" }
+  },
+  "additionalProperties": false
+}

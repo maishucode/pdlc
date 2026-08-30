@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/artifacts/product-management.sprint-scope.schema.json",
+  "title": "Sprint Scope",
+  "type": "object",
+  "required": ["artifactType", "version", "previousScopeHash", "epicRef", "sprint", "stories"],
+  "properties": {
+    "artifactType": { "const": "product-management.sprint-scope" },
+    "version": { "type": "integer", "minimum": 1 },
+    "previousScopeHash": { "type": "string", "pattern": "^$|^[a-f0-9]{64}$" },
+    "epicRef": { "type": "string", "minLength": 1 },
+    "sprint": {
+      "type": "object",
+      "required": ["id", "name", "capturedAt"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "capturedAt": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "stories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["localId", "artifactRef", "revision", "contentHash"],
+        "properties": {
+          "localId": { "type": "string", "pattern": "^STORY-[A-Z0-9][A-Z0-9-]*$" },
+          "artifactRef": { "type": "string", "minLength": 1 },
+          "externalKey": { "type": "string" },
+          "revision": { "type": "integer", "minimum": 1 },
+          "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "ux.experience-quality",
+  "title": "Experience quality baseline",
+  "description": "Mandatory interaction, accessibility, responsive, and visual rules for user-interface delivery.",
+  "ownerDiscipline": "ux",
+  "version": "1.0.0",
+  "appliesTo": {
+    "deliveryFlows": ["poc", "implementation", "pdlc"],
+    "stages": ["requirements-clarification", "acceptance-criteria-definition", "ux-design", "test-strategy", "build-readiness", "implementation", "developer-verification", "test-execution", "acceptance-verification"]
+  },
+  "rules": [
+    {
+      "id": "approved-visual-foundation",
+      "statement": "Use #0B5FFF as the primary action color, #E8F1FF as the light surface, #073B9A as the dark interaction state, and neutral backgrounds; expose them as reusable design tokens.",
+      "enforcement": "evidence",
+      "enforceAt": ["developer-verification", "acceptance-verification"],
+      "requiredEvidence": ["Token definition and rendered UI evidence"],
+      "exceptionApprovers": ["ux-governance-team"],
+      "standardDefault": { "key": "ux.visual-foundation", "topic": "uxInteraction" }
+    },
+    {
+      "id": "semantic-color",
+      "statement": "Pair color with text, iconography, shape, or another visible cue for status, validation, selection, and destructive actions.",
+      "enforcement": "evidence",
+      "enforceAt": ["developer-verification", "acceptance-verification"],
+      "requiredEvidence": ["Rendered state evidence"],
+      "exceptionApprovers": ["ux-governance-team"],
+      "standardDefault": { "key": "ux.semantic-color", "topic": "uxInteraction" }
+    },
+    {
+      "id": "accessible-interaction",
+      "statement": "Use semantic controls, visible keyboard focus, programmatic labels, sufficient color contrast, and reduced-motion support where motion is present.",
+      "enforcement": "evidence",
+      "enforceAt": ["developer-verification", "acceptance-verification"],
+      "requiredEvidence": ["Accessibility verification evidence"],
+      "exceptionApprovers": ["ux-governance-team"],
+      "standardDefault": { "key": "ux.accessible-interaction", "topic": "qualityAttributes" }
+    },
+    {
+      "id": "responsive-baseline",
+      "statement": "Define behavior for at least one mobile width and one desktop width, prevent horizontal overflow, and keep primary actions usable without hover.",
+      "enforcement": "evidence",
+      "enforceAt": ["developer-verification", "acceptance-verification"],
+      "requiredEvidence": ["Mobile and desktop rendered evidence"],
+      "exceptionApprovers": ["ux-governance-team"],
+      "standardDefault": { "key": "ux.responsive-baseline", "topic": "uxInteraction" }
+    },
+    {
+      "id": "complete-interaction-states",
+      "statement": "Specify and implement relevant empty, loading, success, error, disabled, focus, and destructive-action states for the approved scope.",
+      "enforcement": "evidence",
+      "enforceAt": ["developer-verification", "acceptance-verification"],
+      "requiredEvidence": ["State matrix and verification evidence"],
+      "exceptionApprovers": ["ux-governance-team"],
+      "standardDefault": { "key": "ux.complete-states", "topic": "uxInteraction" }
+    }
+  ]
+}

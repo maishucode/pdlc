@@ -7,8 +7,8 @@ import {
   validateControlPolicy,
   validateDeliveryFlowCatalog,
   validateDeliveryFlowDefinition,
-  validateDomainStageHooks,
-  validateDomainManifest,
+  validateDisciplineStageHooks,
+  validateDisciplineManifest,
   validateIntegrationCatalog,
   validateIntegrationManifest,
   validateKnowledgeAsset,
@@ -19,43 +19,54 @@ import {
   validateStageCatalog,
   validateStageContextReceipt,
 } from "../core/schema.ts";
+import { validateRequirementsAnalysisRecord } from "../delivery-flows/product-requirements-analysis/record-validator.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
 async function json(path: string): Promise<unknown> { return JSON.parse(await readFile(path, "utf8")) as unknown; }
 
 test("enforces the Harness and project workspace ownership boundary", async () => {
   await Promise.all([
+    access(join(projectRoot, ".pdlc/package.json")),
+    access(join(projectRoot, ".pdlc/bun.lock")),
+    access(join(projectRoot, ".pdlc/tsconfig.json")),
     access(join(projectRoot, ".pdlc/core")),
-    access(join(projectRoot, ".pdlc/runtime/records/.gitkeep")),
-    access(join(projectRoot, ".pdlc/runtime/audit/.gitkeep")),
-    access(join(projectRoot, ".pdlc/runtime/inbox/.gitkeep")),
+    access(join(projectRoot, "pdlc/records/.gitkeep")),
+    access(join(projectRoot, "pdlc/audit/.gitkeep")),
     access(join(projectRoot, ".pdlc/integrations/catalog.json")),
-    access(join(projectRoot, "pdlc/config/domains/.gitkeep")),
+    access(join(projectRoot, "pdlc/disciplines/.gitkeep")),
     access(join(projectRoot, "pdlc/requirements/.gitkeep")),
     access(join(projectRoot, "pdlc/evidence/.gitkeep")),
     access(join(projectRoot, "pdlc/artifacts/.gitkeep")),
   ]);
   await Promise.all([
     assert.rejects(access(join(projectRoot, "pdlc/core"))),
+    assert.rejects(access(join(projectRoot, "pdlc/config"))),
     assert.rejects(access(join(projectRoot, ".pdlc/config"))),
-    assert.rejects(access(join(projectRoot, ".pdlc/domains/ux/capabilities"))),
-    assert.rejects(access(join(projectRoot, ".pdlc/domains/ux/controls"))),
+    assert.rejects(access(join(projectRoot, ".pdlc/disciplines/ux/capabilities"))),
+    assert.rejects(access(join(projectRoot, ".pdlc/disciplines/ux/controls"))),
+    assert.rejects(access(join(projectRoot, "pdlc/.state"))),
   ]);
 });
 
 test("keeps the Runner entry point as a thin composition root", async () => {
   const cli = await readFile(join(projectRoot, ".pdlc/cli.ts"), "utf8");
-  assert(cli.split("\n").length < 450, "CLI orchestration should stay compact");
+  assert(cli.split("\n").length < 150, "CLI orchestration should stay compact");
   assert.doesNotMatch(cli, /\.\/core\/[^"\n]*-registry\.ts/);
   assert.doesNotMatch(cli, /createStageContextSnapshot/);
   assert.match(cli, /\.\/commands\/context\.ts/);
   assert.match(cli, /\.\/commands\/validate\.ts/);
-  assert.match(cli, /\.\/core\/harness-context\.ts/);
-  assert.match(cli, /\.\/core\/flow-guard\.ts/);
+  assert.match(cli, /\.\/core\/flow-engine\.ts/);
+  assert.doesNotMatch(cli, /deliveryFlow\s*[!=]==?\s*["']/);
+  assert.doesNotMatch(cli, /product-requirements-analysis|deliveryFlow.*poc/);
 });
 
-test("validates the canonical v2 Delivery Record", async () => {
+test("validates the canonical POC Delivery Record", async () => {
   assert.equal(validatePocDeliveryRecord(await json(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"))).ok, true);
+});
+
+test("validates the canonical Requirements Analysis Delivery Record", async () => {
+  const result = validateRequirementsAnalysisRecord(await json(join(projectRoot, ".pdlc/examples/requirements-analysis-record.json")));
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
 });
 
 test("requires evidence when a Stage Context asset is declared used", () => {
@@ -65,7 +76,7 @@ test("requires evidence when a Stage Context asset is declared used", () => {
     contextHash: "a".repeat(64),
     policies: [],
     knowledge: [{ ref: "product-management.requirements-writing@1.0.0", disposition: "used", notes: "Consulted it.", evidenceRefs: [] }],
-    domainContributions: [],
+    disciplineContributions: [],
     integrations: [],
   });
   assert.equal(result.ok, false);
@@ -93,10 +104,46 @@ test("validates the explicit Delivery Flow Catalog and registered Flows", async 
   const stages = validateStageCatalog(await json(join(projectRoot, ".pdlc/stages/catalog.json")));
   assert.equal(stages.ok, true, JSON.stringify(stages.issues));
   if (stages.ok) assert.equal(stages.value.stages.length, 29);
-  for (const id of ["poc", "implementation", "pdlc"]) {
+  for (const id of ["poc", "product-requirements-analysis", "implementation", "pdlc"]) {
     const result = validateDeliveryFlowDefinition(await json(join(projectRoot, `.pdlc/delivery-flows/${id}/flow.json`)));
     assert.equal(result.ok, true, `${id}: ${JSON.stringify(result.issues)}`);
   }
+});
+
+test("allows Flow-owned delivery controls without changing the base schema", async () => {
+  const value = await json(join(projectRoot, ".pdlc/delivery-flows/poc/flow.json")) as {
+    controls: { deliveryDefaults: { roleAssignmentMode: string; collectDuringRequirements: boolean } };
+  };
+  value.controls.deliveryDefaults.roleAssignmentMode = "explicit-role-assignment";
+  value.controls.deliveryDefaults.collectDuringRequirements = true;
+  const result = validateDeliveryFlowDefinition(value);
+  assert.equal(result.ok, true, JSON.stringify(result.issues));
+});
+
+test("rejects duplicate, unreachable, and dead-end Delivery Flow transitions", async () => {
+  const duplicate = await json(join(projectRoot, ".pdlc/delivery-flows/poc/flow.json")) as {
+    controls: { checkpoints: Array<Record<string, unknown>>; terminalStatuses: string[] };
+  };
+  duplicate.controls.checkpoints.push({ ...duplicate.controls.checkpoints[0] });
+  const duplicateResult = validateDeliveryFlowDefinition(duplicate);
+  assert.equal(duplicateResult.ok, false);
+  if (!duplicateResult.ok) assert(duplicateResult.issues.some(({ code }) => code === "DUPLICATE_CHECKPOINT"));
+
+  const unreachable = await json(join(projectRoot, ".pdlc/delivery-flows/poc/flow.json")) as {
+    controls: { checkpoints: Array<Record<string, unknown>>; terminalStatuses: string[] };
+  };
+  unreachable.controls.terminalStatuses.push("UNREACHABLE");
+  const unreachableResult = validateDeliveryFlowDefinition(unreachable);
+  assert.equal(unreachableResult.ok, false);
+  if (!unreachableResult.ok) assert(unreachableResult.issues.some(({ code }) => code === "UNREACHABLE_TERMINAL_STATUS"));
+
+  const deadEnd = await json(join(projectRoot, ".pdlc/delivery-flows/poc/flow.json")) as {
+    controls: { checkpoints: Array<Record<string, unknown>> };
+  };
+  deadEnd.controls.checkpoints.push({ id: "abandon", from: ["DRAFT"], to: "ABANDONED", ownerRole: "product" });
+  const deadEndResult = validateDeliveryFlowDefinition(deadEnd);
+  assert.equal(deadEndResult.ok, false);
+  if (!deadEndResult.ok) assert(deadEndResult.issues.some(({ code }) => code === "DEAD_END_STATUS"));
 });
 
 test("validates the explicit Role Catalog", async () => {
@@ -105,13 +152,16 @@ test("validates the explicit Role Catalog", async () => {
   if (result.ok) assert.deepEqual(result.value.roles.map(({ id }) => id), ["product", "developer", "qa"]);
 });
 
-test("validates representative Domain assets", async () => {
-  assert.equal(validateDomainManifest(await json(join(projectRoot, ".pdlc/domains/ux/domain.json"))).ok, true);
-  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/domains/product-management/artifacts/requirements/artifact.json"))).ok, true);
-  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/domains/product-management/artifacts/productization-package/artifact.json"))).ok, true);
-  assert.equal(validateControlPolicy(await json(join(projectRoot, ".pdlc/domains/ux/policies/experience-quality.policy.json"))).ok, true);
-  assert.equal(validateKnowledgeAsset(await json(join(projectRoot, ".pdlc/domains/data-platform/knowledge/kb/databricks-connectivity.json"))).ok, true);
-  assert.equal(validateDomainStageHooks(await json(join(projectRoot, ".pdlc/domains/ux/hooks/stages.json"))).ok, true);
+test("validates representative Discipline assets", async () => {
+  assert.equal(validateDisciplineManifest(await json(join(projectRoot, ".pdlc/disciplines/ux/discipline.json"))).ok, true);
+  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/disciplines/product-management/artifacts/requirements/artifact.json"))).ok, true);
+  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/disciplines/product-management/artifacts/productization-package/artifact.json"))).ok, true);
+  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/disciplines/product-management/artifacts/sprint-scope/artifact.json"))).ok, true);
+  assert.equal(validateArtifactDefinition(await json(join(projectRoot, ".pdlc/disciplines/product-management/artifacts/change-proposal/artifact.json"))).ok, true);
+  assert.equal(validateControlPolicy(await json(join(projectRoot, ".pdlc/disciplines/ux/policies/experience-quality.policy.json"))).ok, true);
+  assert.equal(validateKnowledgeAsset(await json(join(projectRoot, ".pdlc/disciplines/data-platform/knowledge/kb/databricks-connectivity.json"))).ok, true);
+  assert.equal(validateKnowledgeAsset(await json(join(projectRoot, ".pdlc/examples/project-overlay/pdlc/disciplines/solution-architecture/knowledge/guidance/system-context.json"))).ok, true);
+  assert.equal(validateDisciplineStageHooks(await json(join(projectRoot, ".pdlc/disciplines/ux/hooks/stages.json"))).ok, true);
   assert.equal(validateIntegrationCatalog(await json(join(projectRoot, ".pdlc/integrations/catalog.json"))).ok, true);
   assert.equal(validateIntegrationManifest(await json(join(projectRoot, ".pdlc/integrations/databricks/integration.json"))).ok, true);
 });
@@ -133,7 +183,7 @@ test("rejects Requirements Flow Controls that exceed the conversational batch li
   if (!result.ok) assert(result.issues.some(({ code }) => code === "INVALID_QUESTION_LIMIT"));
 });
 
-test("validates project-specific Domain defaults and rejects duplicate keys", async () => {
+test("validates project-specific Discipline defaults and rejects duplicate keys", async () => {
   const path = join(projectRoot, ".pdlc/tests/fixtures/project-web-ui-standard.json");
   const value = await json(path) as Record<string, unknown>;
   assert.equal(validateProjectDefaultProfile(value).ok, true);
@@ -144,7 +194,7 @@ test("validates project-specific Domain defaults and rejects duplicate keys", as
 });
 
 test("keeps the Requirements questionnaire under the owning Artifact", async () => {
-  const template = await readFile(join(projectRoot, ".pdlc/domains/product-management/artifacts/requirements/templates/questions.md"), "utf8");
+  const template = await readFile(join(projectRoot, ".pdlc/disciplines/product-management/artifacts/requirements/templates/questions.md"), "utf8");
   assert(template.includes("[Answer]:"));
   assert(template.includes("Product role"));
 });
@@ -152,7 +202,7 @@ test("keeps the Requirements questionnaire under the owning Artifact", async () 
 test("keeps UX clarification options selectable", async () => {
   const sources = await Promise.all([
     readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8"),
-    readFile(join(projectRoot, ".pdlc/domains/ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, ".pdlc/disciplines/ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
   ]);
   for (const source of sources) {
     assert.match(source, /2[–-]4 mutually exclusive, selectable options/i);

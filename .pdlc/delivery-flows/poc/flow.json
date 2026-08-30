@@ -4,12 +4,17 @@
   "name": "POC Delivery Flow",
   "description": "A bounded, non-production Delivery Flow that tests an idea and produces a park or recommend-productization decision.",
   "status": "active",
+  "runtime": {
+    "executor": "executor.ts",
+    "recordSchema": "schemas/poc-delivery-record.schema.json",
+    "actions": ["build-readiness"]
+  },
   "stageSequence": [
     { "stageId": "requirements-clarification", "inclusion": "required" },
-    { "stageId": "requirements-approval", "inclusion": "required" },
     { "stageId": "solution-design", "inclusion": "required" },
     { "stageId": "ux-design", "inclusion": "conditional", "activationTags": ["technology:web-ui", "technology:mobile-ui"] },
     { "stageId": "build-readiness", "inclusion": "required" },
+    { "stageId": "requirements-approval", "inclusion": "required" },
     { "stageId": "implementation", "inclusion": "required" },
     { "stageId": "developer-verification", "inclusion": "required" },
     { "stageId": "security-verification", "inclusion": "conditional", "activationTags": ["risk:sensitive-data", "risk:external-access", "risk:credentials", "risk:regulated-data"] },

@@ -5,7 +5,7 @@
   "type": "object",
   "required": [
     "schemaVersion",
-    "domain",
+    "discipline",
     "status",
     "approvedBy",
     "approvedAt",
@@ -16,7 +16,7 @@
     "schemaVersion": {
       "const": 1
     },
-    "domain": {
+    "discipline": {
       "type": "string"
     },
     "status": {

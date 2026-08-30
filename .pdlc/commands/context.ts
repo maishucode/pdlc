@@ -2,42 +2,43 @@ import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { validateReceiptAgainstSnapshot } from "../core/context-receipt.ts";
 import { persistRecordAndAudit } from "../core/controlled-mutation.ts";
-import { discoverDomainHooks, domainAgentPath, domainSkillPath, resolveDomainGuidance } from "../core/domain-guidance.ts";
-import { projectKnowledgeRefs } from "../core/domain-resolver.ts";
+import { discoverDisciplineHooks, disciplineAgentPath, disciplineSkillPath, resolveDisciplineGuidance } from "../core/discipline-guidance.ts";
 import { PdlcError } from "../core/errors.ts";
 import { HarnessContext } from "../core/harness-context.ts";
 import { validateStageContextReceipt } from "../core/schema.ts";
 import { FileStateStore } from "../core/state.ts";
-import type { PocDeliveryRecord, StageContextReceipt } from "../core/types.ts";
+import type { DeliveryRecord, StageContextReceipt } from "../core/types.ts";
 import type { RunnerOptions } from "./types.ts";
 
-async function readRecord(options: RunnerOptions): Promise<PocDeliveryRecord> {
+async function readRecord(options: RunnerOptions): Promise<DeliveryRecord> {
   const store = new FileStateStore(options.root);
   return options.record ? store.readRecord(options.record) : store.readCurrentRecord();
 }
 
 export async function stageContext(harnessRoot: string, options: RunnerOptions, stageId?: string): Promise<unknown> {
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Context requires a canonical Stage id");
-  let record: PocDeliveryRecord | undefined;
+  let record: DeliveryRecord | undefined;
   try { record = await readRecord(options); } catch (error) {
     if (!(error instanceof PdlcError) || error.code !== "CURRENT_RECORD_NOT_SET") throw error;
   }
   const harness = await HarnessContext.load(harnessRoot, options.root);
-  const { deliveryFlow, stage, resolved, domainGuidance, snapshot, project, roles } = await harness.resolveStage(stageId, record);
+  const { deliveryFlow, stage, resolved, disciplineGuidance, snapshot, roles } = await harness.resolveStage(stageId, record);
   return {
     ok: true,
     deliveryFlow,
     stage,
     contextHash: snapshot.contextHash,
     roles: roles.map(({ id, name, path }) => ({ id, name, path: relative(harnessRoot, path) })),
-    controls: resolved.controls.map(({ ref, ownerDomain, source, policy }) => ({ ref, ownerDomain, source, rules: policy.rules })),
+    controls: resolved.controls.map(({ ref, ownerDiscipline, source, policy }) => ({ ref, ownerDiscipline, source, rules: policy.rules })),
     baselines: resolved.baselines.map(({ ref, baseline }) => ({ ref, decisions: baseline.decisions })),
     defaults: resolved.defaults,
-    knowledge: [
-      ...resolved.knowledge.map(({ ref, asset, contentPath }) => ({ ref, kind: asset.kind, contentPath: contentPath ? relative(harnessRoot, contentPath) : undefined })),
-      ...projectKnowledgeRefs(project, options.root).map((ref) => ({ ref, kind: "project" })),
-    ],
-    domainContributions: domainGuidance.contributions,
+    knowledge: resolved.knowledge.map(({ ref, asset, contentPath, source }) => ({
+      ref,
+      kind: asset.kind,
+      source,
+      contentPath: contentPath ? relative(source === "project" ? options.root : harnessRoot, contentPath) : undefined,
+    })),
+    disciplineContributions: disciplineGuidance.contributions,
     integrations: resolved.integrations.map(({ ref, owners, permissions, skills }) => ({
       ref,
       owners,
@@ -73,7 +74,7 @@ export async function applyStageContext(harnessRoot: string, options: RunnerOpti
   const contextApplications = original.resolution.contextApplications.filter((entry) => entry.stage !== stageId);
   contextApplications.push(application);
   contextApplications.sort((left, right) => left.stage.localeCompare(right.stage));
-  const updated: PocDeliveryRecord = {
+  const updated: DeliveryRecord = {
     ...original,
     revision: original.revision + 1,
     updatedAt: appliedAt,
@@ -81,7 +82,7 @@ export async function applyStageContext(harnessRoot: string, options: RunnerOpti
   };
   const evidenceRefs = [
     ...receipt.knowledge.flatMap((entry) => entry.evidenceRefs),
-    ...receipt.domainContributions.flatMap((entry) => entry.evidenceRefs),
+    ...receipt.disciplineContributions.flatMap((entry) => entry.evidenceRefs),
     ...receipt.integrations.flatMap((entry) => entry.evidenceRefs),
   ];
   await persistRecordAndAudit(options.root, original, updated, {
@@ -97,35 +98,35 @@ export async function applyStageContext(harnessRoot: string, options: RunnerOpti
 
 export async function guidance(harnessRoot: string, stageId?: string): Promise<unknown> {
   if (!stageId) throw new PdlcError("INVALID_ARGUMENT", "Guidance requires a canonical Stage id");
-  const { stages, domains } = await HarnessContext.loadDomainView(harnessRoot);
-  return { ok: true, ...await resolveDomainGuidance(stages, domains, harnessRoot, stageId) };
+  const { stages, disciplines } = await HarnessContext.loadDisciplineView(harnessRoot);
+  return { ok: true, ...await resolveDisciplineGuidance(stages, disciplines, harnessRoot, stageId) };
 }
 
-export async function domainList(harnessRoot: string): Promise<unknown> {
-  const { stages, domains } = await HarnessContext.loadDomainView(harnessRoot);
-  const hooks = await discoverDomainHooks(stages, domains);
-  return { ok: true, domains: domains.list().map(({ manifest, artifacts, policies, knowledge, skills, agents, hooks: domainHooks }) => ({
+export async function disciplineList(harnessRoot: string): Promise<unknown> {
+  const { stages, disciplines } = await HarnessContext.loadDisciplineView(harnessRoot);
+  const hooks = await discoverDisciplineHooks(stages, disciplines);
+  return { ok: true, disciplines: disciplines.list().map(({ manifest, artifacts, policies, knowledge, skills, agents, hooks: disciplineHooks }) => ({
     id: manifest.id,
     artifacts: artifacts.length,
     policies: policies.length,
     knowledge: knowledge.length,
     skills: skills.map(({ id }) => id),
     agents: agents.map(({ id }) => id),
-    hooks: domainHooks.length,
-    stages: hooks.filter(({ domain }) => domain === manifest.id).flatMap(({ bindings }) => bindings.map(({ stage }) => stage)),
+    hooks: disciplineHooks.length,
+    stages: hooks.filter(({ discipline }) => discipline === manifest.id).flatMap(({ bindings }) => bindings.map(({ stage }) => stage)),
   })) };
 }
 
-export async function domainSync(harnessRoot: string, options: RunnerOptions): Promise<unknown> {
-  const { stages, domains } = await HarnessContext.loadDomainView(harnessRoot);
-  const hooks = (await discoverDomainHooks(stages, domains)).filter(({ descriptor }) => descriptor.enabled && descriptor.deliveryFlows.includes("poc"));
-  const sources = new Map<string, { domain: string; source: string; destination: string }>();
-  for (const { domain, root, bindings } of hooks) for (const binding of bindings) {
+export async function disciplineSync(harnessRoot: string, options: RunnerOptions): Promise<unknown> {
+  const { stages, disciplines } = await HarnessContext.loadDisciplineView(harnessRoot);
+  const hooks = (await discoverDisciplineHooks(stages, disciplines)).filter(({ descriptor }) => descriptor.enabled);
+  const sources = new Map<string, { discipline: string; source: string; destination: string }>();
+  for (const { discipline, root, bindings } of hooks) for (const binding of bindings) {
     const agentDestination = join(".github", "agents", `${binding.agent}.agent.md`);
-    sources.set(agentDestination, { domain, source: domainAgentPath(root, binding.agent), destination: agentDestination });
+    sources.set(agentDestination, { discipline, source: disciplineAgentPath(root, binding.agent), destination: agentDestination });
     for (const skill of binding.skills) {
       const skillDestination = join(".github", "skills", skill, "SKILL.md");
-      sources.set(skillDestination, { domain, source: domainSkillPath(root, skill), destination: skillDestination });
+      sources.set(skillDestination, { discipline, source: disciplineSkillPath(root, skill), destination: skillDestination });
     }
   }
   const installed: string[] = [];
@@ -134,7 +135,7 @@ export async function domainSync(harnessRoot: string, options: RunnerOptions): P
     const destination = join(options.root, item.destination);
     const sourceContent = await readFile(item.source, "utf8");
     try {
-      if (await readFile(destination, "utf8") !== sourceContent) throw new PdlcError("DOMAIN_FILE_CONFLICT", `Domain '${item.domain}' will not overwrite an existing file: ${relative(options.root, destination)}`);
+      if (await readFile(destination, "utf8") !== sourceContent) throw new PdlcError("DISCIPLINE_FILE_CONFLICT", `Discipline '${item.discipline}' will not overwrite an existing file: ${relative(options.root, destination)}`);
       unchanged.push(relative(options.root, destination));
     } catch (error) {
       if (error instanceof PdlcError) throw error;
@@ -143,7 +144,7 @@ export async function domainSync(harnessRoot: string, options: RunnerOptions): P
       installed.push(relative(options.root, destination));
     }
   }
-  return { ok: true, domains: [...new Set(hooks.map(({ domain }) => domain))], target: options.root, installed, unchanged };
+  return { ok: true, disciplines: [...new Set(hooks.map(({ discipline }) => discipline))], target: options.root, installed, unchanged };
 }
 
 export async function integrationList(harnessRoot: string): Promise<unknown> {

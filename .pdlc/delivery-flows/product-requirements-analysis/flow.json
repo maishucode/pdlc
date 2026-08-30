@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "id": "product-requirements-analysis",
+  "name": "Product Requirements Analysis Delivery Flow",
+  "description": "Turns an approved product requirement into versioned Stories and an approved Sprint Scope without writing to an external work-management system.",
+  "status": "active",
+  "runtime": {
+    "executor": "executor.ts",
+    "recordSchema": "schemas/requirements-analysis-record.schema.json",
+    "actions": ["artifacts-bind"]
+  },
+  "stageSequence": [
+    { "stageId": "requirements-clarification", "inclusion": "required" },
+    { "stageId": "requirements-analysis", "inclusion": "required" },
+    { "stageId": "acceptance-criteria-definition", "inclusion": "required" },
+    { "stageId": "data-integration-boundaries", "inclusion": "required" },
+    { "stageId": "risk-classification", "inclusion": "required" },
+    { "stageId": "requirements-approval", "inclusion": "required" },
+    { "stageId": "work-item-planning", "inclusion": "required" },
+    { "stageId": "delivery-planning", "inclusion": "required" }
+  ],
+  "controls": {
+    "initialStatus": "DRAFT",
+    "terminalStatuses": ["SCOPED"],
+    "checkpoints": [
+      { "id": "requirements-approve", "from": ["DRAFT"], "to": "REQUIREMENTS_APPROVED", "ownerRole": "product" },
+      { "id": "work-items-ready", "from": ["REQUIREMENTS_APPROVED"], "to": "WORK_ITEMS_PREPARED", "ownerRole": "product" },
+      { "id": "scope-approve", "from": ["WORK_ITEMS_PREPARED"], "to": "SCOPED", "ownerRole": "product" },
+      { "id": "change-approve", "from": ["SCOPED"], "to": "DRAFT", "ownerRole": "product" }
+    ],
+    "deliveryDefaults": {
+      "roleAssignmentMode": "approval-actor-all-roles",
+      "timebox": "one sprint-planning cycle",
+      "collectDuringRequirements": false,
+      "requirementsProfile": "comprehensive"
+    },
+    "constraints": {
+      "productionUse": false,
+      "externalIntegrations": [],
+      "allowSinglePersonAllRoles": true
+    }
+  }
+}

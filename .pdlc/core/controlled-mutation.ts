@@ -2,14 +2,14 @@ import { AuditLog, type NewAuditEvent } from "./audit.ts";
 import { PdlcError } from "./errors.ts";
 import { withLock } from "./lock.ts";
 import { FileStateStore } from "./state.ts";
-import type { AuditEvent, PocDeliveryRecord } from "./types.ts";
+import type { AuditEvent, BaseDeliveryRecord } from "./types.ts";
 
 type ControlledAuditInput = Omit<NewAuditEvent, "recordId">;
 
-export async function persistRecordAndAudit(
+export async function persistRecordAndAudit<T extends BaseDeliveryRecord>(
   workspaceRoot: string,
-  original: PocDeliveryRecord,
-  updated: PocDeliveryRecord,
+  original: T,
+  updated: T,
   auditInput: ControlledAuditInput,
 ): Promise<AuditEvent> {
   if (updated.id !== original.id) {

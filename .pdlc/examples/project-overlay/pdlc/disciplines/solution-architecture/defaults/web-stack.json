@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "project-web-stack",
+  "discipline": "solution-architecture",
+  "version": "1.0.0",
+  "appliesTo": {
+    "technologies": [
+      "web-ui"
+    ],
+    "stages": [
+      "solution-design",
+      "implementation"
+    ]
+  },
+  "defaults": [
+    {
+      "key": "engineering.web-stack",
+      "title": "Use the existing approved web stack",
+      "topic": "qualityAttributes",
+      "statement": "Use the project's existing TypeScript web stack and build system.",
+      "rationale": "The project architecture has already approved and operationalized this stack.",
+      "controlRefs": []
+    }
+  ]
+}

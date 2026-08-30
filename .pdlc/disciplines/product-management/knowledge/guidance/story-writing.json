@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management.story-writing",
+  "title": "Writing traceable stories",
+  "description": "Recommended practices for creating small, outcome-oriented, testable delivery stories.",
+  "ownerDiscipline": "product-management",
+  "version": "1.0.0",
+  "kind": "guidance",
+  "appliesTo": { "stages": ["work-item-planning"] },
+  "contentRef": "story-writing.md"
+}

@@ -3,14 +3,14 @@
   "$id": "https://example.internal/pdlc/stage-context-receipt.schema.json",
   "title": "Stage Context Receipt",
   "type": "object",
-  "required": ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "domainContributions", "integrations"],
+  "required": ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "disciplineContributions", "integrations"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "stage": { "type": "string", "minLength": 1 },
     "contextHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "policies": { "type": "array", "items": { "$ref": "#/$defs/policy" } },
     "knowledge": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
-    "domainContributions": { "type": "array", "items": { "$ref": "#/$defs/domainContribution" } },
+    "disciplineContributions": { "type": "array", "items": { "$ref": "#/$defs/disciplineContribution" } },
     "integrations": { "type": "array", "items": { "$ref": "#/$defs/integration" } }
   },
   "$defs": {
@@ -43,7 +43,7 @@
       ],
       "unevaluatedProperties": false
     },
-    "domainContribution": {
+    "disciplineContribution": {
       "allOf": [
         { "$ref": "#/$defs/assetFields" },
         {

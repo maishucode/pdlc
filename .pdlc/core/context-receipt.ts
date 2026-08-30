@@ -1,10 +1,9 @@
 import { readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { sha256 } from "./hash.ts";
-import type { ProjectOverlay } from "./project-overlay.ts";
-import type { ResolvedIntegration } from "./domain-resolver.ts";
+import type { ResolvedIntegration } from "./discipline-resolver.ts";
 import type {
-  DomainGuidanceResolution,
+  DisciplineGuidanceResolution,
   ExecutableDeliveryFlowDefinition,
   ResolvedControl,
   ResolvedKnowledge,
@@ -20,7 +19,7 @@ export interface HashedContextAsset {
   hash: string;
 }
 
-export interface HashedDomainContribution extends HashedContextAsset {
+export interface HashedDisciplineContribution extends HashedContextAsset {
   agent: string;
   skills: string[];
 }
@@ -35,7 +34,7 @@ export interface StageContextSnapshot {
   activation: {
     riskTriggers: string[];
     technologies: string[];
-    domains: string[];
+    disciplines: string[];
   };
   stage: string;
   stageDefinitionHash: string;
@@ -44,19 +43,18 @@ export interface StageContextSnapshot {
   baselines: HashedContextAsset[];
   defaults: HashedContextAsset[];
   knowledge: HashedContextAsset[];
-  domainContributions: HashedDomainContribution[];
+  disciplineContributions: HashedDisciplineContribution[];
   integrations: HashedIntegration[];
   contextHash: string;
 }
 
 export async function createStageContextSnapshot(input: {
   harnessRoot: string;
-  projectRoot: string;
   deliveryFlow: string;
   deliveryFlowDefinition: ExecutableDeliveryFlowDefinition;
   riskTriggers: string[];
   technologies: string[];
-  domains: string[];
+  disciplines: string[];
   stage: string;
   stageDefinition: StageDefinition;
   roles: Array<{ id: string; path: string }>;
@@ -64,32 +62,26 @@ export async function createStageContextSnapshot(input: {
   baselines: ResolvedBaseline[];
   defaults: ResolvedStandardDefault[];
   knowledge: ResolvedKnowledge[];
-  project: ProjectOverlay;
-  domainGuidance: DomainGuidanceResolution;
+  disciplineGuidance: DisciplineGuidanceResolution;
   integrations: ResolvedIntegration[];
 }): Promise<StageContextSnapshot> {
   const policies = input.controls.map(({ ref, policy }) => ({ ref, hash: sha256(policy) })).sort(byRef);
   const roles = await Promise.all(input.roles.map(async ({ id, path }) => ({ ref: id, hash: sha256(await readFile(path, "utf8")) })));
   const baselines = input.baselines.map(({ ref, baseline }) => ({ ref, hash: sha256(baseline) })).sort(byRef);
   const defaults = input.defaults.map((entry) => ({ ref: `${entry.sourceRef}:${entry.key}`, hash: sha256(entry) })).sort(byRef);
-  const domainKnowledge = await Promise.all(input.knowledge.map(async ({ ref, asset, contentPath }) => ({
+  const knowledge = await Promise.all(input.knowledge.map(async ({ ref, asset, contentPath }) => ({
     ref,
     hash: sha256({ metadata: asset, content: contentPath ? await readFile(contentPath, "utf8") : undefined }),
   })));
-  const projectKnowledge = await Promise.all(input.project.knowledge().map(async ({ domain, path }) => ({
-    ref: `project:${domain}:${relative(input.projectRoot, path)}`,
-    hash: sha256(await readFile(path, "utf8")),
-  })));
-  const knowledge = [...domainKnowledge, ...projectKnowledge].sort(byRef);
 
-  const domainContributions = await Promise.all(input.domainGuidance.contributions.map(async (contribution) => {
+  const disciplineContributions = await Promise.all(input.disciplineGuidance.contributions.map(async (contribution) => {
     const agentContent = await readFile(resolve(input.harnessRoot, contribution.agent.path), "utf8");
     const skillContents = await Promise.all(contribution.skills.map(async ({ name, path }) => ({
       name,
       content: await readFile(resolve(input.harnessRoot, path), "utf8"),
     })));
     return {
-      ref: `${contribution.domain}@${contribution.version}:${contribution.agent.id}`,
+      ref: `${contribution.discipline}@${contribution.version}:${contribution.agent.id}`,
       agent: contribution.agent.id,
       skills: contribution.skills.map(({ name }) => name).sort(),
       hash: sha256({ permissions: contribution.permissions, agentContent, skillContents, mode: contribution.mode, handoff: contribution.handoff, approvalBoundary: contribution.approvalBoundary }),
@@ -111,7 +103,7 @@ export async function createStageContextSnapshot(input: {
     activation: {
       riskTriggers: [...new Set(input.riskTriggers)].sort(),
       technologies: [...new Set(input.technologies)].sort(),
-      domains: [...new Set(input.domains)].sort(),
+      disciplines: [...new Set(input.disciplines)].sort(),
     },
     stage: input.stage,
     stageDefinitionHash: sha256(input.stageDefinition),
@@ -119,8 +111,8 @@ export async function createStageContextSnapshot(input: {
     policies,
     baselines,
     defaults,
-    knowledge,
-    domainContributions: domainContributions.sort(byRef),
+    knowledge: knowledge.sort(byRef),
+    disciplineContributions: disciplineContributions.sort(byRef),
     integrations: integrations.sort(byRef),
   };
   return { ...material, contextHash: sha256(material) };
@@ -132,15 +124,15 @@ export function validateReceiptAgainstSnapshot(receipt: StageContextReceipt, sna
   if (receipt.contextHash !== snapshot.contextHash) issues.push({ code: "STALE_CONTEXT_RECEIPT", path: "$.contextHash", message: "Stage context changed after the receipt was prepared" });
   compareRefs("policies", receipt.policies, snapshot.policies, issues);
   compareRefs("knowledge", receipt.knowledge, snapshot.knowledge, issues);
-  compareRefs("domainContributions", receipt.domainContributions, snapshot.domainContributions, issues);
+  compareRefs("disciplineContributions", receipt.disciplineContributions, snapshot.disciplineContributions, issues);
   compareRefs("integrations", receipt.integrations, snapshot.integrations, issues);
 
-  const domains = new Map(snapshot.domainContributions.map((entry) => [entry.ref, entry]));
-  receipt.domainContributions.forEach((entry, index) => {
-    const expected = domains.get(entry.ref);
+  const disciplines = new Map(snapshot.disciplineContributions.map((entry) => [entry.ref, entry]));
+  receipt.disciplineContributions.forEach((entry, index) => {
+    const expected = disciplines.get(entry.ref);
     if (!expected) return;
-    if (entry.agent !== expected.agent) issues.push({ code: "CONTEXT_AGENT_MISMATCH", path: `$.domainContributions[${index}].agent`, message: `Expected Agent ${expected.agent}` });
-    if (!sameStrings(entry.skills, expected.skills)) issues.push({ code: "CONTEXT_SKILLS_MISMATCH", path: `$.domainContributions[${index}].skills`, message: "Domain Skill set does not match the resolved Hook" });
+    if (entry.agent !== expected.agent) issues.push({ code: "CONTEXT_AGENT_MISMATCH", path: `$.disciplineContributions[${index}].agent`, message: `Expected Agent ${expected.agent}` });
+    if (!sameStrings(entry.skills, expected.skills)) issues.push({ code: "CONTEXT_SKILLS_MISMATCH", path: `$.disciplineContributions[${index}].skills`, message: "Discipline Skill set does not match the resolved Hook" });
   });
   const integrationMap = new Map(snapshot.integrations.map((entry) => [entry.ref, entry]));
   receipt.integrations.forEach((entry, index) => {
@@ -151,7 +143,7 @@ export function validateReceiptAgainstSnapshot(receipt: StageContextReceipt, sna
 }
 
 function compareRefs(
-  field: "policies" | "knowledge" | "domainContributions" | "integrations",
+  field: "policies" | "knowledge" | "disciplineContributions" | "integrations",
   actual: Array<{ ref: string }>,
   expected: Array<{ ref: string }>,
   issues: ValidationIssue[],

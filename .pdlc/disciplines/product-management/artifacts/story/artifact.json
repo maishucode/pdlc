@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "product-management.story",
+  "name": "Delivery Story",
+  "description": "A traceable unit of product value with observable acceptance conditions.",
+  "ownerDiscipline": "product-management",
+  "version": "1.0.0",
+  "format": "markdown",
+  "schemaRef": "schema.json",
+  "profiles": ["default"],
+  "defaultTemplate": "templates/default.md",
+  "examples": ["examples/example-story.md"]
+}

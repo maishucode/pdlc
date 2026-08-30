@@ -6,7 +6,7 @@
   "required": [
     "schemaVersion",
     "id",
-    "domain",
+    "discipline",
     "version",
     "appliesTo",
     "defaults"
@@ -18,7 +18,7 @@
     "id": {
       "type": "string"
     },
-    "domain": {
+    "discipline": {
       "type": "string"
     },
     "version": {

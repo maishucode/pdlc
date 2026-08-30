@@ -3,6 +3,7 @@
   "owner": "pdlc-governance",
   "flows": [
     { "id": "poc", "definition": "poc/flow.json" },
+    { "id": "product-requirements-analysis", "definition": "product-requirements-analysis/flow.json" },
     { "id": "implementation", "definition": "implementation/flow.json" },
     { "id": "pdlc", "definition": "pdlc/flow.json" }
   ]

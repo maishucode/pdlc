@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "solution-architecture.project-system-context",
+  "title": "Project system context",
+  "description": "Project-local guidance describing the approved system boundary and dependencies.",
+  "ownerDiscipline": "solution-architecture",
+  "version": "1.0.0",
+  "kind": "guidance",
+  "appliesTo": {
+    "stages": [
+      "solution-design",
+      "implementation",
+      "delivery-planning"
+    ]
+  },
+  "contentRef": "system-context.md"
+}

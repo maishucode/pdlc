@@ -8,7 +8,7 @@
     "id",
     "title",
     "description",
-    "ownerDomain",
+    "ownerDiscipline",
     "version",
     "appliesTo",
     "rules"
@@ -26,7 +26,7 @@
     "description": {
       "type": "string"
     },
-    "ownerDomain": {
+    "ownerDiscipline": {
       "type": "string"
     },
     "version": {

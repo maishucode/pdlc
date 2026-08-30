@@ -1,0 +1,20 @@
+{
+  "artifactType": "product-management.sprint-scope",
+  "version": 1,
+  "previousScopeHash": "",
+  "epicRef": "EPIC-LOCAL-1",
+  "sprint": {
+    "id": "SPRINT-24",
+    "name": "Sprint 24",
+    "capturedAt": "2026-08-30T00:00:00.000Z"
+  },
+  "stories": [
+    {
+      "localId": "STORY-LOGIN-1",
+      "artifactRef": "pdlc/artifacts/stories/STORY-LOGIN-1.md",
+      "externalKey": "",
+      "revision": 1,
+      "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

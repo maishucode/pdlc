@@ -1,4 +1,4 @@
-import type { PocDeliveryRecord, ValidationIssue } from "./types.ts";
+import type { ContextualDeliveryRecord, PocDeliveryRecord, ValidationIssue } from "./types.ts";
 
 export const POC_SECURITY_RISK_TRIGGERS = [
   "sensitive-data",
@@ -15,20 +15,20 @@ const TECHNOLOGY_TAG_ALIASES = new Map([
   ["native-mobile", "mobile-ui"],
 ]);
 
-export function contextTags(record: PocDeliveryRecord): string[] {
+export function contextTags(record: ContextualDeliveryRecord): string[] {
   return [...new Set([
     ...record.risk.triggers.map((value) => `risk:${value}`),
     ...record.design.technologies.map((value) => `technology:${value}`),
-    ...record.design.domains.map((value) => `domain:${value}`),
+    ...record.design.disciplines.map((value) => `discipline:${value}`),
   ])].sort();
 }
 
-export function contextClassificationIssues(record: PocDeliveryRecord): ValidationIssue[] {
+export function contextClassificationIssues(record: ContextualDeliveryRecord): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const classifications = [
     { values: record.risk.triggers, path: "$.risk.triggers", prefix: "risk:" },
     { values: record.design.technologies, path: "$.design.technologies", prefix: "technology:" },
-    { values: record.design.domains, path: "$.design.domains", prefix: "domain:" },
+    { values: record.design.disciplines, path: "$.design.disciplines", prefix: "discipline:" },
   ];
   for (const { values, path, prefix } of classifications) {
     const seen = new Set<string>();
@@ -63,17 +63,21 @@ export function technologyTagIssues(record: PocDeliveryRecord): ValidationIssue[
 }
 
 export function currentPocStage(record: PocDeliveryRecord): string {
+  const appliedStages = new Set(record.resolution.contextApplications.map(({ stage }) => stage));
   if (record.status === "DRAFT") {
     const clarificationComplete = Object.values(record.requirements.clarification.coverage).every((status) => status === "complete")
       && record.requirements.clarification.openQuestions.length === 0
       && record.requirements.clarification.contradictions.length === 0;
     if (!clarificationComplete) return "requirements-clarification";
     if (!record.design.summary.trim()) return "solution-design";
-    return "build-readiness";
+    if (record.design.technologies.some((technology) => technology === "web-ui" || technology === "mobile-ui") && !appliedStages.has("ux-design")) return "ux-design";
+    if (!appliedStages.has("build-readiness")) return "build-readiness";
+    return "requirements-approval";
   }
   if (record.status === "COMMITTED") {
-    if (record.evidence.tests.length === 0 || record.evidence.build.length === 0) return "implementation";
-    if (requiresSecurityVerification(record) && record.evidence.security.length === 0) return "security-verification";
+    if (!appliedStages.has("implementation") || record.evidence.build.length === 0) return "implementation";
+    if (!appliedStages.has("developer-verification") || record.evidence.tests.length === 0) return "developer-verification";
+    if (requiresSecurityVerification(record) && (!appliedStages.has("security-verification") || record.evidence.security.length === 0)) return "security-verification";
     return "acceptance-verification";
   }
   return "outcome-review-and-disposition";
@@ -83,13 +87,17 @@ export function requiresSecurityVerification(record: PocDeliveryRecord): boolean
   return record.risk.triggers.some((trigger) => SECURITY_RISK_TRIGGER_SET.has(trigger));
 }
 
-export function buildReadinessContextStages(): string[] {
-  return ["requirements-clarification", "build-readiness"];
+export function buildReadinessContextStages(record?: ContextualDeliveryRecord): string[] {
+  return [
+    "requirements-clarification",
+    ...(record?.design.technologies.some((technology) => technology === "web-ui" || technology === "mobile-ui") ? ["ux-design"] : []),
+    "build-readiness",
+  ];
 }
 
 export function verificationContextStages(record: PocDeliveryRecord): string[] {
   return [
-    ...buildReadinessContextStages(),
+    ...buildReadinessContextStages(record),
     "implementation",
     "developer-verification",
     ...(requiresSecurityVerification(record) ? ["security-verification"] : []),
@@ -98,7 +106,7 @@ export function verificationContextStages(record: PocDeliveryRecord): string[] {
 }
 
 export function operationalContextStages(record: PocDeliveryRecord): string[] {
-  if (record.status === "DRAFT") return buildReadinessContextStages();
+  if (record.status === "DRAFT") return buildReadinessContextStages(record);
   if (record.status === "COMMITTED") return verificationContextStages(record);
   return [];
 }

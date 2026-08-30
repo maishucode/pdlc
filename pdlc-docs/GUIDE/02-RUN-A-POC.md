@@ -12,9 +12,9 @@ Use a short outcome-oriented request:
 
 The Agent opens a draft POC. The Harness establishes its DRAFT Delivery Record, current selection, and `DELIVERY_FLOW_CREATED` audit event together, so the audit timeline starts at creation. It does not start coding yet.
 
-Startup uses a fast path: the Agent creates a minimal Draft, resolves the Requirements Stage context once, reads any returned Domain contribution, and asks the first clarification round. Full validation, future Stage resolution, detailed Control application, design, and verification planning happen only when needed and are completed before Build Readiness.
+Startup uses a fast path: the Agent creates a minimal Draft, resolves the Requirements Stage context once, reads any returned Discipline contribution, and asks the first clarification round. Full validation, future Stage resolution, detailed Control application, design, and verification planning happen only when needed and are completed before Build Readiness.
 
-You do not select Domain Agents separately. Before each Stage, the main Agent resolves applicable Policies/Controls, Project Baselines and Defaults, relevant Knowledge, Domain contributions, and Integrations. For example, the UX Domain supplies mandatory experience Policies plus Stage-bound Skills and an Agent.
+You do not select Discipline Agents separately. Before each Stage, the main Agent resolves applicable Policies/Controls, Project Baselines and Defaults, relevant Knowledge, Discipline contributions, and Integrations. For example, the UX Discipline supplies mandatory experience Policies plus Stage-bound Skills and an Agent.
 
 ## Answer requirement questions by choosing options
 
@@ -111,4 +111,4 @@ Each controlled Record change and its matching Audit Event are persisted through
 
 ## Next
 
-Continue with [03. Add Domain Contributions](03-ADD-DOMAIN-CONTRIBUTIONS.md) if your team wants to bind specialized Agents and Skills into a Delivery Flow.
+Continue with [03. Add Discipline Contributions](03-ADD-DISCIPLINE-CONTRIBUTIONS.md) if your team wants to bind specialized Agents and Skills into a Delivery Flow.

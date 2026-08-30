@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "data-platform.databricks-connectivity",
+  "title": "Databricks connectivity",
+  "description": "Company-specific knowledge for selecting an approved Databricks endpoint, authentication path, and operating boundary.",
+  "ownerDiscipline": "data-platform",
+  "version": "1.0.0",
+  "kind": "kb",
+  "appliesTo": { "technologies": ["databricks"] },
+  "contentRef": "databricks-connectivity.md"
+}

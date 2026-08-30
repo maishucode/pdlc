@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "ux.experience-design",
+  "title": "Experience design guidance",
+  "description": "Recommended methods for turning product behavior into a complete, reviewable interaction model.",
+  "ownerDiscipline": "ux",
+  "version": "1.0.0",
+  "kind": "guidance",
+  "appliesTo": { "stages": ["requirements-clarification", "ux-design", "implementation", "acceptance-verification"] },
+  "contentRef": "experience-design.md"
+}

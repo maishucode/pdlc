@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.internal/pdlc/requirements-analysis-record.schema.json",
+  "title": "Requirements Analysis Delivery Record v1",
+  "type": "object",
+  "required": ["schemaVersion", "id", "deliveryFlow", "status", "title", "revision", "createdAt", "updatedAt", "assignments", "source", "requirements", "risk", "resolution", "design", "stories", "scope", "changes"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^REQ-[A-Z0-9][A-Z0-9-]*$" },
+    "deliveryFlow": { "const": "product-requirements-analysis" },
+    "status": { "enum": ["DRAFT", "REQUIREMENTS_APPROVED", "WORK_ITEMS_PREPARED", "SCOPED"] },
+    "title": { "type": "string", "minLength": 1 },
+    "revision": { "type": "integer", "minimum": 0 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "assignments": { "type": "object", "additionalProperties": { "type": "string" } },
+    "source": {
+      "type": "object",
+      "required": ["baseRevision", "derivedFromRecord", "deliveredRevision"],
+      "properties": {
+        "baseRevision": { "type": "string", "pattern": "^$|^[a-f0-9]{7,64}$" },
+        "derivedFromRecord": { "type": "string" },
+        "deliveredRevision": { "type": "string", "pattern": "^$|^[a-f0-9]{7,64}$" }
+      },
+      "additionalProperties": false
+    },
+    "requirements": { "type": "object" },
+    "risk": { "type": "object" },
+    "resolution": { "type": "object" },
+    "design": { "type": "object" },
+    "stories": { "type": "array" },
+    "scope": { "type": "object" },
+    "changes": { "type": "array" }
+  },
+  "additionalProperties": false
+}

@@ -11,12 +11,13 @@ export function hashApprovedBuildContract(record: PocDeliveryRecord): string {
   const sorted = (values: string[]): string[] => [...values].sort();
   return sha256({
     deliveryFlow: record.deliveryFlow,
+    source: { baseRevision: record.source.baseRevision, derivedFromRecord: record.source.derivedFromRecord },
     assignments: record.assignments,
     idea: record.idea,
     requirements,
     scope: record.scope,
     risk: { ...record.risk, triggers: sorted(record.risk.triggers) },
-    design: { ...record.design, technologies: sorted(record.design.technologies), domains: sorted(record.design.domains) },
+    design: { ...record.design, technologies: sorted(record.design.technologies), disciplines: sorted(record.design.disciplines) },
     resolution: {
       controls: {
         applicable: sorted(record.resolution.controls.applicable),

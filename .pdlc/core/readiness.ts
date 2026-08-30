@@ -21,7 +21,7 @@ export interface BuildReadinessResult {
   ok: boolean;
   issues: ValidationIssue[];
   requirementsDocument?: string;
-  controls: Array<{ ref: string; ownerDomain: string; ruleCount: number }>;
+  controls: Array<{ ref: string; ownerDiscipline: string; ruleCount: number }>;
 }
 
 export function assessResolvedControlSet(record: PocDeliveryRecord, controls: ResolvedControl[]): ValidationIssue[] {
@@ -203,6 +203,6 @@ export async function assessPocBuildReadiness(
     ok: issues.length === 0,
     issues,
     requirementsDocument: requirementsDocument ? documentRef : undefined,
-    controls: controls.map((control) => ({ ref: control.ref, ownerDomain: control.ownerDomain, ruleCount: control.policy.rules.length })),
+    controls: controls.map((control) => ({ ref: control.ref, ownerDiscipline: control.ownerDiscipline, ruleCount: control.policy.rules.length })),
   };
 }

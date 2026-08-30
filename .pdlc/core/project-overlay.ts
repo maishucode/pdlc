@@ -1,8 +1,8 @@
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PdlcError } from "./errors.ts";
-import { validateControlPolicy, validateProjectBaseline, validateProjectDefaultProfile } from "./schema.ts";
-import type { ControlPolicy, ProjectBaseline, ProjectDefaultProfile } from "./types.ts";
+import { validateControlPolicy, validateKnowledgeAsset, validateProjectBaseline, validateProjectDefaultProfile } from "./schema.ts";
+import type { ControlPolicy, KnowledgeAsset, ProjectBaseline, ProjectDefaultProfile } from "./types.ts";
 
 export interface ProjectPolicyEntry {
   policy: ControlPolicy;
@@ -15,12 +15,14 @@ export interface ProjectDefaultEntry {
 }
 
 export interface ProjectKnowledgeEntry {
-  domain: string;
-  path: string;
+  discipline: string;
+  asset: KnowledgeAsset;
+  metadataPath: string;
+  contentPath: string;
 }
 
-export interface ProjectDomainOverlay {
-  domain: string;
+export interface ProjectDisciplineOverlay {
+  discipline: string;
   root: string;
   baseline?: ProjectBaseline;
   policies: ProjectPolicyEntry[];
@@ -29,26 +31,31 @@ export interface ProjectDomainOverlay {
 }
 
 export class ProjectOverlay {
-  private constructor(readonly domains: ProjectDomainOverlay[]) {}
+  private constructor(readonly disciplines: ProjectDisciplineOverlay[]) {}
 
-  static async load(projectRoot: string, knownDomains: Set<string>): Promise<ProjectOverlay> {
-    const domainsRoot = join(projectRoot, "pdlc", "config", "domains");
-    const directories = await listDirectories(domainsRoot);
-    const domains: ProjectDomainOverlay[] = [];
-    for (const domain of directories) {
-      if (!knownDomains.has(domain)) {
-        throw new PdlcError("UNKNOWN_PROJECT_DOMAIN", `Project Overlay references an unknown Domain: ${domain}`);
+  static async load(projectRoot: string, knownDisciplines: Set<string>): Promise<ProjectOverlay> {
+    const legacyRoot = join(projectRoot, "pdlc", "config");
+    if (await exists(legacyRoot)) {
+      throw new PdlcError("LEGACY_PROJECT_OVERLAY_PATH", `Legacy Project Overlay path is present: ${legacyRoot}. Move its Discipline folders to pdlc/disciplines/.`);
+    }
+    const disciplinesRoot = join(projectRoot, "pdlc", "disciplines");
+    const directories = await listDirectories(disciplinesRoot);
+    const disciplines: ProjectDisciplineOverlay[] = [];
+    const knowledgeRefs = new Set<string>();
+    for (const discipline of directories) {
+      if (!knownDisciplines.has(discipline)) {
+        throw new PdlcError("UNKNOWN_PROJECT_DISCIPLINE", `Project Overlay references an unknown Discipline: ${discipline}`);
       }
-      const root = join(domainsRoot, domain);
+      const root = join(disciplinesRoot, discipline);
       await rejectLegacyProjectCategories(root);
       const baseline = await optionalJson(join(root, "baseline.json"), validateProjectBaseline, "Project Baseline");
-      if (baseline && baseline.domain !== domain) throw mismatch("Project Baseline", domain, baseline.domain);
+      if (baseline && baseline.discipline !== discipline) throw mismatch("Project Baseline", discipline, baseline.discipline);
 
       const policies: ProjectPolicyEntry[] = [];
       for (const file of await listJsonFiles(join(root, "policies"))) {
         const path = join(root, "policies", file);
         const policy = await requiredJson(path, validateControlPolicy, "Project Policy");
-        if (policy.ownerDomain !== domain) throw mismatch("Project Policy", domain, policy.ownerDomain);
+        if (policy.ownerDiscipline !== discipline) throw mismatch("Project Policy", discipline, policy.ownerDiscipline);
         policies.push({ policy, path });
       }
 
@@ -56,30 +63,35 @@ export class ProjectOverlay {
       for (const file of await listJsonFiles(join(root, "defaults"))) {
         const path = join(root, "defaults", file);
         const profile = await requiredJson(path, validateProjectDefaultProfile, "Project Default");
-        if (profile.domain !== domain) throw mismatch("Project Default", domain, profile.domain);
+        if (profile.discipline !== discipline) throw mismatch("Project Default", discipline, profile.discipline);
         defaults.push({ profile, path });
       }
 
-      const knowledge = (await listFiles(join(root, "knowledge"))).map((path) => ({ domain, path }));
-      domains.push({ domain, root, baseline, policies, defaults, knowledge });
+      const knowledge = await loadProjectKnowledge(root, discipline);
+      for (const entry of knowledge) {
+        const ref = `${entry.asset.id}@${entry.asset.version}`;
+        if (knowledgeRefs.has(ref)) throw new PdlcError("DUPLICATE_PROJECT_KNOWLEDGE", `Duplicate Project Knowledge: ${ref}`);
+        knowledgeRefs.add(ref);
+      }
+      disciplines.push({ discipline, root, baseline, policies, defaults, knowledge });
     }
-    return new ProjectOverlay(domains);
+    return new ProjectOverlay(disciplines);
   }
 
-  baselines(): Array<{ domain: string; baseline: ProjectBaseline }> {
-    return this.domains.flatMap((entry) => entry.baseline ? [{ domain: entry.domain, baseline: entry.baseline }] : []);
+  baselines(): Array<{ discipline: string; baseline: ProjectBaseline }> {
+    return this.disciplines.flatMap((entry) => entry.baseline ? [{ discipline: entry.discipline, baseline: entry.baseline }] : []);
   }
 
   policies(): ProjectPolicyEntry[] {
-    return this.domains.flatMap((entry) => entry.policies);
+    return this.disciplines.flatMap((entry) => entry.policies);
   }
 
   defaults(): ProjectDefaultEntry[] {
-    return this.domains.flatMap((entry) => entry.defaults);
+    return this.disciplines.flatMap((entry) => entry.defaults);
   }
 
   knowledge(): ProjectKnowledgeEntry[] {
-    return this.domains.flatMap((entry) => entry.knowledge);
+    return this.disciplines.flatMap((entry) => entry.knowledge);
   }
 }
 
@@ -99,6 +111,80 @@ async function rejectLegacyProjectCategories(root: string): Promise<void> {
   }
 }
 
+async function loadProjectKnowledge(root: string, discipline: string): Promise<ProjectKnowledgeEntry[]> {
+  const knowledgeRoot = join(root, "knowledge");
+  const kinds = ["guidance", "references", "kb"] as const;
+  await rejectUnsupportedKnowledgeLayout(knowledgeRoot, kinds);
+  const entries: ProjectKnowledgeEntry[] = [];
+  for (const kind of kinds) {
+    const directory = join(knowledgeRoot, kind);
+    for (const file of await listJsonFiles(directory)) {
+      const metadataPath = join(directory, file);
+      const asset = await requiredJson(metadataPath, validateKnowledgeAsset, "Project Knowledge");
+      if (asset.ownerDiscipline !== discipline) throw mismatch("Project Knowledge", discipline, asset.ownerDiscipline);
+      if (!asset.id.startsWith(`${discipline}.`)) {
+        throw new PdlcError("VALIDATION_FAILED", `Project Knowledge id '${asset.id}' must be prefixed '${discipline}.'`);
+      }
+      if (!Object.values(asset.appliesTo).some((value) => Array.isArray(value) && value.length > 0)) {
+        throw new PdlcError("VALIDATION_FAILED", `Project Knowledge '${asset.id}' must declare at least one non-empty appliesTo selector`);
+      }
+      const expectedKind = kind === "references" ? "reference" : kind;
+      if (asset.kind !== expectedKind) {
+        throw new PdlcError("PROJECT_KNOWLEDGE_DIRECTORY_MISMATCH", `Project Knowledge '${asset.id}' has kind '${asset.kind}' but is stored under '${kind}/'`);
+      }
+      if (!asset.contentRef) throw new PdlcError("PROJECT_KNOWLEDGE_CONTENT_MISSING", `Project Knowledge '${asset.id}' requires contentRef`);
+      const contentPath = join(directory, asset.contentRef);
+      await requireRegularFile(contentPath, `Project Knowledge content not found or not a regular file: ${asset.contentRef}`);
+      entries.push({ discipline, asset, metadataPath, contentPath });
+    }
+  }
+  await rejectOrphanKnowledgeContent(knowledgeRoot, kinds, entries);
+  return entries;
+}
+
+async function rejectUnsupportedKnowledgeLayout(knowledgeRoot: string, allowedKinds: readonly string[]): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(knowledgeRoot, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return;
+    throw error;
+  }
+  const unsupported = entries.filter((entry) => !entry.isDirectory() || !allowedKinds.includes(entry.name)).map((entry) => entry.name).sort();
+  if (unsupported.length > 0) {
+    throw new PdlcError(
+      "VALIDATION_FAILED",
+      `Project Knowledge contains unsupported entries: ${unsupported.join(", ")}. Use knowledge/guidance/, knowledge/references/, or knowledge/kb/; put project Defaults in the sibling defaults/ folder.`,
+    );
+  }
+}
+
+async function rejectOrphanKnowledgeContent(
+  knowledgeRoot: string,
+  kinds: readonly string[],
+  entries: ProjectKnowledgeEntry[],
+): Promise<void> {
+  const referenced = new Set(entries.flatMap(({ metadataPath, contentPath }) => [metadataPath, contentPath]));
+  const orphans: string[] = [];
+  for (const kind of kinds) {
+    const directory = join(knowledgeRoot, kind);
+    let files;
+    try {
+      files = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (isNodeError(error) && error.code === "ENOENT") continue;
+      throw error;
+    }
+    for (const file of files) {
+      const path = join(directory, file.name);
+      if (!file.isFile() || !referenced.has(path)) orphans.push(path);
+    }
+  }
+  if (orphans.length > 0) {
+    throw new PdlcError("VALIDATION_FAILED", `Project Knowledge contains unreferenced or non-regular content: ${orphans.sort().join(", ")}`);
+  }
+}
+
 async function listJsonFiles(path: string): Promise<string[]> {
   try {
     return (await readdir(path, { withFileTypes: true })).filter((entry) => entry.isFile() && entry.name.endsWith(".json")).map((entry) => entry.name).sort();
@@ -108,11 +194,21 @@ async function listJsonFiles(path: string): Promise<string[]> {
   }
 }
 
-async function listFiles(path: string): Promise<string[]> {
+async function requireRegularFile(path: string, message: string): Promise<void> {
   try {
-    return (await readdir(path, { withFileTypes: true })).filter((entry) => entry.isFile()).map((entry) => join(path, entry.name)).sort();
+    if (!(await lstat(path)).isFile()) throw new Error(message);
   } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") return [];
+    if (error instanceof PdlcError) throw error;
+    throw new PdlcError("VALIDATION_FAILED", message);
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return false;
     throw error;
   }
 }
@@ -142,7 +238,7 @@ async function optionalJson<T>(
 }
 
 function mismatch(label: string, expected: string, actual: string): PdlcError {
-  return new PdlcError("PROJECT_DOMAIN_MISMATCH", `${label} belongs to '${actual}' but is stored under '${expected}'`);
+  return new PdlcError("PROJECT_DISCIPLINE_MISMATCH", `${label} belongs to '${actual}' but is stored under '${expected}'`);
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
