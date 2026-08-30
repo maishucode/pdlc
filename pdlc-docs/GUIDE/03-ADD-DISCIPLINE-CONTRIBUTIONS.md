@@ -216,3 +216,5 @@ Add tests proving that:
 - the target Flow cannot cross its governed gate without a valid Receipt.
 
 Then run the Harness tests, typecheck, and validation commands internally.
+
+Migrating existing Domain-owned assets? Continue with [04. Migrate Domain Capabilities to the Discipline Stage Runtime](04-MIGRATE-DOMAIN-TO-DISCIPLINE.md).
