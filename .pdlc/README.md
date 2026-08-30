@@ -1,6 +1,6 @@
 # Shared Harness source
 
-This hidden directory is owned by the Lean PDLC Harness and Runner. Product teams author project configuration and delivery artifacts under the visible `pdlc/` workspace instead of editing Harness files here.
+This hidden directory is owned by the Atlas PDLC Harness and Runner. Product teams author project configuration and delivery artifacts under the visible `pdlc/` workspace instead of editing Harness files here.
 
 | Directory | Purpose | Primary owner |
 |---|---|---|
@@ -36,3 +36,5 @@ The Runner uses four dependency layers:
 A configuration-only Flow needs no executor. Declare its Stage sequence, statuses, checkpoints, owners, defaults, and constraints, then register it. Add a Flow-owned executor only for special validation, initialization, actions, checkpoint gates, status projections, or operational-integrity checks. A new Flow or new requirements-analysis rule must not add an `if (deliveryFlow === ...)` branch to Core or CLI.
 
 Read-only checks may run in parallel. Controlled mutations remain serialized through optimistic revision checks and locks. A command loads each required model view once; startup and ordinary conversational work remain just-in-time.
+
+Discipline Hooks declare required Capabilities, Agent role profiles, and candidate Skills. Context resolution batches all same-Stage Capabilities into one generic subagent invocation. The worker selects Skills per Capability, while one Stage-level execution Receipt and separate Capability contributions provide the evidence checked by Flow readiness and checkpoints.

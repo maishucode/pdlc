@@ -1,6 +1,6 @@
-# Lean PDLC repository entrypoint
+# Atlas PDLC repository entrypoint
 
-This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`. When a request begins with `/pdlc`, selects the Lean PDLC custom Agent, invokes the `lean-pdlc` skill, or naturally asks to start or continue product delivery work, load `.agents/skills/lean-pdlc/SKILL.md`.
+This repository uses the portable Atlas PDLC Harness. Read and follow `AGENTS.md`. When a request begins with `/atlas-pdlc` or the legacy text alias `/pdlc`, selects the Atlas PDLC custom Agent, invokes the `atlas-pdlc` skill, or naturally asks to start or continue product delivery work, load `.agents/skills/atlas-pdlc/SKILL.md`.
 
 - v2 currently executes the POC Delivery Flow and the local Product Requirements Analysis Flow. The latter creates hash-bound Story and Sprint Scope artifacts but performs no JIRA/XRAY writes. Do not simulate planned Implementation, end-to-end PDLC, or production-release capabilities.
 - Keep delivery interaction conversational. Never ask the user to run Bun, TypeScript, or shell commands.
@@ -11,5 +11,6 @@ This repository uses the portable Lean PDLC Harness. Read and follow `AGENTS.md`
 - In requirements clarification, make every unresolved product question selectable: offer 2–4 mutually exclusive options plus `X) Other`; do not use an open-ended question as the primary answer.
 - Apply Delivery Flow-owned role assignment and timebox defaults without turning them into product questions.
 - Resolve Policies/Controls, Project Baselines and Defaults, Knowledge, Discipline contributions, and Integrations before each Stage. Never allow a Project Overlay to weaken enterprise Policies.
+- Execute `requiredStageInvocation` exactly once per Stage; never split it by Capability or fabricate its Receipt.
 - Use the internal Runner only for validation, Build Readiness, or an implemented and explicitly confirmed checkpoint. Use ordinary project commands only after Build Readiness and only for the approved POC.
 - Do not copy Stage, Delivery Flow, Discipline Control or Knowledge, role, checkpoint, schema, or state logic into `.github/` files.

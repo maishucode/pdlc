@@ -1,10 +1,11 @@
 import { join } from "node:path";
-import { createStageContextSnapshot, type StageContextSnapshot } from "./context-receipt.ts";
+import { contextReceiptEvidenceEntries, createStageContextSnapshot, validateReceiptAgainstSnapshot, type StageContextSnapshot } from "./context-receipt.ts";
 import { DeliveryFlowRegistry } from "./delivery-flow-registry.ts";
-import { resolveDisciplineGuidance } from "./discipline-guidance.ts";
+import { resolveDisciplineGuidance, validateDisciplineCapabilityGates } from "./discipline-guidance.ts";
 import { DisciplineRegistry } from "./discipline-registry.ts";
 import { resolveDisciplineContext } from "./discipline-resolver.ts";
 import { PdlcError } from "./errors.ts";
+import { assessEvidenceIntegrity } from "./evidence.ts";
 import { IntegrationRegistry } from "./integration-registry.ts";
 import { ProjectOverlay } from "./project-overlay.ts";
 import { RoleRegistry, type ResolvedRole } from "./role-registry.ts";
@@ -49,6 +50,7 @@ export class HarnessContext {
     const projectPromise = ProjectOverlay.load(projectRoot, new Set(disciplines.list().map(({ manifest }) => manifest.id)));
     const [stages, integrations, project] = await Promise.all([stagesPromise, integrationsPromise, projectPromise]);
     const deliveryFlows = await DeliveryFlowRegistry.load(join(harnessRoot, ".pdlc", "delivery-flows", "catalog.json"), stages);
+    await validateDisciplineCapabilityGates(stages, disciplines, deliveryFlows);
     return new HarnessContext(harnessRoot, projectRoot, { roles, stages, deliveryFlows, disciplines, integrations, project });
   }
 
@@ -108,12 +110,18 @@ export class HarnessContext {
     const uniqueStages = [...new Set(stages)];
     const materials = await Promise.all(uniqueStages.map((stageId) => this.resolveStage(stageId, record)));
     const applications = new Map(record.resolution.contextApplications.map((entry) => [entry.stage, entry]));
-    return uniqueStages.flatMap((stage, index) => {
+    const issueGroups = await Promise.all(uniqueStages.map(async (stage, index) => {
       const application = applications.get(stage);
       if (!application) return [{ code: "STAGE_CONTEXT_APPLICATION_MISSING", path: "$.resolution.contextApplications", message: `Stage context has not been applied: ${stage}` }];
-      return application.contextHash !== materials[index]!.snapshot.contextHash
-        ? [{ code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets or activation inputs changed after the Stage context was applied: ${stage}` }]
-        : [];
-    });
+      const receiptIssues = validateReceiptAgainstSnapshot(application, materials[index]!.snapshot).map((issue) => issue.code === "STALE_CONTEXT_RECEIPT"
+        ? { code: "STALE_STAGE_CONTEXT_APPLICATION", path: `$.resolution.contextApplications.${stage}.contextHash`, message: `Resolved assets or activation inputs changed after the Stage context was applied: ${stage}` }
+        : { ...issue, path: `$.resolution.contextApplications.${stage}${issue.path.slice(1)}` });
+      const evidenceIssues = await assessEvidenceIntegrity(this.projectRoot, [{
+        name: `stageContext.${stage}`,
+        entries: contextReceiptEvidenceEntries(application),
+      }]);
+      return [...receiptIssues, ...evidenceIssues];
+    }));
+    return issueGroups.flat();
   }
 }

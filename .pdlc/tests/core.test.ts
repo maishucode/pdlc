@@ -39,7 +39,7 @@ async function requirementsRecord(): Promise<RequirementsAnalysisRecord> {
 }
 
 async function temporaryWorkspace(): Promise<{ path: string; cleanup(): Promise<void> }> {
-  const path = await mkdtemp(join(tmpdir(), "lean-pdlc-test-"));
+  const path = await mkdtemp(join(tmpdir(), "atlas-pdlc-test-"));
   return { path, cleanup: () => rm(path, { recursive: true, force: true }) };
 }
 
@@ -128,7 +128,7 @@ test("navigates every material POC Stage from recorded progress", async () => {
   const record = await exampleRecord();
   const apply = (stage: string): void => {
     record.resolution.contextApplications.push({
-      schemaVersion: 1,
+      schemaVersion: 2,
       stage,
       contextHash: "a".repeat(64),
       policies: [],
@@ -174,7 +174,7 @@ test("loads Discipline-owned Artifacts, Policies, Knowledge, Skills, Agents, and
   assert.equal(disciplines.artifact("product-management.productization-package").definition.ownerDiscipline, "product-management");
   assert.equal(disciplines.get("ux").policies.length, 1);
   assert.equal(disciplines.get("ux").skills.length, 3);
-  assert.equal(disciplines.get("ux").agents[0]?.id, "lean-pdlc-ux");
+  assert.equal(disciplines.get("ux").agents[0]?.id, "atlas-pdlc-ux");
   assert.equal(disciplines.get("ux").hooks.length, 1);
   assert.equal(disciplines.get("data-platform").knowledge[0]?.asset.kind, "kb");
   assert.equal(integrations.get("databricks").manifest.kind, "integration");
@@ -369,7 +369,7 @@ test("blocks build until the Requirements Artifact and mandatory Controls are ap
 });
 
 test("declares the Copilot capabilities needed by the portable Harness", () => {
-  assert.deepEqual([...DECLARED_CAPABILITIES["github-copilot"]].sort(), ["cloud-environment-setup", "command-approval", "custom-agent", "prompt-file", "repository-instructions", "shared-skill"]);
+  assert.deepEqual([...DECLARED_CAPABILITIES["github-copilot"]].sort(), ["cloud-environment-setup", "command-approval", "custom-agent", "native-subagent", "prompt-file", "repository-instructions", "shared-skill"]);
 });
 
 test("writes and reads a Delivery Record atomically with optimistic revision control", async (context) => {

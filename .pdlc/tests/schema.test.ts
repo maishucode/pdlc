@@ -71,7 +71,7 @@ test("validates the canonical Requirements Analysis Delivery Record", async () =
 
 test("requires evidence when a Stage Context asset is declared used", () => {
   const result = validateStageContextReceipt({
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage: "requirements-clarification",
     contextHash: "a".repeat(64),
     policies: [],
@@ -81,6 +81,48 @@ test("requires evidence when a Stage Context asset is declared used", () => {
   });
   assert.equal(result.ok, false);
   if (!result.ok) assert(result.issues.some(({ code }) => code === "TOO_FEW_ITEMS"));
+});
+
+test("requires one completed Stage Agent invocation for required capabilities", () => {
+  const completed = {
+    schemaVersion: 2,
+    stage: "ux-design",
+    contextHash: "a".repeat(64),
+    policies: [],
+    knowledge: [],
+    disciplineContributions: [{
+      ref: "ux@1.0.0:ux-design",
+      capability: "ux-design",
+      agent: "atlas-pdlc-ux",
+      selectedSkills: ["atlas-pdlc-ux-spec"],
+      disposition: "used",
+      notes: "Produced the UX specification.",
+      evidenceRefs: ["pdlc/evidence/ux-design.md"],
+    }],
+    integrations: [],
+    stageInvocation: {
+      invocationId: "b".repeat(64),
+      platform: "github-copilot",
+      executor: "generic-subagent",
+      agentType: "general-purpose",
+      status: "completed",
+      platformExecutionRef: "github-copilot:subagent:test-ux-design",
+      permissions: { filesystem: "write", network: false, externalWrites: false },
+    },
+  };
+  assert.equal(validateStageContextReceipt(completed).ok, true);
+
+  const missingExecution = structuredClone(completed) as typeof completed & { stageInvocation?: unknown };
+  delete missingExecution.stageInvocation;
+  const missing = validateStageContextReceipt(missingExecution);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert(missing.issues.some(({ path }) => path.endsWith(".stageInvocation")));
+
+  const skipped = structuredClone(completed);
+  skipped.disciplineContributions[0]!.disposition = "not-used";
+  const skippedResult = validateStageContextReceipt(skipped);
+  assert.equal(skippedResult.ok, false);
+  if (!skippedResult.ok) assert(skippedResult.issues.some(({ code }) => code === "REQUIRED_AGENT_CAPABILITY_SKIPPED"));
 });
 
 test("rejects production use in a POC", async () => {
@@ -201,8 +243,8 @@ test("keeps the Requirements questionnaire under the owning Artifact", async () 
 
 test("keeps UX clarification options selectable", async () => {
   const sources = await Promise.all([
-    readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8"),
-    readFile(join(projectRoot, ".pdlc/disciplines/ux/skills/lean-pdlc-ux-spec/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, ".agents/skills/atlas-pdlc/SKILL.md"), "utf8"),
+    readFile(join(projectRoot, ".pdlc/disciplines/ux/skills/atlas-pdlc-ux-spec/SKILL.md"), "utf8"),
   ]);
   for (const source of sources) {
     assert.match(source, /2[–-]4 mutually exclusive, selectable options/i);
@@ -212,7 +254,7 @@ test("keeps UX clarification options selectable", async () => {
 });
 
 test("keeps fresh POC activation on the fast-start path", async () => {
-  const skill = await readFile(join(projectRoot, ".agents/skills/lean-pdlc/SKILL.md"), "utf8");
+  const skill = await readFile(join(projectRoot, ".agents/skills/atlas-pdlc/SKILL.md"), "utf8");
   assert.match(skill, /Fast start and just-in-time loading/);
   assert.match(skill, /one read-only `context requirements-clarification` Runner call/);
   assert.match(skill, /Do not run full Harness `validate` before the first clarification round/);

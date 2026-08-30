@@ -1,6 +1,6 @@
-# Lean PDLC Harness v2
+# Atlas PDLC Harness v2
 
-Lean PDLC is a portable, policy-aware delivery Harness for running POC, implementation, and end-to-end product delivery through one shared model.
+Atlas PDLC is a portable, policy-aware delivery Harness for running POC, implementation, and end-to-end product delivery through one shared model.
 
 The v2 architecture is intentionally small:
 
@@ -27,10 +27,13 @@ Before each Stage
   -> resolve mandatory Discipline and project Policies as Controls
   -> apply Project Baselines and resolved Defaults
   -> retrieve relevant Guidance, References, and KB
-  -> compose Discipline Agents and Skills through Hooks
+  -> compile required Discipline Capabilities through Hooks
+  -> batch them into one generic Stage Agent invocation
   -> resolve eligible top-level Integrations and bundled Skills
 
 Stage execution
+  -> selects relevant candidate Skills inside the Stage Agent
+  -> returns one evidence-backed result per Capability
   -> reads and produces Discipline-owned Artifacts
   -> applies a hashed Stage Context Receipt after the work is done
   -> updates the Delivery Record and evidence
@@ -134,7 +137,7 @@ bun .pdlc/cli.ts discipline sync --root <project>
 bun .pdlc/cli.ts integration list
 ```
 
-`context` is the normal Stage-resolution API. It returns the current Stage's registered Roles, Controls, Baselines, Defaults, Knowledge, Discipline contributions, Integrations, and a deterministic `contextHash`. It remains read-only and resolves only the requested Stage. After the Stage work, `context-apply` records an evidence-backed receipt for what was applied or intentionally not used. Build Readiness rejects missing or stale receipts for the requirements and readiness Stages. `guidance` is the narrower Discipline-contribution view.
+`context` is the normal Stage-resolution API. It returns the current Stage's registered Roles, Controls, Baselines, Defaults, Knowledge, Discipline contributions, Integrations, a deterministic `contextHash`, and at most one `requiredStageInvocation`. That invocation batches every required same-Stage Capability into one generic subagent call; each Capability keeps a separate selected-Skill result and evidence record. After the Stage work, `context-apply` validates the execution identity, Capability coverage, selected Skill subsets, evidence integrity, and context freshness. Build Readiness and verification reject missing, invalid, or stale receipts. `guidance` is the narrower Discipline-contribution view.
 
 `audit summary` is a read-only projection over the selected Delivery Record and append-only Audit Log. It reports the current conclusion, Build Readiness, Verify and Decide milestones, a concise timeline, evidence references, satisfied, excepted, and pending Controls, and warnings when record state has no matching audit event. It never replaces or modifies the underlying Audit Events.
 

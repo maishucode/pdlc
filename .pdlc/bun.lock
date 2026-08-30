@@ -1,9 +1,9 @@
 {
-  "lockfileVersion": 2,
+  "lockfileVersion": 1,
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "lean-pdlc-harness",
+      "name": "atlas-pdlc-harness",
       "devDependencies": {
         "@types/node": "^24.0.0",
         "typescript": "^5.9.0",

@@ -39,8 +39,14 @@ export class DeliveryFlowRegistry {
           ]);
         }
       }
-      for (const [index, checkpoint] of (definition.controls?.checkpoints ?? []).entries()) if (!stages.roles.has(checkpoint.ownerRole)) {
-        throw new PdlcError("UNKNOWN_ROLE_REF", `Delivery Flow ${definition.id} checkpoint ${checkpoint.id} references unregistered Role ${checkpoint.ownerRole}`, [{ code: "UNKNOWN_ROLE_REF", path: `$.controls.checkpoints[${index}].ownerRole`, message: `Role is not registered in the Role Catalog: ${checkpoint.ownerRole}` }]);
+      const flowStages = new Set(definition.stageSequence.map(({ stageId }) => stageId));
+      for (const [index, checkpoint] of (definition.controls?.checkpoints ?? []).entries()) {
+        if (!stages.roles.has(checkpoint.ownerRole)) {
+          throw new PdlcError("UNKNOWN_ROLE_REF", `Delivery Flow ${definition.id} checkpoint ${checkpoint.id} references unregistered Role ${checkpoint.ownerRole}`, [{ code: "UNKNOWN_ROLE_REF", path: `$.controls.checkpoints[${index}].ownerRole`, message: `Role is not registered in the Role Catalog: ${checkpoint.ownerRole}` }]);
+        }
+        for (const [stageIndex, stageId] of (checkpoint.contextStages ?? []).entries()) if (!flowStages.has(stageId)) {
+          throw new PdlcError("UNKNOWN_STAGE_REF", `Delivery Flow ${definition.id} checkpoint ${checkpoint.id} requires context for a Stage outside the Flow: ${stageId}`, [{ code: "UNKNOWN_STAGE_REF", path: `$.controls.checkpoints[${index}].contextStages[${stageIndex}]`, message: `Context Stage is not referenced by Delivery Flow ${definition.id}: ${stageId}` }]);
+        }
       }
       byId.set(definition.id, definition);
     }

@@ -1,9 +1,9 @@
 ---
-name: lean-pdlc
+name: atlas-pdlc
 description: Guide lightweight, risk-based product delivery using canonical Stages, Delivery Flows, Discipline-owned Policies, Knowledge, Skills, Agents and Hooks, top-level Integrations, Project Overlays, Delivery Records, and auditable evidence. Use when starting or continuing a POC, implementation, or end-to-end PDLC delivery.
 ---
 
-# Lean PDLC
+# Atlas PDLC
 
 Use the shared Stage Catalog, Delivery Flow definitions, and deterministic TypeScript Runner. Keep routine development conversational and file-based; invoke the Runner only for explicit validation or controlled state transitions.
 
@@ -11,17 +11,18 @@ Use the shared Stage Catalog, Delivery Flow definitions, and deterministic TypeS
 
 Recognize these user intents as equivalent activation requests:
 
-- `/pdlc poc [optional idea]`
-- `$lean-pdlc poc [optional idea]`
+- `/atlas-pdlc poc [optional idea]`
+- `/pdlc poc [optional idea]` as a legacy text alias
+- `$atlas-pdlc poc [optional idea]`
 - “start a POC”, “analyze product requirements”, or an equivalent request in the user's language
 
-When a message beginning with `/pdlc` reaches the agent as text, interpret it as:
+When a message beginning with `/atlas-pdlc`, or the legacy alias `/pdlc`, reaches the agent as text, interpret it as:
 
 ```text
-/pdlc <delivery-flow> [optional context]
+/atlas-pdlc <delivery-flow> [optional context]
 ```
 
-The currently executable Delivery Flows are `poc` and `product-requirements-analysis`. `implementation` and `pdlc` are registered but planned. Also recognize `/pdlc resume [RECORD-ID]`, `/pdlc status`, `/pdlc audit [RECORD-ID]`, and `/pdlc help` as conversation intents, not Runner commands.
+The currently executable Delivery Flows are `poc` and `product-requirements-analysis`. `implementation` and `pdlc` are registered but planned. Also recognize `/atlas-pdlc resume [RECORD-ID]`, `/atlas-pdlc status`, `/atlas-pdlc audit [RECORD-ID]`, and `/atlas-pdlc help` as conversation intents, not Runner commands. Accept the same suffixes after the legacy `/pdlc` alias.
 
 After activation:
 
@@ -31,8 +32,8 @@ After activation:
    Use canonical technology activation values in the initial Draft: browser-facing apps use `web-ui`, native or cross-platform mobile apps use `mobile-ui`, and framework names are additional values rather than replacements. Never store generic aliases such as `web` or prefixed values such as `technology:web-ui`.
 4. Determine whether requirements need minimal, standard, or comprehensive depth. For a user-facing greenfield POC, default to standard depth.
 5. Resolve only conditional Stages implied by context already known. Do not resolve or prepare future Stages in anticipation. System-supplied context removes repetitive questions but never replaces confirmation of the user, problem, behavior, business rules, scenarios, scope, data decisions, or success measures. Every unresolved product question must offer 2–4 mutually exclusive, selectable options, plus `X) Other`. The user can answer by choosing an option letter and may add detail for `X) Other`; do not ask an open-ended question as the primary answer. Never exceed `questionRules.maxQuestionsPerRound` in chat.
-6. Before performing work for the current canonical Stage, internally invoke `bun .pdlc/cli.ts context <stage-id> --root <project-root>` exactly once for that Stage entry. Apply mandatory Policies as Controls, auto-apply Project Baselines and resolved Defaults, consult only relevant returned Knowledge, and read every returned Discipline Agent, Discipline Skill, and Integration Skill path. Preserve declared permissions and approval boundaries. Empty Discipline contributions or Integrations mean continue with core behavior. Never ask the end user to select a Discipline Agent manually. `guidance <stage-id>` remains a Discipline-contribution compatibility view and is not an additional startup call.
-7. Persist a small Stage Context Receipt under `pdlc/evidence/context/` only when the current or next controlled checkpoint requires it, or when the Stage executes a Discipline contribution, Integration, or Policy enforcement that needs provenance. Acknowledge every resolved Policy; mark each Knowledge, Discipline contribution, and Integration as `used` or `not-used`; and attach output/evidence references whenever it was used. Apply it internally with `context-apply <stage-id>`. Do not create receipts for lightweight analysis-only Stages just to prove that the Agent visited them. This operational provenance write is not a checkpoint and needs no separate confirmation. Never claim `used` before reading or executing the asset.
+6. Before performing work for the current canonical Stage, internally invoke `bun .pdlc/cli.ts context <stage-id> --root <project-root>` exactly once for that Stage entry. Apply mandatory Policies as Controls, auto-apply Project Baselines and resolved Defaults, and consult only relevant returned Knowledge and Integration Skills. If the result contains `requiredStageInvocation`, invoke exactly one generic subagent for the whole Stage. Pass the complete contract unchanged; never start one subagent per Capability or candidate Skill. The worker must read each Capability's Agent role profile, select at least one Skill only from that Capability's `candidateSkills`, read the selected Skill files, perform every Capability, and return a separate result and evidence list for each one. Preserve declared permissions and approval boundaries. Never perform required Capability work inline, fabricate a worker result, or ask the end user to select a Discipline Agent manually. A missing or failed Stage invocation blocks Context Application. If a stored application has the same context hash and a valid completed invocation, reuse it instead of launching again. `guidance <stage-id>` remains a compatibility view and is not an additional startup call.
+7. Persist a small schema-version-2 Stage Context Receipt under `pdlc/evidence/context/` only when the current or next controlled checkpoint requires it, or when the Stage executes a Discipline contribution, Integration, or Policy enforcement that needs provenance. Acknowledge every resolved Policy; mark Knowledge and Integrations as `used` or `not-used`; and attach output/evidence references whenever used. Required Discipline capabilities must always be `used`. When `requiredStageInvocation` exists, write exactly one top-level `stageInvocation` from the completed platform trace and one `disciplineContributions` entry per Capability containing its `capability`, role-profile `agent`, worker-selected `selectedSkills`, result notes, and evidence references. Apply it internally with `context-apply <stage-id>`. Do not create receipts for lightweight analysis-only Stages just to prove that the Agent visited them. This operational provenance write is not a checkpoint and needs no separate confirmation.
 8. Maintain both the Delivery Record and `pdlc/requirements/<RECORD-ID>.md` behind the conversation; summarize material changes.
 9. Never create or modify application code, install application dependencies, or run an application build until the user explicitly approves the Requirements and Build Readiness summary.
 10. Never show Bun commands or ask the end user to execute the Runner. Invoke the internal Runner yourself only for Stage contribution resolution/application, validation, Build Readiness, or a checkpoint.
@@ -48,7 +49,7 @@ Before that first clarification round, do only this:
 2. create the Requirements shell and atomically initialize the minimal DRAFT Delivery Record, current pointer, and creation audit event through the Runner;
 3. classify only technology and discipline tags evident from the user's prompt;
 4. enter `requirements-clarification` and make one read-only `context requirements-clarification` Runner call;
-5. read the Discipline Agent and Skill files returned by that call; and
+5. execute the returned `requiredStageInvocation` exactly once when present; and
 6. ask the first focused clarification round immediately.
 
 Delay all other work until it is required:

@@ -1,17 +1,17 @@
-# 01. Start Here: Install Lean PDLC Harness
+# 01. Start Here: Install Atlas PDLC Harness
 
-This guide is for product owners and engineers who want to use Lean PDLC with GitHub Copilot.
+This guide is for product owners and engineers who want to use Atlas PDLC with GitHub Copilot.
 
 ## What you install
 
-Lean PDLC is **project content**, not a compiled application. Clone or copy this repository into the project that should use it, commit the selected files, then let Copilot read the repository instructions and Skill.
+Atlas PDLC is **project content**, not a compiled application. Clone or copy this repository into the project that should use it, commit the selected files, then let Copilot read the repository instructions and Skill.
 
 There is no required release build, `dist/` directory, server, hook, or background process. Bun is only an internal maintainer/Agent runtime for deterministic validation and Build Readiness; delivery users do not run it.
 
 ```text
 Your product repository
 ├── AGENTS.md                         Shared PDLC boundaries
-├── .agents/skills/lean-pdlc/         Main Delivery Flow Skill
+├── .agents/skills/atlas-pdlc/         Main Delivery Flow Skill
 ├── .github/                          Copilot adapter and prompt
 ├── .pdlc/                            Reusable Harness definitions and Runner code
 ├── pdlc-docs/                        Namespaced Harness documentation
@@ -25,7 +25,7 @@ Your product repository
     └── .state/                       Ignored inbox, current pointer, and locks
 ```
 
-## Put Lean PDLC in a project
+## Put Atlas PDLC in a project
 
 ### Option A: start from this repository
 
@@ -36,16 +36,16 @@ git clone https://github.com/maishucode/pdlc.git my-poc
 cd my-poc
 ```
 
-### Option B: add Lean PDLC to an existing product repository
+### Option B: add Atlas PDLC to an existing product repository
 
 Copy the following version-controlled paths into the product repository, preserving their paths:
 
 ```text
 AGENTS.md
-.agents/skills/lean-pdlc/
+.agents/skills/atlas-pdlc/
 .github/copilot-instructions.md
-.github/agents/lean-pdlc.agent.md
-.github/prompts/pdlc.prompt.md
+.github/agents/atlas-pdlc.agent.md
+.github/prompts/atlas-pdlc.prompt.md
 .github/workflows/copilot-setup-steps.yml
 .pdlc/
 pdlc/
@@ -70,28 +70,28 @@ Maintainers may project all enabled Discipline Agents and Skills into VS Code-na
 bun .pdlc/cli.ts discipline sync --root /absolute/path/to/product
 ```
 
-This projection makes Discipline Agents independently visible in VS Code, but the normal user still starts only the main Lean PDLC POC. The main flow activates Discipline contributions automatically.
+This projection makes Discipline Agents independently visible in VS Code, but the normal user still starts only the main Atlas PDLC POC. Stage execution does not depend on this projection: the main flow batches required Discipline Capabilities into one generic Stage Agent invocation automatically.
 
 ## Enable GitHub Copilot
 
-Open the product repository in VS Code with GitHub Copilot enabled. Copilot reads the repository instructions and discovers the Lean PDLC custom Agent and shared Skill from the files above.
+Open the product repository in VS Code with GitHub Copilot enabled. Copilot reads the repository instructions and discovers the Atlas PDLC custom Agent and shared Skill from the files above.
 
 Use one of these entry points:
 
 ```text
-/pdlc poc validate whether AI can categorize customer feedback
+/atlas-pdlc poc validate whether AI can categorize customer feedback
 ```
 
-Or select **Lean PDLC** in the Copilot Agent picker and send:
+Or select **Atlas PDLC** in the Copilot Agent picker and send:
 
 ```text
 poc validate whether AI can categorize customer feedback
 ```
 
-If the IDE does not show `/pdlc`, use natural language:
+If the IDE does not show `/atlas-pdlc`, use natural language:
 
 ```text
-Use the lean-pdlc skill to start a POC that validates whether AI can categorize customer feedback.
+Use the atlas-pdlc skill to start a POC that validates whether AI can categorize customer feedback.
 ```
 
 ## Confirm the installation

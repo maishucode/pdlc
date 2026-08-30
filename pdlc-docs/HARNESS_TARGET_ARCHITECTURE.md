@@ -1,4 +1,4 @@
-# Lean PDLC Harness v2 Target Architecture
+# Atlas PDLC Harness v2 Target Architecture
 
 > Status: implemented architecture baseline on the `v2` branch. The POC and Product Requirements Analysis Delivery Flows are executable; Implementation and end-to-end PDLC remain registered but planned.
 
@@ -85,8 +85,8 @@ The categories mean:
 - `policies/`: mandatory professional or enterprise rules.
 - `knowledge/`: non-blocking expert context and default choices.
 - `skills/`: reusable expert procedures.
-- `agents/`: Discipline-owned execution behaviors.
-- `hooks/`: Flow/Stage bindings that activate Agents and Skills and declare permissions and approval boundaries.
+- `agents/`: Discipline-owned role profiles read by generic Stage workers.
+- `hooks/`: Flow/Stage bindings that declare required Capabilities, Agent role profiles, candidate Skills, permissions, and approval boundaries.
 
 `discipline.json` declares owners, policy approvers, maintainers, contribution modes, and optional default applicability. It does not enumerate every asset dynamically; the Discipline Registry discovers the fixed category structure.
 
@@ -218,7 +218,7 @@ Create `.pdlc/delivery-flows/<id>/flow.json` and register it explicitly in `.pdl
 
 ### Add Discipline behavior
 
-Add the Skill or Agent directly under the owning Discipline and bind it through `hooks/`. Do not create a Plugin manifest or `capabilities/` directory.
+Add the Skill or Agent role profile directly under the owning Discipline and bind a globally unique Capability through `hooks/`. Candidate Skills remain an allowlist selected by the Stage worker. Do not create a Plugin manifest or `capabilities/` directory.
 
 ### Add an Integration
 
@@ -234,6 +234,7 @@ Place the smallest necessary content under `pdlc/disciplines/<discipline>/`. Do 
 - Stages remain canonical and cannot be redefined by a Flow, Hook, Integration, or platform adapter.
 - Discipline asset ownership must match its folder.
 - Hook Agent and Skill references must resolve inside the same Discipline.
+- All required same-Stage Capabilities are batched into one context-bound Stage invocation and validated separately in its Receipt.
 - Integration Skill references must resolve inside the Integration package.
 - Network, credentials, filesystem writes, and external writes remain explicit permission boundaries.
 - Project configuration cannot override locked enterprise constraints.

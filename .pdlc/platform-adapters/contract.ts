@@ -6,6 +6,7 @@ export type PlatformCapability =
   | "custom-agent"
   | "prompt-file"
   | "cloud-environment-setup"
+  | "native-subagent"
   | "command-approval";
 
 export interface PortableHarnessSource {

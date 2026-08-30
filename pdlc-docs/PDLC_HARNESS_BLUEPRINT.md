@@ -1,4 +1,4 @@
-# Lean PDLC Harness v2 Blueprint
+# Atlas PDLC Harness v2 Blueprint
 
 The implemented v2 blueprint is documented in:
 

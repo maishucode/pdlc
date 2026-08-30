@@ -1,4 +1,4 @@
-# Lean PDLC Harness Architecture and Ownership
+# Atlas PDLC Harness Architecture and Ownership
 
 ## 1. Purpose
 
@@ -66,7 +66,7 @@ If knowledge must become enforceable, the owning team creates a Control that ref
 
 ### Skill, Agent, and Hook
 
-A Skill defines reusable expert procedure. An Agent provides a Discipline-owned execution persona or behavior. A Hook binds canonical Stages to Discipline Agents and Skills while declaring Flow scope, permissions, handoff, and approval boundaries. These assets live directly under their Discipline; there is no Plugin wrapper or `capabilities/` layer.
+A Skill defines reusable expert procedure. An Agent file provides a Discipline-owned role profile. A Hook binds a required Capability to a canonical Stage, that role profile, and an allowlist of candidate Skills while declaring Flow scope, permissions, handoff, and approval boundaries. These assets live directly under their Discipline; the Capability is a stable Hook identity, not a `capabilities/` directory.
 
 ### Integration
 
@@ -99,7 +99,8 @@ Flow + Stage + delivery context
   -> Project Baselines
   -> locked Control defaults + project Defaults + Discipline Defaults
   -> relevant Discipline Knowledge + project Knowledge
-  -> eligible Discipline Hooks, Agents, and Skills
+  -> eligible Discipline Hooks, Capabilities, role profiles, and candidate Skills
+  -> one context-bound Stage Agent invocation
   -> eligible top-level Integrations and bundled Skills
   -> Stage execution
 ```
@@ -234,11 +235,12 @@ Context resolution is a system operation before each Stage; it is not itself a S
 
 ### 4.5 Stage Context assurance
 
-Discovery alone does not prove application. v2 therefore uses a lightweight two-step contract:
+Discovery alone does not prove application. v2 therefore uses a lightweight resolve, execute, receipt, and gate contract:
 
-1. `context <stage>` resolves only the requested Stage and returns its registered Role definitions, exact Policies, Knowledge, Discipline contributions, Integrations, and a SHA-256 `contextHash`. This operation is read-only.
-2. When provenance is material, the Agent submits a Stage Context Receipt. Policies must be acknowledged. Knowledge, Discipline contributions, and Integrations must be marked `used` with evidence references or `not-used` with a reason. The Runner rejects missing assets, unexpected assets, changed Agent/Skill sets, or a stale hash.
-3. The Runner stores the validated Context Application in the Delivery Record and appends a `STAGE_CONTEXT_APPLIED` audit event. Build Readiness requires current applications for `requirements-clarification` and `build-readiness`. Verify revalidates those Commit-time applications and additionally requires current applications for `implementation`, `developer-verification`, `acceptance-verification`, and the conditional `security-verification` Stage when active.
+1. `context <stage>` resolves only the requested Stage and returns its registered Role definitions, exact Policies, Knowledge, Discipline contributions, Integrations, a SHA-256 `contextHash`, and at most one `requiredStageInvocation`. This operation is read-only.
+2. When required Capabilities exist, the main Agent invokes one generic Stage subagent. That worker reads each Capability's role profile, chooses one or more declared candidate Skills, performs every Capability, and returns separate evidence-backed results. Multiple Capabilities do not create multiple subagent calls.
+3. When provenance is material, the Agent submits a schema-version-2 Stage Context Receipt. Policies are acknowledged; Knowledge and Integrations are marked `used` or `not-used`; every required Capability is `used` and records `selectedSkills` plus evidence. One top-level `stageInvocation` records the execution identity and platform trace. The Runner rejects missing Capability coverage, out-of-set Skill choices, mismatched identity or permissions, bad evidence, and stale context.
+4. The Runner stores the validated Context Application in the Delivery Record and appends a `STAGE_CONTEXT_APPLIED` audit event. Build Readiness requires current applications for `requirements-clarification` and `build-readiness`. Verify revalidates those Commit-time applications and additionally requires current applications for `implementation`, `developer-verification`, `acceptance-verification`, and the conditional `security-verification` Stage when active.
 
 This mechanism provides deterministic provenance and evidence; it does not claim to inspect an Agent's hidden reasoning. It keeps startup fast because it performs no network access, loads no future Stage, adds no user question, and does not write receipts for analysis-only Stages merely to prove traversal. A typical current-Stage context call remains a small local-file operation.
 

@@ -1,12 +1,14 @@
 import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { validateReceiptAgainstSnapshot } from "../core/context-receipt.ts";
+import { contextReceiptEvidenceEntries, validateReceiptAgainstSnapshot } from "../core/context-receipt.ts";
 import { persistRecordAndAudit } from "../core/controlled-mutation.ts";
 import { discoverDisciplineHooks, disciplineAgentPath, disciplineSkillPath, resolveDisciplineGuidance } from "../core/discipline-guidance.ts";
 import { PdlcError } from "../core/errors.ts";
+import { assessEvidenceIntegrity } from "../core/evidence.ts";
 import { HarnessContext } from "../core/harness-context.ts";
 import { validateStageContextReceipt } from "../core/schema.ts";
 import { FileStateStore } from "../core/state.ts";
+import { buildRequiredStageInvocation } from "../platform-adapters/github-copilot-stage-agent.ts";
 import type { DeliveryRecord, StageContextReceipt } from "../core/types.ts";
 import type { RunnerOptions } from "./types.ts";
 
@@ -39,6 +41,7 @@ export async function stageContext(harnessRoot: string, options: RunnerOptions, 
       contentPath: contentPath ? relative(source === "project" ? options.root : harnessRoot, contentPath) : undefined,
     })),
     disciplineContributions: disciplineGuidance.contributions,
+    requiredStageInvocation: buildRequiredStageInvocation(snapshot.contextHash, stage.id, disciplineGuidance.contributions),
     integrations: resolved.integrations.map(({ ref, owners, permissions, skills }) => ({
       ref,
       owners,
@@ -69,6 +72,10 @@ export async function applyStageContext(harnessRoot: string, options: RunnerOpti
   const issues = validateReceiptAgainstSnapshot(receipt, material.snapshot);
   if (issues.length > 0) throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt does not match the current resolved context", issues);
 
+  const evidenceEntries = contextReceiptEvidenceEntries(receipt);
+  const evidenceIssues = await assessEvidenceIntegrity(options.root, [{ name: "stageContext", entries: evidenceEntries }]);
+  if (evidenceIssues.length > 0) throw new PdlcError("CONTEXT_RECEIPT_INVALID", "Stage context receipt evidence is invalid", evidenceIssues);
+
   const appliedAt = new Date().toISOString();
   const application = { ...receipt, actor: options.actor, appliedAt };
   const contextApplications = original.resolution.contextApplications.filter((entry) => entry.stage !== stageId);
@@ -80,11 +87,7 @@ export async function applyStageContext(harnessRoot: string, options: RunnerOpti
     updatedAt: appliedAt,
     resolution: { ...original.resolution, contextApplications },
   };
-  const evidenceRefs = [
-    ...receipt.knowledge.flatMap((entry) => entry.evidenceRefs),
-    ...receipt.disciplineContributions.flatMap((entry) => entry.evidenceRefs),
-    ...receipt.integrations.flatMap((entry) => entry.evidenceRefs),
-  ];
+  const evidenceRefs = evidenceEntries.map(({ ref }) => ref);
   await persistRecordAndAudit(options.root, original, updated, {
     eventType: "STAGE_CONTEXT_APPLIED",
     stage: stageId,
@@ -124,7 +127,7 @@ export async function disciplineSync(harnessRoot: string, options: RunnerOptions
   for (const { discipline, root, bindings } of hooks) for (const binding of bindings) {
     const agentDestination = join(".github", "agents", `${binding.agent}.agent.md`);
     sources.set(agentDestination, { discipline, source: disciplineAgentPath(root, binding.agent), destination: agentDestination });
-    for (const skill of binding.skills) {
+    for (const skill of binding.candidateSkills) {
       const skillDestination = join(".github", "skills", skill, "SKILL.md");
       sources.set(skillDestination, { discipline, source: disciplineSkillPath(root, skill), destination: skillDestination });
     }

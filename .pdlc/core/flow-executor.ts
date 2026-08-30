@@ -9,6 +9,7 @@ import { FileStateStore } from "./state.ts";
 import type {
   AuditEvent,
   BaseDeliveryRecord,
+  ContextualDeliveryRecord,
   DeliveryFlowDefinition,
   ExecutableDeliveryFlowDefinition,
   ValidationIssue,
@@ -125,6 +126,10 @@ export async function genericCheckpoint(
   if (assigned && assigned !== actor) throw new PdlcError("INVALID_ARGUMENT", `Checkpoint '${checkpointId}' must be performed by the assigned ${definition.ownerRole} role`);
   const target = definition.to ?? (options.outcome ? definition.toByOutcome?.[options.outcome] : undefined);
   if (!target) throw new PdlcError("INVALID_ARGUMENT", `Checkpoint '${checkpointId}' requires a valid --outcome`);
+  if ((definition.contextStages?.length ?? 0) > 0) {
+    const contextIssues = await context.harness.contextIssues(original as unknown as ContextualDeliveryRecord, definition.contextStages!);
+    if (contextIssues.length > 0) throw new PdlcError("CHECKPOINT_NOT_READY", `Checkpoint '${checkpointId}' requires current Stage context receipts`, contextIssues);
+  }
   const timestamp = new Date().toISOString();
   const requiredRoles = context.harness.model.deliveryFlows.requiredRoles(context.flow.id, []);
   const hasAssignments = Object.keys(original.assignments).length > 0;

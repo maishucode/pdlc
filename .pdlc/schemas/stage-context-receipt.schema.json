@@ -5,13 +5,14 @@
   "type": "object",
   "required": ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "disciplineContributions", "integrations"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "stage": { "type": "string", "minLength": 1 },
     "contextHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "policies": { "type": "array", "items": { "$ref": "#/$defs/policy" } },
     "knowledge": { "type": "array", "items": { "$ref": "#/$defs/asset" } },
     "disciplineContributions": { "type": "array", "items": { "$ref": "#/$defs/disciplineContribution" } },
-    "integrations": { "type": "array", "items": { "$ref": "#/$defs/integration" } }
+    "integrations": { "type": "array", "items": { "$ref": "#/$defs/integration" } },
+    "stageInvocation": { "$ref": "#/$defs/stageInvocation" }
   },
   "$defs": {
     "policy": {
@@ -48,11 +49,15 @@
         { "$ref": "#/$defs/assetFields" },
         {
           "type": "object",
-          "required": ["agent", "skills"],
+          "required": ["capability", "agent", "selectedSkills"],
           "properties": {
+            "capability": { "type": "string", "minLength": 1 },
             "agent": { "type": "string", "minLength": 1 },
-            "skills": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+            "selectedSkills": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
           }
+        },
+        {
+          "properties": { "disposition": { "const": "used" } }
         },
         {
           "if": { "properties": { "disposition": { "const": "used" } } },
@@ -60,6 +65,29 @@
         }
       ],
       "unevaluatedProperties": false
+    },
+    "stageInvocation": {
+      "type": "object",
+      "required": ["invocationId", "platform", "executor", "agentType", "status", "platformExecutionRef", "permissions"],
+      "properties": {
+        "invocationId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "platform": { "const": "github-copilot" },
+        "executor": { "const": "generic-subagent" },
+        "agentType": { "const": "general-purpose" },
+        "status": { "const": "completed" },
+        "platformExecutionRef": { "type": "string", "pattern": "^github-copilot:subagent:\\S+$" },
+        "permissions": {
+          "type": "object",
+          "required": ["filesystem", "network", "externalWrites"],
+          "properties": {
+            "filesystem": { "enum": ["read", "write"] },
+            "network": { "type": "boolean" },
+            "externalWrites": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     },
     "integration": {
       "allOf": [
@@ -79,5 +107,12 @@
       "unevaluatedProperties": false
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "disciplineContributions": { "minItems": 1 } } },
+      "then": { "required": ["stageInvocation"] },
+      "else": { "not": { "required": ["stageInvocation"] } }
+    }
+  ],
   "additionalProperties": false
 }

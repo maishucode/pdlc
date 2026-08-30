@@ -11,6 +11,7 @@ export const DECLARED_CAPABILITIES: Readonly<Record<PlatformId, ReadonlySet<Plat
   "github-copilot": new Set([
     ...BASELINE_CAPABILITIES,
     "custom-agent",
+    "native-subagent",
     "prompt-file",
     "cloud-environment-setup",
   ]),

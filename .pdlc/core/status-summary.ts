@@ -239,7 +239,7 @@ export function buildPocStatusSummary(
     .filter(({ disposition }) => disposition === "used")
     .map(({ ref }) => ({ ref, stage: application.stage })));
   const skillEntries = record.resolution.contextApplications.flatMap((application) => [
-    ...application.disciplineContributions.filter(({ disposition }) => disposition === "used").flatMap(({ skills }) => skills.map((ref) => ({ ref, stage: application.stage }))),
+    ...application.disciplineContributions.filter(({ disposition }) => disposition === "used").flatMap(({ selectedSkills }) => selectedSkills.map((ref) => ({ ref, stage: application.stage }))),
     ...application.integrations.filter(({ disposition }) => disposition === "used").flatMap(({ skills }) => skills.map((ref) => ({ ref, stage: application.stage }))),
   ]);
   return {

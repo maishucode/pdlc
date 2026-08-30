@@ -1,4 +1,4 @@
-# Lean PDLC Delivery Flow Model
+# Atlas PDLC Delivery Flow Model
 
 ## One composition concept
 

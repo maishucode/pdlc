@@ -159,9 +159,9 @@ function validateEvidenceList(value: unknown, path: string, issues: ValidationIs
 function validateStageContextReceiptFields(value: unknown, path: string, issues: ValidationIssue[], stored: boolean): void {
   const receipt = object(value, path, issues);
   if (!receipt) return;
-  const allowed = ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "disciplineContributions", "integrations", ...(stored ? ["actor", "appliedAt"] : [])];
+  const allowed = ["schemaVersion", "stage", "contextHash", "policies", "knowledge", "disciplineContributions", "integrations", "stageInvocation", ...(stored ? ["actor", "appliedAt"] : [])];
   exact(receipt, allowed, path, issues);
-  if (receipt.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 1");
+  if (receipt.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", `${path}.schemaVersion`, "Expected schemaVersion 2");
   id(receipt.stage, `${path}.stage`, issues);
   if (typeof receipt.contextHash !== "string" || !/^[a-f0-9]{64}$/.test(receipt.contextHash)) issue(issues, "INVALID_CONTEXT_HASH", `${path}.contextHash`, "Expected a SHA-256 digest");
   if (stored) {
@@ -183,12 +183,15 @@ function validateStageContextReceiptFields(value: unknown, path: string, issues:
     if (new Set(refs).size !== refs.length) issue(issues, "DUPLICATE_CONTEXT_REF", `${path}.policies`, "Policy receipt refs must be unique");
   }
 
-  validateContextAssets(receipt.knowledge, `${path}.knowledge`, issues, false);
-  validateContextAssets(receipt.disciplineContributions, `${path}.disciplineContributions`, issues, true);
-  validateContextAssets(receipt.integrations, `${path}.integrations`, issues, true, true);
+  validateContextAssets(receipt.knowledge, `${path}.knowledge`, issues, "asset");
+  validateContextAssets(receipt.disciplineContributions, `${path}.disciplineContributions`, issues, "discipline");
+  validateContextAssets(receipt.integrations, `${path}.integrations`, issues, "integration");
+  const requiredCapabilities = Array.isArray(receipt.disciplineContributions) && receipt.disciplineContributions.length > 0;
+  if (requiredCapabilities) validateStageInvocation(receipt.stageInvocation, `${path}.stageInvocation`, issues);
+  else if (receipt.stageInvocation !== undefined) issue(issues, "UNEXPECTED_STAGE_INVOCATION", `${path}.stageInvocation`, "A Stage without required capabilities must not include a Stage Agent invocation");
 }
 
-function validateContextAssets(value: unknown, path: string, issues: ValidationIssue[], hasSkills: boolean, integration = false): void {
+function validateContextAssets(value: unknown, path: string, issues: ValidationIssue[], kind: "asset" | "discipline" | "integration"): void {
   if (!Array.isArray(value)) {
     issue(issues, "EXPECTED_ARRAY", path, "Expected context asset array");
     return;
@@ -198,17 +201,50 @@ function validateContextAssets(value: unknown, path: string, issues: ValidationI
     const itemPath = `${path}[${index}]`;
     const item = object(entry, itemPath, issues);
     if (!item) return;
-    const allowed = ["ref", "disposition", "notes", "evidenceRefs", ...(hasSkills ? ["skills"] : []), ...(!integration && hasSkills ? ["agent"] : [])];
+    const allowed = [
+      "ref",
+      "disposition",
+      "notes",
+      "evidenceRefs",
+      ...(kind === "discipline" ? ["capability", "agent", "selectedSkills"] : []),
+      ...(kind === "integration" ? ["skills"] : []),
+    ];
     exact(item, allowed, itemPath, issues);
     if (string(item.ref, `${itemPath}.ref`, issues)) refs.push(item.ref);
     if (!CONTEXT_USE_DISPOSITIONS.includes(item.disposition as never)) issue(issues, "INVALID_CONTEXT_DISPOSITION", `${itemPath}.disposition`, "Expected used or not-used");
     string(item.notes, `${itemPath}.notes`, issues);
     const minimumEvidence = item.disposition === "used" ? 1 : 0;
     stringArray(item.evidenceRefs, `${itemPath}.evidenceRefs`, issues, minimumEvidence);
-    if (hasSkills) stringArray(item.skills, `${itemPath}.skills`, issues);
-    if (!integration && hasSkills) string(item.agent, `${itemPath}.agent`, issues);
+    if (kind === "discipline") {
+      id(item.capability, `${itemPath}.capability`, issues);
+      string(item.agent, `${itemPath}.agent`, issues);
+      stringArray(item.selectedSkills, `${itemPath}.selectedSkills`, issues, 1);
+      if (item.disposition !== "used") issue(issues, "REQUIRED_AGENT_CAPABILITY_SKIPPED", `${itemPath}.disposition`, "A required Agent capability must be executed");
+    }
+    if (kind === "integration") stringArray(item.skills, `${itemPath}.skills`, issues);
   });
   if (new Set(refs).size !== refs.length) issue(issues, "DUPLICATE_CONTEXT_REF", path, "Context asset refs must be unique");
+}
+
+function validateStageInvocation(value: unknown, path: string, issues: ValidationIssue[]): void {
+  const execution = object(value, path, issues);
+  if (!execution) return;
+  exact(execution, ["invocationId", "platform", "executor", "agentType", "status", "platformExecutionRef", "permissions"], path, issues);
+  if (typeof execution.invocationId !== "string" || !/^[a-f0-9]{64}$/.test(execution.invocationId)) issue(issues, "INVALID_INVOCATION_ID", `${path}.invocationId`, "Expected a context-bound SHA-256 invocation id");
+  if (execution.platform !== "github-copilot") issue(issues, "INVALID_AGENT_PLATFORM", `${path}.platform`, "Expected github-copilot");
+  if (execution.executor !== "generic-subagent") issue(issues, "INVALID_AGENT_EXECUTOR", `${path}.executor`, "Expected generic-subagent");
+  if (execution.agentType !== "general-purpose") issue(issues, "INVALID_SUBAGENT_TYPE", `${path}.agentType`, "Expected general-purpose");
+  if (execution.status !== "completed") issue(issues, "AGENT_CAPABILITY_INCOMPLETE", `${path}.status`, "Expected completed");
+  if (string(execution.platformExecutionRef, `${path}.platformExecutionRef`, issues) && !/^github-copilot:subagent:\S+$/.test(execution.platformExecutionRef as string)) {
+    issue(issues, "INVALID_PLATFORM_EXECUTION_REF", `${path}.platformExecutionRef`, "Expected an opaque platform-generated subagent execution reference");
+  }
+  const permissions = object(execution.permissions, `${path}.permissions`, issues);
+  if (permissions) {
+    exact(permissions, ["filesystem", "network", "externalWrites"], `${path}.permissions`, issues);
+    if (!["read", "write"].includes(String(permissions.filesystem))) issue(issues, "INVALID_FILESYSTEM_PERMISSION", `${path}.permissions.filesystem`, "Expected read or write");
+    if (typeof permissions.network !== "boolean") issue(issues, "EXPECTED_BOOLEAN", `${path}.permissions.network`, "Expected a boolean");
+    if (typeof permissions.externalWrites !== "boolean") issue(issues, "EXPECTED_BOOLEAN", `${path}.permissions.externalWrites`, "Expected a boolean");
+  }
 }
 
 export function validateStageContextReceipt(value: unknown): ValidationResult<StageContextReceipt> {
@@ -698,7 +734,7 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
       const path = `$.controls.checkpoints[${index}]`;
       const checkpoint = object(entry, path, issues);
       if (!checkpoint) return;
-      exact(checkpoint, ["id", "from", "to", "toByOutcome", "ownerRole"], path, issues);
+      exact(checkpoint, ["id", "from", "to", "toByOutcome", "ownerRole", "contextStages"], path, issues);
       if (id(checkpoint.id, `${path}.id`, issues)) checkpointIds.push(checkpoint.id);
       const fromValid = stringArray(checkpoint.from, `${path}.from`, issues, 1);
       if ((checkpoint.to === undefined) === (checkpoint.toByOutcome === undefined)) issue(issues, "INVALID_TRANSITION", path, "Define exactly one of to or toByOutcome");
@@ -716,6 +752,7 @@ export function validateDeliveryFlowDefinition(value: unknown): ValidationResult
         targets.forEach((target) => destinations!.add(target));
       }
       roleId(checkpoint.ownerRole, `${path}.ownerRole`, issues);
+      if (checkpoint.contextStages !== undefined) stringArray(checkpoint.contextStages, `${path}.contextStages`, issues, 1);
     });
     if (new Set(checkpointIds).size !== checkpointIds.length) issue(issues, "DUPLICATE_CHECKPOINT", "$.controls.checkpoints", "Checkpoint ids must be unique");
     if (initialStatusValid && terminalStatusesValid && Array.isArray(controls.checkpoints) && controls.checkpoints.length > 0) {
@@ -1022,7 +1059,7 @@ export function validateDisciplineStageHooks(value: unknown): ValidationResult<D
   const descriptor = object(value, "$", issues);
   if (!descriptor) return result(value, issues);
   exact(descriptor, ["schemaVersion", "discipline", "version", "deliveryFlows", "enabled", "permissions", "bindings"], "$", issues);
-  if (descriptor.schemaVersion !== 1) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 1");
+  if (descriptor.schemaVersion !== 2) issue(issues, "UNSUPPORTED_SCHEMA", "$.schemaVersion", "Expected schemaVersion 2");
   id(descriptor.discipline, "$.discipline", issues);
   version(descriptor.version, "$.version", issues);
   stringArray(descriptor.deliveryFlows, "$.deliveryFlows", issues, 1);
@@ -1039,10 +1076,12 @@ export function validateDisciplineStageHooks(value: unknown): ValidationResult<D
     const path = `$.bindings[${index}]`;
     const binding = object(entry, path, issues);
     if (!binding) return;
-    exact(binding, ["stage", "agent", "skills", "mode", "handoff", "approvalBoundary"], path, issues);
+    exact(binding, ["stage", "capability", "invocation", "agent", "candidateSkills", "mode", "handoff", "approvalBoundary"], path, issues);
     id(binding.stage, `${path}.stage`, issues);
+    id(binding.capability, `${path}.capability`, issues);
+    if (binding.invocation !== "required") issue(issues, "INVALID_AGENT_INVOCATION", `${path}.invocation`, "Expected required");
     id(binding.agent, `${path}.agent`, issues);
-    stringArray(binding.skills, `${path}.skills`, issues, 1);
+    stringArray(binding.candidateSkills, `${path}.candidateSkills`, issues, 1);
     if (!DISCIPLINE_GUIDANCE_MODES.includes(binding.mode as never)) issue(issues, "INVALID_DISCIPLINE_GUIDANCE_MODE", `${path}.mode`, "Unsupported Discipline guidance mode");
     string(binding.handoff, `${path}.handoff`, issues);
     string(binding.approvalBoundary, `${path}.approvalBoundary`, issues);

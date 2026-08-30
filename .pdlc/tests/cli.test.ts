@@ -11,7 +11,7 @@ import { AuditLog } from "../core/audit.ts";
 import { hashApprovedBuildContract } from "../core/approval-contract.ts";
 import { hashRequirementsDocument } from "../core/readiness.ts";
 import { sha256 } from "../core/hash.ts";
-import type { PocDeliveryRecord } from "../core/types.ts";
+import type { PocDeliveryRecord, StageContextReceipt } from "../core/types.ts";
 import type { RequirementsAnalysisRecord } from "../delivery-flows/product-requirements-analysis/types.ts";
 
 const projectRoot = resolve(import.meta.dirname, "../..");
@@ -21,30 +21,46 @@ interface ContextOutput {
   contextHash: string;
   controls: Array<{ ref: string }>;
   knowledge: Array<{ ref: string }>;
-  disciplineContributions: Array<{ discipline: string; version: string; agent: { id: string }; skills: Array<{ name: string }> }>;
+  disciplineContributions: Array<{ discipline: string; version: string; capability: string; agent: { id: string }; candidateSkills: Array<{ name: string }> }>;
+  requiredStageInvocation?: { invocationId: string; permissions: { filesystem: "read" | "write"; network: boolean; externalWrites: boolean } };
   integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
 }
 
-async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent", evidenceRefs = ["requirements.md"]): Promise<void> {
-  const context = await runCli(["context", stage, "--root", workspace], workspace);
-  assert.equal(context.exitCode, 0, JSON.stringify(context.output));
-  const output = context.output as ContextOutput;
-  const receipt = {
-    schemaVersion: 1,
+function contextReceipt(output: ContextOutput, stage: string, evidenceRefs: string[]): StageContextReceipt {
+  return {
+    schemaVersion: 2,
     stage,
     contextHash: output.contextHash,
     policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref} while performing ${stage}.` })),
     knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs })),
-    disciplineContributions: output.disciplineContributions.map(({ discipline, version, agent, skills }) => ({
-      ref: `${discipline}@${version}:${agent.id}`,
+    disciplineContributions: output.disciplineContributions.map(({ discipline, version, capability, agent, candidateSkills }) => ({
+      ref: `${discipline}@${version}:${capability}`,
+      capability,
       agent: agent.id,
-      skills: skills.map(({ name }) => name),
+      selectedSkills: [candidateSkills[0]!.name],
       disposition: "used",
       notes: `Executed ${agent.id} guidance for ${stage}.`,
       evidenceRefs,
     })),
     integrations: output.integrations.map(({ ref, skills }) => ({ ref, skills: skills.map(({ id }) => id), disposition: "used", notes: `Used ${ref}.`, evidenceRefs })),
+    stageInvocation: output.requiredStageInvocation ? {
+      invocationId: output.requiredStageInvocation.invocationId,
+      platform: "github-copilot",
+      executor: "generic-subagent",
+      agentType: "general-purpose",
+      status: "completed",
+      platformExecutionRef: `github-copilot:subagent:test-${stage}`,
+      permissions: output.requiredStageInvocation.permissions,
+    } : undefined,
   };
+}
+
+async function applyContextReceipt(workspace: string, stage: string, actor = "pdlc-agent", evidenceRefs?: string[]): Promise<void> {
+  const resolvedEvidenceRefs = evidenceRefs ?? [(await new FileStateStore(workspace).readCurrentRecord() as PocDeliveryRecord).requirements.documentRef];
+  const context = await runCli(["context", stage, "--root", workspace], workspace);
+  assert.equal(context.exitCode, 0, JSON.stringify(context.output));
+  const output = context.output as ContextOutput;
+  const receipt = contextReceipt(output, stage, resolvedEvidenceRefs);
   const receiptPath = `receipt-${stage}.json`;
   await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
   const applied = await runCli(["context-apply", stage, "--root", workspace, "--receipt", receiptPath, "--actor", actor], workspace);
@@ -137,7 +153,7 @@ ${record.resolution.controls.exceptions.map((ref) => `- Exception: \`${ref}\``).
 }
 
 test("status is safe when no record is active", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-cli-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-cli-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["status", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0);
@@ -149,7 +165,7 @@ test("status is safe when no record is active", async (context) => {
 });
 
 test("audit summary is safe when no record is active", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-audit-empty-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-audit-empty-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["audit", "summary", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0);
@@ -161,7 +177,7 @@ test("audit summary is safe when no record is active", async (context) => {
 });
 
 test("initializes a POC record, current pointer, and creation audit event together", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const result = await initializeRecord(workspace, record, "pdlc-agent");
@@ -182,7 +198,7 @@ test("initializes a POC record, current pointer, and creation audit event togeth
 });
 
 test("initializes and reports a project requirements analysis record", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-requirements-init-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-requirements-init-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/requirements-analysis-record.json"), "utf8")) as RequirementsAnalysisRecord;
   record.id = "REQ-CLI";
@@ -196,7 +212,7 @@ test("initializes and reports a project requirements analysis record", async (co
 });
 
 test("approves requirements analysis only after required Stage context is applied", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-requirements-approve-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-requirements-approve-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/requirements-analysis-record.json"), "utf8")) as RequirementsAnalysisRecord;
   record.id = "REQ-APPROVE";
@@ -221,7 +237,7 @@ test("approves requirements analysis only after required Stage context is applie
 });
 
 test("rejects an invalid initial record without writing runtime state", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-invalid-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-invalid-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "COMMITTED";
@@ -236,7 +252,7 @@ test("rejects an invalid initial record without writing runtime state", async (c
 });
 
 test("rejects non-canonical context classifications during initialization", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-tags-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-tags-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.design.technologies = ["web"];
@@ -252,7 +268,7 @@ test("rejects non-canonical context classifications during initialization", asyn
 });
 
 test("loads legacy approved records and requires controlled contract rebinding", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-legacy-contract-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-legacy-contract-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "COMMITTED";
@@ -274,7 +290,7 @@ test("loads legacy approved records and requires controlled contract rebinding",
 });
 
 test("rolls back record and current pointer when creation audit persistence fails", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-init-rollback-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-init-rollback-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.id = "POC-NEW";
@@ -317,7 +333,7 @@ test("requires an active Flow record before resolving a checkpoint", async () =>
 });
 
 test("parks a verified POC without requiring a Productization Package", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-park-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-park-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "VERIFIED";
@@ -356,7 +372,7 @@ test("parks a verified POC without requiring a Productization Package", async (c
 });
 
 test("rolls back a checkpoint when its audit event cannot be persisted", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-checkpoint-rollback-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-checkpoint-rollback-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.status = "VERIFIED";
@@ -383,7 +399,7 @@ test("rolls back a checkpoint when its audit event cannot be persisted", async (
 });
 
 test("build readiness rejects an unapproved requirements draft", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-readiness-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-readiness-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -395,7 +411,7 @@ test("build readiness rejects an unapproved requirements draft", async (context)
 });
 
 test("build readiness records one approved and content-bound decision", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-approval-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-approval-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.requirements.documentRef = "requirements.md";
@@ -659,7 +675,7 @@ test("build readiness records one approved and content-bound decision", async (c
 });
 
 test("status and validate detect receipts made stale by a context-driving change", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-stale-status-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-stale-status-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   const initialized = await initializeRecord(workspace, record);
@@ -689,8 +705,41 @@ test("status and validate detect receipts made stale by a context-driving change
   assert(details.details.some(({ code }) => code === "STALE_STAGE_CONTEXT_APPLICATION"));
 });
 
+test("rejects invalid Skill selection and detects tampered Stage invocation identity", async (context) => {
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-stage-agent-integrity-"));
+  context.after(() => rm(workspace, { recursive: true, force: true }));
+  const record = JSON.parse(await readFile(join(projectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
+  const initialized = await initializeRecord(workspace, record);
+  assert.equal(initialized.exitCode, 0, JSON.stringify(initialized.output));
+
+  const resolved = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
+  assert.equal(resolved.exitCode, 0, JSON.stringify(resolved.output));
+  const receipt = contextReceipt(resolved.output as ContextOutput, "requirements-clarification", [record.requirements.documentRef]);
+  receipt.disciplineContributions[0]!.selectedSkills = ["not-a-candidate"];
+  const receiptPath = "invalid-stage-agent-receipt.json";
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const invalidSelection = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(invalidSelection.exitCode, 2);
+  assert((invalidSelection.output as { error: { details: Array<{ code: string }> } }).error.details.some(({ code }) => code === "CONTEXT_SKILLS_MISMATCH"));
+
+  receipt.disciplineContributions[0]!.selectedSkills = [(resolved.output as ContextOutput).disciplineContributions[0]!.candidateSkills[0]!.name];
+  await writeFile(join(workspace, receiptPath), JSON.stringify(receipt));
+  const applied = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
+  assert.equal(applied.exitCode, 0, JSON.stringify(applied.output));
+
+  const store = new FileStateStore(workspace);
+  const current = await store.readRecord(record.id);
+  const application = current.resolution.contextApplications.find(({ stage }) => stage === "requirements-clarification")!;
+  application.stageInvocation!.invocationId = "f".repeat(64);
+  await store.writeRecord({ ...current, revision: current.revision + 1, updatedAt: new Date().toISOString() }, current.revision);
+
+  const status = await runCli(["status", "--root", workspace], workspace);
+  assert.equal(status.exitCode, 0, JSON.stringify(status.output));
+  assert((status.output as { blockers: Array<{ code: string }> }).blockers.some(({ code }) => code === "CONTEXT_INVOCATION_MISMATCH"));
+});
+
 test("resolves Stage context without writing runtime state and rejects stale receipts", async (context) => {
-  const workspace = await mkdtemp(join(tmpdir(), "lean-pdlc-context-"));
+  const workspace = await mkdtemp(join(tmpdir(), "atlas-pdlc-context-"));
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const result = await runCli(["context", "requirements-clarification", "--root", workspace], workspace);
   assert.equal(result.exitCode, 0, JSON.stringify(result.output));
@@ -703,7 +752,7 @@ test("resolves Stage context without writing runtime state and rejects stale rec
   await store.setCurrentRecord(record.id);
   const output = result.output as ContextOutput;
   const receiptPath = "stale-receipt.json";
-  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 1, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], disciplineContributions: [], integrations: [] }));
+  await writeFile(join(workspace, receiptPath), JSON.stringify({ schemaVersion: 2, stage: "requirements-clarification", contextHash: output.contextHash.replace(/^./, output.contextHash.startsWith("a") ? "b" : "a"), policies: [], knowledge: [], disciplineContributions: [], integrations: [] }));
   const applied = await runCli(["context-apply", "requirements-clarification", "--root", workspace, "--receipt", receiptPath, "--actor", "pdlc-agent"], workspace);
   assert.equal(applied.exitCode, 2);
   assert.equal((applied.output as { error: { code: string } }).error.code, "CONTEXT_RECEIPT_INVALID");

@@ -106,22 +106,38 @@ export interface ContextAssetReceipt {
 }
 
 export interface ContextDisciplineContributionReceipt extends ContextAssetReceipt {
+  capability: string;
   agent: string;
-  skills: string[];
+  selectedSkills: string[];
 }
 
 export interface ContextIntegrationReceipt extends ContextAssetReceipt {
   skills: string[];
 }
 
+export interface StageAgentInvocationReceipt {
+  invocationId: string;
+  platform: "github-copilot";
+  executor: "generic-subagent";
+  agentType: "general-purpose";
+  status: "completed";
+  platformExecutionRef: string;
+  permissions: {
+    filesystem: "read" | "write";
+    network: boolean;
+    externalWrites: boolean;
+  };
+}
+
 export interface StageContextReceipt {
-  schemaVersion: 1;
+  schemaVersion: 2;
   stage: string;
   contextHash: string;
   policies: ContextPolicyReceipt[];
   knowledge: ContextAssetReceipt[];
   disciplineContributions: ContextDisciplineContributionReceipt[];
   integrations: ContextIntegrationReceipt[];
+  stageInvocation?: StageAgentInvocationReceipt;
 }
 
 export interface StageContextApplication extends StageContextReceipt {
@@ -392,6 +408,8 @@ export interface DeliveryFlowCheckpoint {
   to?: string;
   toByOutcome?: Record<string, string>;
   ownerRole: RoleSlot;
+  /** Stage receipts required before this generic checkpoint may advance. */
+  contextStages?: string[];
 }
 
 export interface DisciplineManifest {
@@ -491,15 +509,17 @@ export type DisciplineGuidanceMode = (typeof DISCIPLINE_GUIDANCE_MODES)[number];
 
 export interface DisciplineStageHookBinding {
   stage: string;
+  capability: string;
+  invocation: "required";
   agent: string;
-  skills: string[];
+  candidateSkills: string[];
   mode: DisciplineGuidanceMode;
   handoff: string;
   approvalBoundary: string;
 }
 
 export interface DisciplineStageHooksDescriptor {
-  schemaVersion: 1;
+  schemaVersion: 2;
   discipline: string;
   version: string;
   deliveryFlows: string[];
@@ -556,8 +576,10 @@ export interface DisciplineGuidanceContribution {
   discipline: string;
   version: string;
   permissions: DisciplineStageHooksDescriptor["permissions"];
+  capability: string;
+  invocation: "required";
   agent: { id: string; path: string };
-  skills: Array<{ name: string; path: string }>;
+  candidateSkills: Array<{ name: string; path: string }>;
   mode: DisciplineGuidanceMode;
   handoff: string;
   approvalBoundary: string;

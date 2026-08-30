@@ -11,6 +11,7 @@ import { AuditLog } from "../core/audit.ts";
 import { FlowEngine } from "../core/flow-engine.ts";
 import { sha256 } from "../core/hash.ts";
 import { FileStateStore } from "../core/state.ts";
+import { buildRequiredStageInvocation } from "../platform-adapters/github-copilot-stage-agent.ts";
 import type { ContextualDeliveryRecord, StageContextReceipt } from "../core/types.ts";
 import type { PocDeliveryRecord } from "../core/types.ts";
 import { assessContractChange, assessDeliveryContract } from "../delivery-flows/product-requirements-analysis/delivery-contract.ts";
@@ -26,9 +27,11 @@ interface ContextOutput {
   disciplineContributions: Array<{
     discipline: string;
     version: string;
+    capability: string;
     agent: { id: string };
-    skills: Array<{ name: string }>;
+    candidateSkills: Array<{ name: string }>;
   }>;
+  requiredStageInvocation?: { invocationId: string; permissions: { filesystem: "read" | "write"; network: boolean; externalWrites: boolean } };
   integrations: Array<{ ref: string; skills: Array<{ id: string }> }>;
 }
 
@@ -60,15 +63,16 @@ async function applyResolvedContext(workspace: string, stage: string, evidenceRe
   assert.equal(context.exitCode, 0, JSON.stringify(context.output));
   const output = context.output as ContextOutput;
   const receipt: StageContextReceipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage,
     contextHash: output.contextHash,
     policies: output.controls.map(({ ref }) => ({ ref, notes: `Applied ${ref}.` })),
     knowledge: output.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: `Consulted ${ref}.`, evidenceRefs })),
-    disciplineContributions: output.disciplineContributions.map(({ discipline, version, agent, skills }) => ({
-      ref: `${discipline}@${version}:${agent.id}`,
+    disciplineContributions: output.disciplineContributions.map(({ discipline, version, capability, agent, candidateSkills }) => ({
+      ref: `${discipline}@${version}:${capability}`,
+      capability,
       agent: agent.id,
-      skills: skills.map(({ name }) => name),
+      selectedSkills: [candidateSkills[0]!.name],
       disposition: "used",
       notes: `Executed ${agent.id}.`,
       evidenceRefs,
@@ -80,6 +84,15 @@ async function applyResolvedContext(workspace: string, stage: string, evidenceRe
       notes: `Used ${ref}.`,
       evidenceRefs,
     })),
+    stageInvocation: output.requiredStageInvocation ? {
+      invocationId: output.requiredStageInvocation.invocationId,
+      platform: "github-copilot",
+      executor: "generic-subagent",
+      agentType: "general-purpose",
+      status: "completed",
+      platformExecutionRef: `github-copilot:subagent:e2e-${stage}`,
+      permissions: output.requiredStageInvocation.permissions,
+    } : undefined,
   };
   const receiptPath = `pdlc/evidence/context/${stage}.json`;
   await writeJson(join(workspace, receiptPath), receipt);
@@ -98,7 +111,7 @@ async function initializeGitProject(workspace: string): Promise<void> {
 }
 
 test("runs a concrete Flow executor through delivery, controlled change, and revised handoff", async (context) => {
-  const workspace = await temporaryWorkspace("lean-pdlc-framework-e2e-");
+  const workspace = await temporaryWorkspace("atlas-pdlc-framework-e2e-");
   context.after(() => rm(workspace, { recursive: true, force: true }));
   await initializeGitProject(workspace);
 
@@ -256,7 +269,7 @@ test("runs a concrete Flow executor through delivery, controlled change, and rev
 });
 
 test("runs the lightweight POC Flow from Draft through guarded evidence to Parked", async (context) => {
-  const workspace = await temporaryWorkspace("lean-pdlc-poc-e2e-");
+  const workspace = await temporaryWorkspace("atlas-pdlc-poc-e2e-");
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const record = JSON.parse(await readFile(join(harnessProjectRoot, ".pdlc/examples/poc-delivery-record.json"), "utf8")) as PocDeliveryRecord;
   record.id = "POC-FRAMEWORK-E2E";
@@ -374,7 +387,7 @@ test("runs the lightweight POC Flow from Draft through guarded evidence to Parke
 });
 
 test("discovers a new Stage, Flow, Policy, Knowledge, Agent and Skill without Core changes", async (context) => {
-  const workspace = await temporaryWorkspace("lean-pdlc-extension-e2e-");
+  const workspace = await temporaryWorkspace("atlas-pdlc-extension-e2e-");
   context.after(() => rm(workspace, { recursive: true, force: true }));
   const harnessRoot = join(workspace, "harness");
   const projectRoot = join(workspace, "project");
@@ -415,7 +428,7 @@ test("discovers a new Stage, Flow, Policy, Knowledge, Agent and Skill without Co
       initialStatus: "DRAFT",
       terminalStatuses: ["PASSED"],
       checkpoints: [
-        { id: "review", from: ["DRAFT"], to: "REVIEWED", ownerRole: "developer" },
+        { id: "review", from: ["DRAFT"], to: "REVIEWED", ownerRole: "developer", contextStages: ["framework-smoke-review"] },
         { id: "pass", from: ["REVIEWED"], to: "PASSED", ownerRole: "qa" },
       ],
       deliveryDefaults: { roleAssignmentMode: "explicit-role-assignment", timebox: "one minute", collectDuringRequirements: true },
@@ -461,7 +474,7 @@ test("discovers a new Stage, Flow, Policy, Knowledge, Agent and Skill without Co
   await writeFile(join(disciplineRoot, "agents/framework-smoke.agent.md"), "# Framework Smoke Agent\n\nCoordinates the smoke review.\n");
   await writeFile(join(disciplineRoot, "skills/framework-smoke/SKILL.md"), "# Framework Smoke Skill\n\nCreate deterministic local evidence.\n");
   await writeJson(join(disciplineRoot, "hooks/stages.json"), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     discipline: "framework-assurance",
     version: "1.0.0",
     deliveryFlows: ["framework-smoke"],
@@ -469,8 +482,10 @@ test("discovers a new Stage, Flow, Policy, Knowledge, Agent and Skill without Co
     permissions: { filesystem: "write", network: false, externalWrites: false },
     bindings: [{
       stage: "framework-smoke-review",
+      capability: "framework-smoke-review",
+      invocation: "required",
       agent: "framework-smoke",
-      skills: ["framework-smoke"],
+      candidateSkills: ["framework-smoke"],
       mode: "verify",
       handoff: "Produce local framework smoke evidence.",
       approvalBoundary: "The Agent reports evidence; the QA checkpoint remains external to the contribution.",
@@ -496,31 +511,49 @@ test("discovers a new Stage, Flow, Policy, Knowledge, Agent and Skill without Co
   assert.equal(await engine.executor(engine.flow("framework-smoke")), undefined);
   await engine.initialize(record, "qa@example.com");
 
+  await assert.rejects(
+    engine.checkpoint({ root: projectRoot, actor: "developer@example.com" }, "review"),
+    (error: unknown) => error instanceof Error && error.message.includes("requires current Stage context receipts"),
+  );
+
   const material = await engine.harness.resolveStage("framework-smoke-review", record as unknown as ContextualDeliveryRecord);
   assert.deepEqual(material.resolved.controls.map(({ ref }) => ref), ["framework-assurance.stability@1.0.0"]);
   assert.deepEqual(material.resolved.knowledge.map(({ ref }) => ref), ["framework-assurance.smoke-method@1.0.0"]);
-  assert.deepEqual(material.disciplineGuidance.contributions.map(({ discipline, agent, skills }) => ({ discipline, agent: agent.id, skills: skills.map(({ name }) => name) })), [
-    { discipline: "framework-assurance", agent: "framework-smoke", skills: ["framework-smoke"] },
+  assert.deepEqual(material.disciplineGuidance.contributions.map(({ discipline, capability, agent, candidateSkills }) => ({ discipline, capability, agent: agent.id, candidateSkills: candidateSkills.map(({ name }) => name) })), [
+    { discipline: "framework-assurance", capability: "framework-smoke-review", agent: "framework-smoke", candidateSkills: ["framework-smoke"] },
   ]);
 
   const evidenceRef = "pdlc/evidence/framework-smoke.txt";
   await mkdir(dirname(join(projectRoot, evidenceRef)), { recursive: true });
   await writeFile(join(projectRoot, evidenceRef), "framework smoke passed\n");
   const receipt: StageContextReceipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     stage: "framework-smoke-review",
     contextHash: material.snapshot.contextHash,
     policies: material.resolved.controls.map(({ ref }) => ({ ref, notes: "Acknowledged by the E2E fixture." })),
     knowledge: material.resolved.knowledge.map(({ ref }) => ({ ref, disposition: "used", notes: "Applied the smoke method.", evidenceRefs: [evidenceRef] })),
-    disciplineContributions: material.disciplineGuidance.contributions.map(({ discipline, version, agent, skills }) => ({
-      ref: `${discipline}@${version}:${agent.id}`,
+    disciplineContributions: material.disciplineGuidance.contributions.map(({ discipline, version, capability, agent, candidateSkills }) => ({
+      ref: `${discipline}@${version}:${capability}`,
+      capability,
       agent: agent.id,
-      skills: skills.map(({ name }) => name),
+      selectedSkills: [candidateSkills[0]!.name],
       disposition: "used",
       notes: "Executed the discovered Discipline component.",
       evidenceRefs: [evidenceRef],
     })),
     integrations: [],
+    stageInvocation: (() => {
+      const invocation = buildRequiredStageInvocation(material.snapshot.contextHash, "framework-smoke-review", material.disciplineGuidance.contributions)!;
+      return {
+        invocationId: invocation.invocationId,
+        platform: "github-copilot" as const,
+        executor: "generic-subagent" as const,
+        agentType: "general-purpose" as const,
+        status: "completed" as const,
+        platformExecutionRef: "github-copilot:subagent:framework-smoke-e2e",
+        permissions: invocation.permissions,
+      };
+    })(),
   };
   await writeJson(join(projectRoot, "pdlc/evidence/context/framework-smoke-review.json"), receipt);
   await applyStageContext(harnessRoot, {
