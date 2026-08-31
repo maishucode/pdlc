@@ -25,12 +25,19 @@ This guide is for people who maintain or extend Atlas PDLC:
 
 Read the Architecture before changing a shared contract. Installation and POC operation are covered by the User Guide.
 
+## Corp AI governance boundary
+
+Atlas maintainers operate within Corp's established AI-use governance. Corp determines which Coding Agents, accounts, data classes, environments, external services, and usage patterns are approved. GitHub Copilot is the current approved Coding Agent for the Pilot.
+
+Atlas assets may encode or strengthen Corp requirements, but no Stage, Flow, Discipline asset, Integration, Project Overlay, exception, or Coding Agent Adapter may weaken or bypass them. When a Corp rule must be made enforceable in Atlas, represent it through the owning Policy and Control path with traceable ownership rather than copying informal guidance into multiple Flows or Adapters.
+
 ## Current repository baseline
 
 Before extending Atlas, distinguish bundled implementation from extension potential. As of August 31, 2026, the repository contains:
 
-- active `poc` and `product-requirements-analysis` Delivery Flows;
-- planned `implementation` and `pdlc` Delivery Flows;
+- Pilot Ready `poc` Delivery Flow;
+- Developing `product-requirements-analysis` Flow with an active technical implementation and a target during the week of August 31, 2026;
+- Developing `implementation` and `pdlc` Flow definitions, targeted for the weeks of August 31 and September 7, 2026 respectively;
 - Product Management, UX, Solution Architecture, Security, and Data Platform Discipline packages;
 - three UX Skills, one UX Agent, and one UX Hook; other registered Disciplines currently contribute Artifacts, Policies, Knowledge, or no executable contribution as declared by their manifests;
 - one Databricks Integration definition with no bundled Integration Skills;
@@ -287,9 +294,11 @@ Before merging:
 
 Never silently reinterpret an active Record under a materially changed Flow.
 
-## Discipline owner responsibilities
+## Discipline Owner Guide
 
-A Discipline owns professional content and its governance. It does not own Delivery Flow state.
+A Discipline Owner turns professional standards, methods, and expertise into reusable Atlas assets. The Discipline owns its content and professional governance; it does not own Delivery Flow state, Core behavior, or Coding Agent Adapter behavior.
+
+### What a Discipline Owner owns
 
 ```text
 .pdlc/disciplines/<discipline>/
@@ -306,51 +315,83 @@ A Discipline owns professional content and its governance. It does not own Deliv
   hooks/
 ```
 
-The owner is responsible for:
+The owner is accountable for:
 
-- stable asset IDs and semantic versions;
-- correct `ownerDiscipline` metadata;
+- the Discipline's purpose, maintainers, and professional approval authorities;
+- stable asset IDs, semantic versions, and compatibility;
+- correct `ownerDiscipline` metadata and safe repository-relative references;
 - applicability across Flow, Stage, risk, technology, and Discipline tags;
-- schema-valid content and resolvable references;
-- required evidence and approval boundaries;
-- exception authorities for mandatory Policies;
-- permissions for executable contributions;
-- tests for discovery, resolution, conflicts, and enforcement;
-- review and migration of breaking changes.
+- required evidence, enforcement behavior, and exception authorities;
+- executable-contribution permissions and handoff boundaries;
+- tests for discovery, resolution, conflicts, enforcement, and provenance;
+- periodic review, deprecation, and migration of its assets.
 
-### Artifact Definitions
+### Choose the correct asset type
 
-Use an Artifact Definition for a governed deliverable contract such as Requirements, a Story, ADR, Scope, or Package. Provide only the schemas, profiles, templates, examples, and references required to make the contract usable.
+Use the smallest asset type that expresses the professional need clearly:
+
+| Need | Atlas asset | Use it for |
+|---|---|---|
+| Governed deliverable contract | Artifact Definition | Requirements, Story, ADR, Scope, Package, or another typed deliverable. |
+| Mandatory rule | Policy | A requirement that becomes an applicable Control and may require evidence, approval, or a formal exception. |
+| Recommended practice | Knowledge: Guidance | Advice that improves Stage work but does not block progress by itself. |
+| Automatic replaceable choice | Knowledge: Default | A value Atlas may apply automatically unless a stronger authority locks or replaces it. |
+| Example or reusable source | Knowledge: Reference or KB | Reference implementations, examples, standards summaries, or concrete organizational facts. |
+| Reusable expert procedure | Skill | A repeatable method the main Agent applies during relevant Stage work. |
+| Expert execution behavior | Discipline Agent | Specialized behavior, boundaries, and handoff expectations for a Discipline contribution. |
+| Stage activation and permissions | Hook | Binding an Agent and Skills to canonical Stages for eligible Flows with explicit permissions. |
+
+Do not use Knowledge for a mandatory obligation. Do not create a Skill when static Guidance is sufficient, and do not create a Discipline Agent merely to represent a Role or job title.
+
+### End-to-end change workflow
+
+For every new or changed Discipline asset:
+
+1. **Confirm ownership.** Verify that the subject belongs to this Discipline. Coordinate with the other owner instead of duplicating cross-Discipline content.
+2. **Identify the delivery need.** Name the affected canonical Stages, Delivery Flows, technologies, risks, and expected outcome.
+3. **Choose the asset type.** Use the decision table above. Separate mandatory Policy from advisory Knowledge.
+4. **Define applicability.** Scope the asset narrowly enough to resolve only when relevant, without hard-coding lifecycle sequence inside the Discipline.
+5. **Author the asset.** Use a stable ID and semantic version, correct ownership metadata, resolvable local references, and the minimum content needed to make it usable.
+6. **Define governance.** For mandatory behavior, specify enforcement Stage, evidence, approval or exception authority, and any locked default. For executable behavior, declare permissions and handoff boundaries.
+7. **Bind execution only when needed.** Add or update a Hook when a Skill or Discipline Agent must participate in Stage work. Static Artifacts, Policies, and Knowledge do not need a Hook merely to be discoverable.
+8. **Test resolution and failure behavior.** Cover positive applicability, non-applicability, invalid references, conflicts, required evidence, permissions, and stale-context behavior as relevant.
+9. **Review compatibility.** Determine whether existing Delivery Records, context receipts, adopters, or Project Overlays need migration or fail-closed handling.
+10. **Obtain review and release.** Use the review matrix and checklist below, run the repository validation suite, and update capability documentation if the bundled inventory changed.
+
+### Asset-specific guidance
+
+#### Artifact Definitions
+
+Use an Artifact Definition for a governed deliverable contract such as Requirements, a Story, ADR, Scope, or Package. Include only the schemas, profiles, templates, examples, and references required to make the contract usable.
 
 Do not store delivery instances under the shared definition. Project Artifact instances belong under `pdlc/`.
 
-### Policies
+#### Policies
 
-Use a Policy for a mandatory professional or enterprise rule. Declare:
+Use a Policy for a mandatory professional, enterprise, or Corp rule. Declare:
 
 - owning Discipline and version;
-- applicability;
+- applicability and enforcement Stage;
 - rules and enforcement mode;
-- enforcement Stage;
 - required evidence;
-- exception approver;
+- approval or exception authority;
 - any locked standard default.
 
-An applicable Policy enters the effective Control set. Do not express mandatory behavior as advisory Knowledge.
+An applicable Policy enters the effective Control set. A Discipline Policy may operationalize or strengthen Corp governance, but it cannot weaken it.
 
-### Knowledge
+#### Knowledge
 
-Use Knowledge for advisory Guidance, Defaults, References, and KB content. Declare applicability narrowly enough that irrelevant Stages do not resolve it or invalidate their context hashes.
+Use Knowledge for advisory Guidance, replaceable Defaults, References, and KB content. Declare applicability narrowly enough that irrelevant Stages do not resolve it or invalidate their context hashes.
 
-Knowledge does not become blocking merely because it is useful. Create or reference a Policy when mandatory enforcement is required.
+Knowledge does not become blocking merely because it is useful. Create or reference a Policy when enforcement is mandatory.
 
-### Skills and Agents
+#### Skills and Discipline Agents
 
-A Skill defines a reusable expert method. A Discipline Agent defines expert execution behavior and boundaries. Keep files self-contained within the Discipline and ensure Skill names match their directories.
+A Skill defines a reusable expert method. A Discipline Agent defines specialized execution behavior and boundaries. Keep each asset self-contained within its Discipline and ensure Skill names match their directories.
 
-These assets advise or perform Stage work. They do not approve Requirements, own Checkpoints, or write controlled Record state.
+These assets advise or perform Stage work. They do not approve Requirements, own Checkpoints, redefine a Stage, or write controlled Record or Audit state.
 
-### Hooks
+#### Hooks
 
 A Hook binds an Agent and Skills to canonical Stages. It declares:
 
@@ -363,15 +404,55 @@ A Hook binds an Agent and Skills to canonical Stages. It declares:
 
 One Discipline may bind a Stage once in one Hook resolution. References must resolve inside the same Discipline. An unbound Stage continues with Core behavior.
 
+### Day-to-day operating responsibilities
+
+Discipline Owners should regularly:
+
+- review assets when Corp policy, professional standards, technology, risk, or supported Flows change;
+- verify that applicability still includes the intended work and excludes unrelated Stages;
+- review permission grants and remove unused network or external-write access;
+- investigate validation failures, Control conflicts, stale context, and recurring exceptions involving their assets;
+- version breaking changes and provide an adopter migration path;
+- deprecate obsolete assets without silently reusing their IDs;
+- keep owner and approver assignments current;
+- ensure bundled capability claims match what the Discipline actually provides.
+
+### Discipline asset release checklist
+
+- [ ] The asset belongs to the declared Discipline and has an accountable owner.
+- [ ] The correct asset type is used; mandatory requirements are Policies rather than Knowledge.
+- [ ] ID, version, metadata, references, and folder placement are valid.
+- [ ] Flow, Stage, risk, technology, and Discipline applicability is explicit and tested.
+- [ ] Evidence, enforcement, approvals, and exception authority are defined where required.
+- [ ] Skill, Agent, and Hook permissions follow least privilege.
+- [ ] Corp AI governance and enterprise Policies are preserved or strengthened.
+- [ ] Positive, negative, conflict, permission, and provenance tests are proportionate to the change.
+- [ ] Breaking-change compatibility, migration, and deprecation are addressed.
+- [ ] Documentation and bundled capability inventory are updated when needed.
+
 ### Review expectations
 
 | Change | Minimum review |
 |---|---|
-| Artifact contract | Discipline Owner plus affected Flow/Stage owners |
+| Artifact contract | Discipline Owner plus affected Flow and Stage owners |
 | Policy | Discipline Policy Approver plus affected governance owner |
 | Knowledge | Discipline maintainer |
-| Skill or Agent | Discipline owner and execution/platform reviewer |
-| Hook or permission | Discipline owner, Flow owner, and security review when permissions increase |
+| Skill or Discipline Agent | Discipline Owner and execution or Coding Agent Adapter reviewer |
+| Hook or permission | Discipline Owner, Flow Owner, and Security review when permissions increase |
+
+### Discipline Owner prohibited patterns
+
+Do not:
+
+- change Delivery Flow state, Checkpoint transitions, or Flow-owned defaults from a Discipline asset;
+- redefine canonical Stage meaning, requirements, or outputs;
+- write controlled Delivery Record or Audit state directly;
+- hide a mandatory obligation in advisory Knowledge;
+- weaken Corp governance, enterprise Policies, or locked Control decisions;
+- copy the same professional rule into multiple Flows, Hooks, or Coding Agent Adapters;
+- request network, filesystem, or external-write permissions that the contribution does not need;
+- store credentials, secrets, or delivery-specific Artifact instances in the shared Discipline package;
+- mark an asset as used without reading or executing it and recording required provenance.
 
 ## Add an Integration
 
@@ -474,9 +555,11 @@ Validation must fail closed for unknown references, stale context, unsafe paths,
 
 ## Release a Delivery Flow
 
-Before changing a Flow to `active` and advertising it as supported:
+Before advertising a Flow as Pilot Ready:
 
 - [ ] Flow ownership and purpose are explicit.
+- [ ] Corp AI, security, privacy, legal, intellectual-property, and data-handling requirements are satisfied.
+- [ ] The Flow has complete executable behavior and appropriate implementation status; technical registration alone is not treated as readiness.
 - [ ] Canonical Stage sequence is reviewed.
 - [ ] Conditional activation tags are tested.
 - [ ] State graph has no duplicates, unreachable terminal states, unreachable sources, or dead ends.

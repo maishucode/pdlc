@@ -12,6 +12,14 @@ The architecture allows organizations to tailor Delivery Flows to their business
 
 This document explains what Atlas is and why it is designed this way. Operational installation and POC instructions are in the [User Guide](ATLAS_PDLC_README.md). Extension procedures and owner responsibilities are in [Maintainers](ATLAS_PDLC_MAINTAINERS.md).
 
+## Corp governance boundary
+
+Atlas is designed to operate inside Corp's existing AI governance boundary. Corp remains authoritative for approved Coding Agents, identity and access, acceptable use, security, privacy, legal and intellectual-property obligations, and data classification and handling.
+
+Atlas adds delivery-specific governance beneath that boundary. Its Policies, Controls, Delivery Flows, Project Overlays, and Coding Agent Adapters may strengthen or operationalize Corp requirements, but they cannot override or weaken them. GitHub Copilot is the current Corp-approved Coding Agent for the Pilot; Codex and other Coding Agents remain future Adapter targets subject to Corp approval.
+
+The architecture diagram starts with the approved Coding Agent and therefore assumes the enclosing Corp AI governance boundary rather than duplicating all Corp controls inside Atlas.
+
 ## Design goals
 
 Atlas is designed to provide:
@@ -51,12 +59,13 @@ The **Agent** owns conversation, analysis, artifact drafting, implementation, an
 
 The diagram intentionally shows stable architectural categories rather than every registered asset. The executable inventory is resolved from the versioned catalogs and manifests, not from the image.
 
-### Current implementation snapshot
+### Current implementation and readiness snapshot
 
 As of August 31, 2026, the repository contains:
 
-- two active Delivery Flows: `poc` and `product-requirements-analysis`;
-- two registered but planned Delivery Flows: `implementation` and `pdlc`;
+- one Pilot Ready Delivery Flow: `poc`;
+- an active technical implementation of `product-requirements-analysis` that remains Developing for pilot release, targeted for the week of August 31, 2026;
+- registered `implementation` and `pdlc` definitions that remain Developing; Implementation is targeted for the week of August 31, 2026, and end-to-end PDLC for the week of September 7, 2026;
 - five registered Disciplines: Product Management, UX, Solution Architecture, Security, and Data Platform;
 - three bundled UX Skills, one UX Agent, and one UX Hook;
 - one registered Integration definition: Databricks, currently without bundled Integration Skills;
@@ -372,9 +381,9 @@ The canonical shared Skill recognizes the executable `poc` and `product-requirem
 
 The `lean-pdlc` directory and Agent identifiers are compatibility names in the current v2 implementation. **Atlas PDLC** is the product and framework name.
 
-## Current implemented capability
+## Current capability and roadmap
 
-The repository currently executes two local Delivery Flows.
+Only the POC Delivery Flow is currently Pilot Ready.
 
 The POC Delivery Flow uses this lifecycle:
 
@@ -387,23 +396,15 @@ DRAFT
 
 It supports Requirements clarification, conditional UX and Security Stages, Build Readiness, implementation, evidence-backed verification, final disposition, Project Overlay resolution, Discipline contributions, and append-only audit history.
 
-The Product Requirements Analysis Delivery Flow turns an approved product requirement into versioned Story snapshots and an approved Sprint Scope. Its lifecycle is:
+Product Requirements Analysis and Implementation are Developing with a target release during the week of August 31, 2026. End-to-end PDLC is Developing with a target release during the week of September 7, 2026. The repository may contain registered definitions, runtime scaffolding, or engineering paths for these Flows before they are Pilot Ready.
 
-```text
-DRAFT
-  -> REQUIREMENTS_APPROVED
-  -> WORK_ITEMS_PREPARED
-  -> SCOPED
-```
-
-An approved change can return a scoped Record to `DRAFT`. The current phase records optional external identifiers but does not write to JIRA or XRAY.
-
-`implementation` and `pdlc` remain planned. Planned Flows are architecture declarations or roadmap items until their lifecycle behavior, tests, documentation, and active status are complete. Release timing is not enforced by the Harness.
+Roadmap dates are planning targets and are not enforced by the Harness. A Flow is not Pilot Ready until its lifecycle behavior, controls, tests, documentation, Coding Agent Adapter entry points, and owner approvals are complete.
 
 ## Safety properties
 
 Atlas maintains these architectural invariants:
 
+- Corp AI governance remains authoritative over Atlas configuration and execution.
 - Only explicitly cataloged Delivery Flows and Integrations are loadable.
 - A Flow cannot redefine canonical Stage semantics.
 - A Stage is not automatically a human approval gate.
