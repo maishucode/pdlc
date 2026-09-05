@@ -6,6 +6,8 @@
 
 **核心决定：Runner 负责恢复、文件版本、执行状态与下一步；模型负责当前范围内的专业工作。** 保留现有概念和文件式存储，按小批次修改契约与实现。
 
+补充决定：必需 Capability 与独立执行要求分别声明。普通 Stage 可以由 Subagent 或主 Agent 完成；Runner 负责合法选择和切换执行方式，适用规则、产物校验与审批要求保持一致。AI-DLC 的实际机制、边界和本方案取舍见[参考实现](#aidlc-reference)。
+
 本文是一份可独立阅读的完整方案。新增字段、命令、接口、目录与数值验收目标均属于拟议设计，不表示当前已实现能力或已测性能。历史审计事实与待实施契约分别标注；实施前必须核对目标分支的实际代码状态。
 
 ## 目录
@@ -15,8 +17,9 @@
 | [一、目标与架构边界](#overview) | [历史基线](#baseline)、[恢复保证](#continuity)、[架构](#architecture)、[运行协议](#protocol-overview)、[共同约束](#invariants) |
 | [二、运行恢复协议](#runtime-recovery) | [执行身份](#execution-state)、[锁](#writer-lock)、[事务](#journal)、[故障矩阵](#crash-matrix)、[幂等](#idempotency)、[文件恢复](#file-recovery)、[worker](#worker-recovery)、[resume 算法](#resume-algorithm)、[存储与备份](#retention)、[恢复验收](#recovery-tests) |
 | [三、Flow、Stage 与 Discipline](#flow-stage-discipline) | [职责](#ownership)、[业务选择](#flow-planning)、[多 Flow](#flow-models)、[适用条件](#applicability)、[失效传播](#invalidation)、[跨 Flow 合同](#handoff)、[并行整合](#workspace-scale)、[规模验证](#scale-tests)、[修改边界](#flow-changes) |
-| [四、普通模型与 Agent 协议](#agent-protocol) | [单一下一动作](#next-action)、[输入输出合同](#agent-contract)、[共享 Skill](#shared-skill)、[重试与暂停](#retry-boundaries)、[平台要求](#platform-support) |
+| [四、普通模型与 Agent 协议](#agent-protocol) | [单一下一动作](#next-action)、[输入输出合同](#agent-contract)、[共享 Skill](#shared-skill)、[重试与暂停](#retry-boundaries)、[平台要求](#platform-support)、[执行策略与主 Agent fallback](#execution-policy) |
 | [五、实施、验收与迁移](#rollout) | [六批 PR](#implementation-plan)、[真实会话验收](#session-tests)、[迁移与回滚](#migration) |
+| [六、AI-DLC 参考实现与取舍](#aidlc-reference) | 已核查的上游机制、fallback 的实现边界、Atlas 采纳范围与固定版本来源 |
 
 <a id="overview"></a>
 
@@ -78,7 +81,7 @@
            |                    |
            v                    v
     Record.execution       Platform Adapter
-    inputs / attempts      at most one dispatch per attempt
+    inputs / attempts      inline or subagent executor
     results / progress            |
            ^                      v
            +--- validated artifact references
@@ -116,7 +119,8 @@ resume(recordId)
   -> return exactly one nextAction
 
 nextAction
-  -> run_action / invoke_worker / wait / needs_input / needs_approval
+  -> run_action / execute_inline / invoke_worker / wait
+  -> needs_input / needs_approval
   -> conflict / unsupported / done
 ```
 
@@ -138,6 +142,7 @@ nextAction
 | 幂等身份由 Runner 生成并持久化 | 网络或调用重试复用操作 ID；真正重做才增加 attempt |
 | worker 写入隔离且结果有 fencing | 旧 attempt 迟到结果不能覆盖当前结果；无法隔离时先确认旧 worker 退出 |
 | 同一 attempt 的派发去重 | 持久化 dispatch claim 或使用平台幂等派发；重复 token 只查询已派发执行 |
+| 执行方式由 Runner 决定 | `inline / prefer_subagent / require_subagent` 区分角色能力与独立性；inline 同样受输入绑定、执行领取和结果校验约束 |
 | 只绑定实际输入与相关规则 | receipt、自增 revision、无关配置变化不能令运行失效；没有精细依赖时明确采用保守失效 |
 | 单一批准版本 | 输入变更或跨 Flow rebase 不得悄悄延用过期审批，也不得覆盖旧批准产物 |
 | 每次恢复提供一条明确下一步 | 模型不需要选择恢复版本、处理锁或推断业务状态机 |
@@ -170,6 +175,8 @@ type StageRun = {
   runKey: string;
   attempt: number;
   activeAttemptId?: string;
+  executorMode?: "inline" | "subagent";
+  fallbackReason?: string;
   status: "pending" | "running" | "completed" | "interrupted" | "failed";
   inputManifestRef: string;
   outputManifestRef?: string;
@@ -179,6 +186,8 @@ type StageRun = {
 ```
 
 这些字段属于 `Record.execution`，不再增加 Session / Job / Task 状态机。`pending` 的 attempt 为 0，进入 `running` 时必须有正整数 attempt、active attempt ID 与完整输入清单。当前 Flow 中 Stage 引用唯一，暂不引入节点 ID；历史 attempt 的输入、结果与失败原因由不可变运行材料保留。
+
+`running` 同时绑定 `executorMode`；`fallbackReason` 由 Runner 根据实际失败或能力缺失生成。执行策略进入上下文清单与 `contextHash`，实际执行方式属于 attempt：在既定策略允许范围内从 Subagent 转 inline 时保留同一输入 `runKey`，增加 attempt 并保存旧尝试。若改变强制独立执行规则，则属于治理配置变更，必须重新绑定，不能记作普通 fallback。
 
 拟新增 `runKey = hash(recordId, flowVersion, stageId, contextHash, inputHash)`，绑定本次真实输入；`attemptId` 标识一次执行尝试。每个 Record/Stage 的 attempt 编号单调递增，输入变化也不重置，以免复用旧目录和身份。输入变化产生新的 `runKey`；同一输入重新执行产生新的 attempt；请求重传复用原 `operationId`。三者不能混用。
 
@@ -310,9 +319,11 @@ Stage `completed` 表示合同要求的不可变输出已通过验证，不自�
 
 <a id="worker-recovery"></a>
 
-### 2.7 Worker 中断与未知结果
+### 2.7 执行者中断与未知结果
 
 启动前先持久化 `running`、attempt ID、输入清单和启动意图，再调用 adapter；获得平台执行引用后立即保存。外部调用与本地 journal 无法组成一个原子事务，故必须处理“已启动但引用尚未保存”的窗口。
+
+本节的 worker 隔离、领取、结果接纳与过期拒收也适用于 inline 主 Agent。开始 inline 工作前，宿主通过相同受控入口领取该 attempt 的执行资格；第二个宿主只能查询或等待。明确验证同一执行者仍在续做时可以恢复原 attempt；原执行者状态未知则按下表处理，不因为“主 Agent 接手”而免除并发写入与外部效果核查。
 
 同一个 attempt 的重复派发也必须去重：宿主调用 adapter 前，通过同一事务入口领取持久化的一次性 dispatch claim，或使用平台保证的 attempt 幂等派发键。重复 `invoke_worker` token 只能查询原派发，不能再次启动 worker。claim 写完但调用前后退出都可能留下未知状态；能证明未执行时安全继续，否则按下表核查或新建隔离 attempt。每 attempt 至多一次逻辑派发，不能承诺每次 attempt 都恰好启动一个 worker。
 
@@ -328,6 +339,8 @@ Stage `completed` 表示合同要求的不可变输出已通过验证，不自�
 | 可能发生外部写入，结果不可确定 | 使用外部幂等键或查询回执核查；不能盲目重放 |
 
 自动重试隔离执行时，在锁内更新 `activeAttemptId`。旧 worker 即使迟到完成，提交时也会因 attempt 已过期而失去发布资格；旧输出保留为诊断材料。这个 fencing 检查必须位于接纳结果的受控入口，不能只写在 Agent 提示词里。
+
+同一机制也用于 Subagent → inline：先判断[执行策略](#execution-policy)是否允许，确认旧执行只写隔离区或已退出，再原子建立新的 inline attempt。复用的是经过校验的进度快照；原始 staging 与未确认的外部动作不能直接当成续做成果。
 
 这里的“本地效果”必须满足“只写自己 attempt 的文件”，而不是仅看 `externalWrites: false`。如果 worker 能直接编辑共享仓库，或能绕过 staging 写全局缓存、启动后台服务，就还不满足安全重试条件。
 
@@ -478,7 +491,7 @@ type FlowStep =
 ```
 
 该函数说明业务上下一步是什么；通用 Runner 再校验前置结果、适用 Controls、执行权限和审批边界。
-`FlowStep` 仅是 Flow 内部业务建议，不是给 Agent 的响应枚举。Runner 将它映射为[Agent 协议](#next-action)统一的 `nextAction`：`run-stage` 可能需要 `run_action`、`invoke_worker` 或等待，`approve` 映射为 `needs_approval`，`complete` 经校验后映射为 `done`。恢复与平台事实由 Core 补足，Flow 不直接给模型调度指令。
+`FlowStep` 仅是 Flow 内部业务建议，不是给 Agent 的响应枚举。Runner 将它映射为[Agent 协议](#next-action)统一的 `nextAction`：`run-stage` 可能需要 `run_action`、`execute_inline`、`invoke_worker` 或等待，`approve` 映射为 `needs_approval`，`complete` 经校验后映射为 `done`。恢复与平台事实由 Core 补足，Flow 不直接给模型调度指令。
 Flow 不得实现自己的锁、文件恢复、attempt 重试或 receipt 去重；这些继续由同一个 runtime 处理。
 `planNext` 返回 `approve` 也不能直接改变 Record，仍须执行现有受控 checkpoint 协议。
 
@@ -549,6 +562,8 @@ UX Discipline 默认只适用于 `web-ui/mobile-ui`，Policy/Knowledge 会继承
 3. 特殊 Hook 确需更窄范围时才增加可选 `binding.appliesTo`，不引入新的 selector language。
 4. 解析输出携带 `whyMatched` 和来源路径，能解释为什么装载、为什么未装载；不新增持久化业务实体。
 5. 所有命中的 required capabilities 都进入通用执行协议；worker 只可选择声明的 candidate Skills。
+
+必需 Capability 表示工作内容不可省略，不自动要求 Subagent。Stage 声明默认 `executionPolicy`；已匹配的强制 Policy/Hook 可将它收紧为 `require_subagent`，Runner 记录来源并统一解析。Project Overlay 不得降低强制独立要求，Flow 不另建一份 fallback 规则。多个贡献使用同一次 Stage 合同，主 Agent inline 时也逐项完成并验证所有必需 Capability。
 
 Mandatory Policies 不能依赖模型随意选择 Discipline 才生效，Project Overlay 继续不能削弱 enterprise Controls。
 新增 Flow 时必须检查 Policy 自身的 Flow 过滤条件：显式列举旧 Flow 的 Policy 不会自然覆盖新 Flow。
@@ -686,14 +701,16 @@ Runner resume -> recover -> verify -> resolve
           v
      One nextAction
           |
-   +------+------+----------------+
-   |             |                |
-Run action   Invoke worker   Wait / Human boundary
-   |             |
-   +------ Result + validation
-                 |
-                 v
-            Runner resume
+   +------------+-------------+----------------+
+   |            |             |                |
+Run action   Main inline   Subagent       Wait / Human boundary
+   |            |             |
+   +------------+-------------+
+                |
+       Result + validation
+                |
+                v
+           Runner resume
 ```
 
 `resume` 先维护未完成事务、检查执行者状态、核对文件，再返回唯一下一动作。
@@ -719,8 +736,9 @@ bun .pdlc/cli.ts action stage-result --input <result.json> --actor <identity>
 共享 runtime action 由 `FlowEngine.action` 分派，避免每个 Flow 复制运行状态写入逻辑。
 Flow 自有 action 继续按其声明校验；共享 action 名称保留并检查冲突，不开放任意动作执行。
 完整命令参数由 Runner 返回，Agent 不推导项目路径、操作 ID、审批人或哈希。
-`stage-start` 在派发前持久化 attempt、身份和派发意图；`stage-result` 验证并发布结果，两者分别幂等。
+`stage-start` 在开始工作前持久化 attempt、身份、实际执行方式及执行意图；`stage-result` 验证并发布结果，两者分别幂等。
 worker 必须经过 adapter 的受控 dispatch 入口：它以短事务原子领取一次性 claim，只有本次成功领取的调用可以实际派发；重复请求只查询，不因重读旧成功响应而重新获得派发资格。平台支持时同时使用 attempt 幂等键。宿主不能拿一个可反复读取的合同直接绕过该入口启动 worker。
+`execute_inline` 由主 Agent 执行同一份工作合同，并走同一个宿主执行领取与结果接纳入口；它不派发 Subagent，也不生成假的 Subagent trace。`run_action` 只表示 Runner 给出的受控操作，不能用它隐藏一段没有执行身份的模型工作。
 claim 落盘后崩溃而派发结果未知时，只有确认本地写入已隔离才能 fence 旧 attempt 并新建尝试；否则先确认退出。
 长 Stage 通过 `stage-save` 保存已验证部分产物和事实交接，不为每份文件新建 Stage；保存不代表 Stage 已完成。
 
@@ -746,7 +764,8 @@ claim 落盘后崩溃而派发结果未知时，只有确认本地写入已隔�
 }
 ```
 
-动作集合为 `run_action / invoke_worker / wait / needs_input / needs_approval / conflict / unsupported / done`。
+动作集合为 `run_action / execute_inline / invoke_worker / wait / needs_input / needs_approval / conflict / unsupported / done`。
+inline 响应沿用相同字段结构，各值绑定本次 inline attempt；`nextAction.kind` 为 `execute_inline`。执行方式由 Runner 生成，模型不能改写 `invoke_worker` 为 `execute_inline` 后提交原 token。
 `wait` 附带可再次查询时间或宿主等待方式；它不会要求模型保持一个长期 Record 写锁。
 每条命令提交前重新验证 token 与输入，防止用户改动或另一执行者推进后使用旧动作。
 合同和交接文件是 Record 执行事实的生成视图，不是需要另行同步的权威状态。
@@ -766,6 +785,7 @@ claim 落盘后崩溃而派发结果未知时，只有确认本地写入已隔�
 | `writeScope` | 本 attempt 的隔离输出或明确授权的源码；禁止模型直接写控制状态 |
 | `completionCriteria` | 可机器验证的条件与需要人工判断的条件分别声明 |
 | `previousWork` | 已验证文件、已完成事项、未完成事项和失败的外部动作引用 |
+| `execution` | 解析后的执行策略、实际方式、规则来源与 fallback 原因；由 Runner 生成 |
 
 不能预先知道 implementation 将查阅的所有源码，因此区分必读输入和允许查阅的固定源码版本。
 缺上下文时从 Runner 增补；不让模型独立扫描全部 Discipline，也不把整仓库塞进提示词。
@@ -775,7 +795,7 @@ MVP 保守绑定 source tree 与必要的未提交文件快照；仅记 `HEAD` �
 
 模型只返回实际工作、实际选用的 Skills 和证据路径；Runner 构建 ID、时间、哈希、receipt 和 Audit。
 结果 token 由合同透传。真实 trace 由 adapter 从宿主调用结果捕获或原样转送，不信任模型自报成功。
-宿主拿不到真实执行来源时必须标明未验证，不得声称已通过真实 worker 验证。
+Subagent 模式下，宿主拿不到真实执行来源时必须标明未验证，不得声称已通过真实 worker 验证。inline 模式记录实际主 Agent 执行及可取得的宿主来源，不要求不存在的 Subagent trace；该结果可以满足普通工作验收，不能满足强制独立调用证明。
 
 ```json
 {
@@ -813,12 +833,12 @@ Runner 校验 token、完整 Capability 覆盖、Skills 候选集、路径权限
 1. Resolve the requested record and call the internal Runner resume entry.
 2. Follow the single nextAction returned by the Runner. Do not infer progress from chat history.
 3. Read the exact required context. Request missing context through the Runner.
-4. Invoke the required worker with the unchanged contract only after the adapter accepts a durable dispatch claim. Inspect duplicate tokens; never redispatch them.
+4. Follow execute_inline or invoke_worker exactly, after the guarded host entry grants execution ownership. Never reuse a claim to start another executor.
 5. Return actual work results and evidence paths using the supplied result schema.
 6. Let the Runner validate and persist results. Never edit controlled state or forge a receipt.
 7. After a recoverable error, follow the Runner's repair action and bounded retry budget.
 8. Ask the user only for the input, approval, or conflict decision named by nextAction.
-9. Never bypass a governed checkpoint or emulate an unsupported required worker.
+9. Never bypass a governed checkpoint, choose your own fallback, or claim inline self-checks are independent reviews.
 10. Call resume again after the action completes or the host reconnects.
 ```
 
@@ -826,7 +846,7 @@ Runner 校验 token、完整 Capability 覆盖、Skills 候选集、路径权限
 
 ### 4.4 技术恢复与必要暂停分开
 
-重试预算按稳定 action 和错误类别保存，默认最多三次自动尝试；新会话不能清零后无限重试。
+重试预算按同一 `runKey` 下的逻辑工作与错误类别保存，默认最多三次自动尝试；更换 action ID、attempt、执行方式或会话都不能清零。对 `prefer_subagent` 的派发失败，预算最多分配两次给 Subagent（初试与一次缩减非必要上下文的重试），随后进入策略允许的 inline 接手；工具已知不可用时直接选 inline，不消耗预算做必败调用。普通结果格式修复仍受对应错误类别预算约束。
 锁忙与正常 `wait` 不消耗错误重试次数，也不能因等待超时就假定原 worker 已退出。
 格式错误返回具体字段与小型修复输入；不重放全部上下文，也不重做已提交工作。
 次数耗尽保存失败事实并给出具体修复下一步，例如补回指定来源、修正指定字段或处理指定冲突；不进入永久 `blocked` 状态。
@@ -843,10 +863,13 @@ Runner 校验 token、完整 Capability 覆盖、Skills 候选集、路径权限
 | 外部写入结果未知 | 按服务端 operation key 或查询接口核对；无法确认则明确暂停 |
 | 业务答案缺失 | 返回 `needs_input`，只请求能解除当前缺口的信息 |
 | 审批缺失或已过期 | 返回 `needs_approval`，呈现需要审批的完整可审查产物 |
-| 平台缺少 required worker 能力 | 返回 `unsupported`，说明支持条件与可转移平台 |
+| `prefer_subagent` 且平台没有 Subagent | 生成合法 inline attempt 与 `execute_inline`，保留同一任务要求 |
+| Subagent 重试耗尽且允许 fallback | 安全撤销旧 attempt 发布资格后转 inline，记录原因与已复用进度 |
+| `require_subagent` 且缺少合格执行能力 | 返回 `unsupported` 与支持条件；如规则已有替代验收路径，按该路径处理 |
+| 独立审查未完成 | 保存真实未完成结果与原因；按既定治理规则请求替代审查或人工判断，不能假报通过 |
 | schema / 权限 / 完整性错误 | 能安全修复则返回修复动作；否则说明准确条件，不循环盲试 |
 
-每个 attempt 至多一次派发，成功执行使用一个 required worker；同一 Stage 至多一个获准发布结果的 active attempt。
+每个 attempt 只有一种实际执行方式和一个获准执行者；Subagent 模式至多一次逻辑派发，inline 模式不派发 worker。同一 Stage 至多一个获准发布结果的 active attempt。
 被 fencing 的旧 worker 可以尚未退出，但它必须只能写独立暂存区，不能继续修改共享源码或发布结果。
 普通文件系统锁或拒收旧 receipt 本身不能隔离源码写入；缺少实际写入隔离时必须等待或确认旧 worker 退出。
 外部副作用另行核对；本地 fencing 不能撤销已经发出的网络操作。
@@ -860,16 +883,17 @@ Runner 校验 token、完整 Capability 覆盖、Skills 候选集、路径权限
 
 | 平台声明 | 最低处理要求 |
 |---|---|
-| `dispatch` | 真实启动 required worker，获得可核验的执行引用 |
+| `inline` | 宿主能交付完整合同、受控领取执行、限制写入范围并回传结果；所有支持平台的普通工作基线 |
+| `dispatch` | 声明是否支持独立执行；支持时真实启动 worker 并获得可核验的引用 |
 | `inspect` / `attach` | 分别声明是否能查询状态、重接执行；不能把两者混称为 resume |
 | `cancel` | 声明能否取消及如何确认退出；取消请求不等于已停止 |
 | `isolatedWrites` | 声明能否将旧 attempt 的本地写入限制在隔离目录或工作树 |
 | `externalOperationLookup` | 外部写入能否查询或依靠服务端幂等键识别重复 |
 
 历史审计快照仅 GitHub Copilot 声明 `native-subagent`，Codex adapter 没有声明；这是该快照的仓库支持情况，实施前须重新核对。
-当前共享 Skill 强制 required worker 并禁止 inline 模拟，不能为了普通模型静默降级。
-实施时把 “exactly once per Stage” 修订为“每 attempt 至多一次派发，成功执行使用一个 required worker”，同步 schema、Skill、adapter 和测试。
-无 native worker 平台提前返回 `unsupported`。MVP 可以只有一个真实验证通过的 adapter，不需要先抽象所有平台。
+历史共享 Skill 强制 required worker 并禁止 inline 模拟；本方案把合法 inline 执行定义为独立模式，不能仅删除旧限制后让模型自行选择。
+实施时同步修订 `requiredStageInvocation` 的类型/校验、AGENTS.md、共享 Skill、adapter 和测试：必需 Capability 始终完成，只有 `require_subagent` 必须独立调用；每 attempt 的执行方式必须可验证。旧 native receipt 保留原含义，新增 inline receipt 明确记录真实方式。
+无 native worker 的平台只要达到 inline 基线，仍能执行普通 Stage；强制独立的任务提前返回具体支持条件。MVP 验证一个平台的原生调用和禁用 Subagent 后的 inline 路径，不需要先支持所有平台。用隔离 CLI worker 作为独立执行适配可以后续补充，未经验证的 shell 调用不能自动满足 `require_subagent`。
 
 交付用户只看到恢复结果与需要参与的业务动作；内部 CLI、哈希和 journal 不进入默认用户流程。
 
@@ -883,6 +907,67 @@ Runner 校验 token、完整 Capability 覆盖、Skills 候选集、路径权限
 | 仅需审批时：请确认本次交付验收结果         |
 +------------------------------------------+
 ```
+
+<a id="execution-policy"></a>
+
+### 4.6 执行策略与主 Agent fallback
+
+以下为 Atlas 的拟议实现，依据第六部分的 AI-DLC 调研补足其协议与 runtime 之间的缺口。它同时修订早期方案中“所有 required worker 都必须是真实 Subagent”的统一限制。
+
+在现有 Stage 定义中增加一个 `executionPolicy`，由适用 Controls/Hook 收紧，并随上下文清单绑定；不新增 Flow、Job 或另一套调度引擎：
+
+| 策略 | 初次执行 | Subagent 不可用或失败 | 验收要求 |
+|---|---|---|---|
+| `inline` | 主 Agent 读取完整合同后直接执行 | 无需 Subagent | 所有必需 Capability、产物与适用 Controls 仍须验证 |
+| `prefer_subagent` | 平台支持时优先独立 worker | 已知无工具则直接 inline；调用失败经过有界重试后允许 inline | 两种方式使用相同业务输入、规则与产物契约，记录实际方式 |
+| `require_subagent` | 使用已验证的独立执行适配 | 不自动改为主 Agent；返回可用平台、重试或已声明的替代验收路径 | 必须满足真实独立执行要求，inline 自检不能代替 |
+
+普通实现、分析和文档 Stage 以 `prefer_subagent` 为建议默认，交互密集 Stage 可明确使用 `inline`。迁移必须逐项分类：未知的历史 required worker 先保留独立要求，只有确认它是专业能力要求而非独立性要求时才改为可 fallback，不能批量删除强制约束。
+
+`prefer_subagent` 本身声明了等价任务范围内的 inline 退路，所以缺工具时不用再次询问技术性确认。切换若要求新增权限、扩大交付范围或豁免独立审查，则按既有治理入口处理。用户只要求继续工作不等于批准修改业务标准。
+
+独立性还须相对于实际产物作者验证：另一个角色名或一条身份首行不构成独立执行证明。要求独立审查的 Capability 必须取得与作者不同、可核验且上下文符合隔离要求的执行来源。首期沿用现有验证 Stage 承接这类工作；若某配置让同一次单执行者任务既写产物又独立审查自己，应在配置校验时指出冲突，不引入通用多人调度器来掩盖它。
+
+#### 确定的选择与切换步骤
+
+```text
+Resolve required work + execution policy + adapter capabilities
+    |
+    +-- inline ------------------------------> execute_inline
+    |
+    +-- prefer_subagent
+    |     +-- available ---------------------> invoke_worker
+    |     |      +-- subagent retries spent --+
+    |     +-- unavailable -------------------+--> safe handoff --> execute_inline
+    |
+    +-- require_subagent
+          +-- qualified executor ------------> invoke_worker
+          +-- unavailable -------------------> explicit support or review boundary
+```
+
+Runner 按以下顺序执行切换，模型只执行返回的一个动作：
+
+1. 校验当前生效策略、输入绑定与宿主能力；分清“没有工具”“调用失败”“仍在运行”“结果未知”。不把等待当失败，不借 fallback 重放未知外部效果。
+2. 若允许重试，缩减非必要历史摘要，保留所有必需规则、输入文件与当前工作范围。重试预算沿用第 4.4 节，切换模式不能重新获得一轮预算。
+3. 需要换执行者时先确认旧执行已退出，或只能写旧 attempt 的隔离目录；在短事务中撤销旧发布资格，增加 attempt，保存 `executorMode: inline` 和准确 `fallbackReason`。事务中断按同一 journal 恢复。
+4. 从绑定来源重建输入与已接纳进度，重新生成完整 inline 合同：主导及辅助角色定义、必要知识、强制规则、文件清单、可写范围和验收条件。不能只返回一句“你自己做”。
+5. Runner 返回 `execute_inline`；宿主先经受控入口领取，再让主 Agent 完成当前工作，使用 `stage-save` / `stage-result` 保存结果。重复读取动作不等于再次获得执行资格，旧 token、旧输出和重复领取不能获得新 attempt 的发布资格。
+6. Runner 依据相同业务完成条件验证结果，生成真实 inline receipt，再重新判断后续 Stage 与 gate。执行模式变化不自动使业务审批失效，也不能让已经过期的输入审批恢复有效。
+
+两个执行方式共用同一业务内容清单；合同的 attempt 路径、执行来源、token 会随新尝试更新。普通 fallback 保持输入内容哈希不变，主 Agent 的新编辑作为新 attempt 的输出。来源丢失、用户并发修改、未知外部结果等仍按原恢复协议处理。
+
+#### 真实回执与独立审查的出口
+
+回执至少关联原有 `runKey`、attempt、输入输出 manifest，以及 Runner 记录的 `executorMode`、执行来源和 fallback 原因。Subagent 结果要有真实派发来源；inline 结果如实标记主 Agent 执行。两者都验证产物与实际测试证据，模型不能自报一种更强的执行方式。
+
+审查没有完成时保存 `incomplete`/失败事实和具体原因，不能当作 `completed` 或批准。借鉴 AI-DLC 的处理方向，让失败成为可处理结果而非永远缺失的 receipt，但 Atlas 的下一步由自身 Controls 决定：
+
+- advisory 审查可以在规则明确允许时携带“未完成审查”的说明进入人工判断，不能显示成通过；
+- 必需独立审查安排另一个合格执行者，或进入已经定义的例外审批；没有例外规则就保持未满足，给出准确解除条件；
+- 主 Agent 可继续规则允许的修复、补材料等工作，其自检明确标为自检，不能替代独立审查证明；
+- “保持未完成”不等于允许跳到依赖它的后续 Stage，任何跳过仍由 Flow 的合法动作决定。
+
+这样无需为普通模型新增专用状态机：模型越普通，越应减少让它自行判断策略、修复收据和选择恢复文件的任务。是否达到稳定支持，最终由两种执行方式的真实会话验收证明。
 
 <a id="rollout"></a>
 
@@ -907,9 +992,9 @@ Runner 校验 token、完整 Capability 覆盖、Skills 候选集、路径权限
 |---|---|---|
 | 1 | `.pdlc/core/controlled-mutation.ts`、`lock.ts`、`audit.ts`、`state.ts` 与 `flow-engine.ts` 初始化；journal、幂等、自动恢复 | 各崩溃窗口可恢复；尾部 JSONL、并发重复 operation token、并发初始化不丢数据；冻结候选字节与最终提交一致 |
 | 2 | `context-receipt.ts`、`harness-context.ts`、`evidence.ts`、`commands/context.ts`；manifest 与输入输出内容绑定 | 需求、dirty source、输出篡改可检测；缺失文件准确恢复；用户文件不被覆盖 |
-| 3 | `types.ts`、`schemas/`、`flow-engine.ts`、`flow-executor.ts`、`cli.ts`、`platform-adapters/`；execution 与 resume | fresh session 返回唯一下一步；并发重复 token 只派发一次；冻结候选字节验证；未知 worker 安全 fencing；结果只接纳一次 |
-| 4 | `discipline-guidance.ts`、`harness-context.ts`、`poc-progress.ts` 与各 Flow Executor；applicability 和业务类型归位 | POC、需求分析行为保持；跨 Flow 无污染；planned Flow 不被当作 executable |
-| 5 | `.pdlc/tests/fixtures/implementation-local/`、共享 Skill 与 adapter；先验证本地交付 fixture | 已批准范围→实现→验证→本地交付；真实普通模型与换模型恢复通过；正式 implementation 仍为 planned |
+| 3 | `types.ts`、`schemas/`、`flow-engine.ts`、`flow-executor.ts`、`cli.ts`、`platform-adapters/`；execution、策略解析、inline/subagent 与 resume | fresh session 返回唯一下一步；两种方式受控领取；无 Subagent 时合法 inline；切换中断可恢复；过期结果只拒收、不重复推进 |
+| 4 | `discipline-guidance.ts`、`harness-context.ts`、`poc-progress.ts` 与各 Flow Executor；applicability、独立要求和业务类型归位 | 必需 Capability 与独立执行分别校验；强制独立不能被 overlay 或 fallback 放宽；跨 Flow 无污染；planned Flow 不可执行 |
+| 5 | `.pdlc/tests/fixtures/implementation-local/`、AGENTS.md、共享 Skill 与 adapter；先验证本地交付 fixture | 正常调用、禁用 Subagent、重试后 inline、换普通模型均跑完本地交付；审查不可用有真实诊断；正式 implementation 仍为 planned |
 | 6 | 索引、保留策略、规模用例、README/参考文档和迁移入口 | 多 Record 数据规模、空间增长、备份恢复、分批迁移与回滚演练 |
 
 PR 1 的恢复机制首先覆盖现有受控命令；PR 3 再暴露统一恢复动作，不能等所有新运行对象完成才修残留锁。
@@ -930,14 +1015,20 @@ PR 6 再验证扩大使用规模，避免在文件恢复和 worker 正确性未�
 | 派发 claim 后崩溃、完成状态未知 | 仅在满足隔离条件后允许新 attempt 重复计算；不得重复接纳状态或外部副作用 |
 | 并发重复 token 或验证时 worker 改文件 | 一次有效派发/接纳；验证冻结候选字节，不将后写内容偷换成已验证结果 |
 | 中途换目标普通模型 | 从磁盘续做，不需要人为补充旧聊天、锁说明或修 receipt |
+| 启动前禁用 Subagent，策略为 `prefer_subagent` | 直接取得完整 inline 合同，主 Agent 完成相同工作；不反复调用不存在的工具 |
+| Subagent 重试耗尽后由主 Agent 接手 | 安全新建 attempt，复用正确文件与进度；实际 executor、fallback 原因与总重试预算可追踪 |
+| fallback 事务中途退出或两个宿主同时接手 | 恢复同一切换决定，只有合法执行者可发布；旧 worker 迟到结果不能覆盖 inline 结果 |
+| inline 执行中途再次清空聊天或更换模型 | 从已接纳进度继续，不能因 mode 切换而丢失 mandatory Policy、Knowledge 或验收条件 |
+| `require_subagent` 没有合格执行者 | 不冒充独立审查；返回明确支持条件或规则已有的替代验收动作 |
+| 主 Agent 提交伪造 native trace 或旧 attempt token | 拒收；合法 inline receipt 则可满足普通工作验收 |
 | 普通模型首次返回错误 JSON | 获得局部修复提示，修复后可继续，重试次数跨会话保持 |
 | 必要文件缺失、被改、来源丢失 | 分别表现为精确恢复、冲突、不可恢复且定位重做入口 |
 | POC 与 implementation-local 使用同名 Stage | Record、输入、适用 Discipline 与结果身份正确隔离 |
 | 必要审批、外部效果未知、平台能力缺失 | 在对应边界停下，不制造假完成或重复外部副作用 |
 
-自动故障注入和 synthetic trace 只验证机制；真实模型验收必须运行真实 adapter 和 worker。
-记录模型/平台版本、样本、人工介入、重试、重复副作用、误复用和验收结果；未执行项明确标为未测。
-首轮至少分别进行同模型续做、换普通模型续做和审批边界测试，不把一次成功泛化为所有模型可靠。
+自动故障注入和 synthetic trace 只验证机制；Subagent 路径须运行真实 adapter/worker，inline 路径须实际禁用 Subagent 并让主 Agent 完成工作，不能只改返回字段来模拟成功。
+记录模型/平台版本、实际执行方式、fallback 原因、样本、人工介入、重试、重复副作用、误复用和验收结果；未执行项明确标为未测。
+首轮至少分别进行同模型续做、换普通模型续做、无 Subagent 交付、调用失败后接手和审批边界测试，不把一次成功泛化为所有模型可靠。上游 AI-DLC 的测试与文档只能作为设计证据，不替代 Atlas 验收。
 
 <a id="migration"></a>
 
@@ -952,7 +1043,146 @@ PR 6 再验证扩大使用规模，避免在文件恢复和 worker 正确性未�
 7. 只有确认没有后续成功写入时才可恢复迁移前备份；已有新交付进度则用兼容修复版本或经过验证的降级迁移。
 8. 不通过清空 Audit、删除 journal 或回退业务审批状态实施回滚；不可恢复的历史来源必须如实保留限制。
 
+执行策略迁移同步检查旧 Hook/Stage 的独立性含义，保留已有 native receipt 的语义，不把历史主 Agent 工作补写成已发生的独立调用。只有新 Runner、schema、AGENTS.md、Skill 和 adapter 的策略协议一起可用后才启用 inline fallback，避免提示词允许而结果校验仍拒收。
+
 版本门禁在迁移数据前先部署到受支持的 Runner 入口：写入前检查存储 schema 与最低 writer 版本，拒绝不兼容格式。未经补丁的历史可执行文件不能被新 JSON 字段自动约束，必须退出并从实际写入入口移除；不把“文档要求旧版本拒写”当作已有技术保护。
 
 上线完成标准是：支持范围内的可恢复中断无需人工技术修补，必要边界能准确解释，且每一份复用结果都有可验证来源。
 具体文件恢复与事务不变量以 [运行恢复协议](#runtime-recovery) 为准；Flow 扩展与规模边界以 [Flow、Stage 与 Discipline](#flow-stage-discipline) 为准。
+
+<a id="aidlc-reference"></a>
+
+## 六、AI-DLC 参考实现与取舍
+
+本节调研 AWS `awslabs/aidlc-workflows`，固定到提交 `a277af218f0df7f325d3b8be7b6d90fce2c5bd40`。下文分别标明上游已有协议、从源码得出的限制，以及 Atlas 拟议设计，避免把文档中的承诺当成已验证的运行保证。本次只做源码与协议审阅，没有运行上游测试，也没有实施 Atlas 的相关改动。
+
+关键启发是：**执行某项专业工作、创建独立 Subagent、通过独立审查，是三种不同要求。** 主 Agent 可以完成许多专业工作；是否必须委派，取决于执行策略和独立性要求，不能仅凭“存在一个专家角色”决定。
+
+<a id="aidlc-execution"></a>
+
+### 6.1 上游已有：主 Agent 执行是正式模式
+
+AI-DLC 的 Stage 定义选择协作方式；主导专家、辅助专家是职责，未必对应独立运行的 Agent。四种已使用的模式如下。[协作模式协议](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L7-L36)
+
+| 上游模式 | 谁实际执行 | 如何交付完成证据 |
+|---|---|---|
+| `inline` | 主 Agent 加载主导与辅助专家的角色和知识，依次采用各专业视角 | Stage 产物；不要求辅助专家贡献文件 |
+| `subagent` | 委派主导专家；如有辅助专家，再分别委派并由主导专家整合 | 有辅助专家时，检查各自贡献文件 |
+| `pipeline` | 按声明顺序逐个委派，后续执行者接收上游产物 | 每一环节在当前执行中的持久收据 |
+| `mob` | 主导专家起草，辅助专家分别贡献，再有限轮次整合与讨论 | 辅助专家贡献文件，并保留异议 |
+
+当前编译后的 Stage 表共有 33 个 Stage：29 个 `inline`、2 个 `subagent`、1 个 `pipeline`、1 个 `mob`。29 个 `inline` 包括 3 个通过初始化工具完成的初始化阶段，不能表述成“29 个阶段全部靠主模型独立推理完成”。另外，Stage 本体采用 `inline`，也不表示它配置的后续独立 Reviewer 可以省略。[当前 Stage 表](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/harness/copilot/skills/aidlc/SKILL.md#L214-L253)
+
+例如架构与安全可以是主 Agent 必须依次采用的专业视角；只有当工作要求独立参与者或独立审查时，才需要把相关身份落实为独立执行。上游明确禁止为了 `inline` Stage 的辅助角色而额外派发 Agent。[Inline 规则](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L24-L34)
+
+### 6.2 上游已有：代码决定下一步，文件承载交接
+
+上游稳定性的主要来源是一套明确的交接协议，并非某个模型能一直记住整个过程。
+
+```text
+next reads state and returns one directive
+                    |
+                    v
+conductor loads context and performs the work
+                    |
+                    v
+report records the outcome and transition
+                    |
+                    +--------------------> next
+```
+
+`next` 读取状态与编译后的 Stage 图，返回一个结构化指令；主 Agent 执行后调用 `report`，由工具提交阶段转换。协议不允许主 Agent 自行维护另一套阶段顺序或直接调用状态生命周期方法。[Forwarding Loop](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/harness/copilot/skills/aidlc/SKILL.md#L32-L46)
+
+上下文交付也具体到内容和文件：`load-steering` 交付当前规则内容；`inline_context_paths` 列出主 Agent 必须读取的角色及知识文件；随后才读取 Stage 定义与输入产物。派发的 Agent 则通过配置加载自身角色，brief 携带当前任务、相关路径和完整适用规则。Agent 名字或文件路径出现在提示词里，本身不代表上下文已经读入。[上下文加载与规则交付](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/harness/copilot/skills/aidlc/SKILL.md#L87-L88)、[派发上下文预算](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L103-L108)
+
+产物内容留在磁盘，Subagent 返回的摘要只列产物路径、关键决定、问题和下一步。协作产物分文件写入；支持者贡献文件需要正确身份标记；Pipeline 在每次返回后记录当前执行的环节收据。完成检查并不只看一句“已完成”。这些是结构性证据，仍不能单独证明产物质量或真实的进程隔离。[文件交接](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L18-L36)、[返回摘要](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L40-L70)
+
+新会话从产物、阶段记忆、Audit、状态文件和派生图重新定位；发生冲突时，Audit 是事件事实的校准依据。协议明确恢复的是决定、进度和上下文，不是上一个会话的聊天缓冲区。Atlas 应吸收这种恢复目标，但仍需落实前文的事务、文件快照和执行隔离，不能把“能够读取旧文件”直接当成精确恢复。[恢复来源](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-recovery.md#L8-L36)
+
+<a id="aidlc-fallback"></a>
+
+### 6.3 上游已有：普通派发失败后可以由主 Agent 接手
+
+上游的普通 Subagent 失败恢复协议覆盖超时、工具报错，以及返回内容被截断或不完整。处理路径如下。[失败恢复原文](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L110-L116)
+
+```text
+Subagent call fails or returns incomplete output
+                    |
+                    v
+Retry once with a smaller relevant context
+                    |
+              Still failing
+                    |
+                    v
+User chooses the resolution
+  +-- Run it here: continue in the main conversation
+  +-- Skip and revisit: leave unfinished and revisit later
+                    |
+                    v
+Record the failure and chosen resolution
+```
+
+因此，“主 Agent 继续完成这项工作”是上游明确允许的退路；但该协议要求用户选择，不能说成引擎已经在能力不足时自动切换执行模式。`Skip and revisit` 也保留“未完成”事实，不等于自动满足下游输入或批准 Stage。
+
+另一种常被误读的退路是“不能并行时改为串行”。上游允许 `subagent` 和 `mob` 中的独立派发串行运行，但要求每个参与者仍遵守原有信息边界。这解决并发能力不足，仍然依赖独立委派能力，**不等同于没有 Subagent 时由主 Agent 模拟所有参与者**。[串行派发约束](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L32-L36)
+
+### 6.4 上游已有：Reviewer 不完整时记录真实失败
+
+Reviewer 有单独的恢复协议。工具将审查请求绑定到当时的产物与源文件，校验审查附录的完整性、身份、迭代号和请求挑战；不完整的附录不能充当有效结论。[Reviewer 完成判定](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-reviewer.md#L145-L157)
+
+| 情况 | 上游处理 |
+|---|---|
+| 第一次审查不完整 | 清理本次不完整附录，以同一待处理请求重试一次，不增加审查迭代 |
+| 重试仍不完整 | 停止重复请求，记录 `NOT-READY`，原因是审查未在预算内完成 |
+| Advisory 审查 | 进入带有真实失败说明的人工关口 |
+| Adversarial 审查仍有迭代 | 开始下一次有界审查；没有真实发现时不让实现者盲目返工 |
+| Adversarial 审查耗尽迭代 | 带着失败事实进入人工关口 |
+
+这份终态收据既不伪造通过，也不让引擎永远等一份不存在的审查。它允许流程到达处理失败的关口，**不表示质量门槛自动满足，更不是将主 Agent 自检冒充独立审查**。[Reviewer 重试与失败收据](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-reviewer.md#L158-L187)
+
+<a id="aidlc-limits"></a>
+
+### 6.5 源码推断：尚不能承诺所有 Stage 自动无损降级
+
+结合协议与当前代码，可以确认下面的衔接缺口；这些是源码审阅结论，不是本次运行故障复现。
+
+| 检查点 | 当前实现 | 对主 Agent 接手的影响 |
+|---|---|---|
+| 执行模式 | `run-stage` 的 `mode` 直接取自 Stage 定义 | 未见按宿主 Subagent 能力改写模式的统一机制 |
+| Inline 上下文 | `subagent` / `pipeline` 不构建 inline 角色清单 | 协议选择接手后，仍需补齐主 Agent 的上下文交付 |
+| 协作完成校验 | 仍按声明模式检查贡献文件与 Pipeline 收据 | 改由主 Agent 工作，并不会自动改变对应完成条件 |
+| 恢复逃生开关 | 可关闭协作证据检查以恢复确实已执行但丢失证据的工作 | 这是有限恢复手段，不能作为日常缺能力降级策略 |
+
+依据分别是 [指令模式生成](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/tools/aidlc-orchestrate.ts#L3208-L3220)、[Inline 角色选择](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/tools/aidlc-orchestrate.ts#L2807-L2824)、[协作与 Pipeline 校验](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/tools/aidlc-orchestrate.ts#L7095-L7227)。
+
+跨宿主的保证也有边界。例如 Copilot 的 Hook 依赖项目受信任，非交互运行还需要额外配置；缺失这些条件时，部分保护 Hook 不会运行。README 也明确提醒能力较弱的模型可能遗漏步骤或提前推进审批。因此，不能从“适配多个 Harness”推导出“任何模型、任何宿主都稳定”。[Copilot 条件](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/harness/copilot/skills/aidlc/SKILL.md#L124-L129)、[模型限制](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/README.md#L72-L77)
+
+历史 [RFC 105](https://github.com/awslabs/aidlc-workflows/issues/105) 曾提出安全 Subagent 失败后，改由 `aidlc-security-check` Skill / 主会话继续检查，仍无有效结果则拒绝放行。它只能作为设计背景：当前检视的源码树未交付这一命名 Skill，不能据此认定该 fallback 已在当前版本实现。本文以固定提交的实际协议和代码为实现证据；Issue 是历史讨论，链接不具有固定提交的不可变性。
+
+### 6.6 Atlas 拟议设计：吸收协议，补齐模式切换
+
+以下是本方案的设计选择，**不是声称 AI-DLC 已有这些接口或 Atlas 已经实现**。具体字段、状态机和验收要求以前五部分为准。
+
+| 采纳的原则 | Atlas 的处理 |
+|---|---|
+| 专业职责与进程拓扑分开 | Discipline 规定必须做什么；Stage 执行策略决定用主 Agent 还是独立 Worker |
+| 主 Agent 执行是正式路径 | 支持 `inline`；`prefer_subagent` 允许能力不足或有界失败后接手 |
+| 独立性需要明确声明 | 只有确有独立性要求时使用 `require_subagent`；自检如实记录为自检 |
+| 单一结构化下一步 | Runner 决定恢复、补上下文、执行或真实等待，普通模型不自行拼接路由 |
+| 文件承载工作交接 | 两种执行方式接收等价的已验证输入、适用规则、有效进度和验收条件 |
+| 失败必须具有终态 | 保存失败原因、重试预算和后续选择，避免永久等待缺失的 Worker 或收据 |
+
+不直接照搬三件事：其一，不把每次允许的技术降级都变成新的用户确认；前文策略已授权、且不改变独立性与业务审批时，由 Runner 执行切换。其二，不通过关闭证据校验、伪造参与者贡献或伪造 Review 来换取继续。其三，不把协议里的“接着做”当成恢复保证，切换前仍须处理旧 Worker 的发布权限、真实外部副作用和文件版本。
+
+最终验收应分别覆盖原生主 Agent 执行、无 Subagent、派发超时、能力中途丢失、重复派发、切换后旧 Worker 返回，以及普通模型在新会话中接手。只有这些路径使用同一套事实校验并通过实际宿主测试，才能把“不因缺少 Subagent 被机械阻塞”作为产品能力。
+
+<a id="aidlc-sources"></a>
+
+### 6.7 参考资料与证据范围
+
+上游协议与代码链接均固定到同一提交，避免后续主分支变化使结论失去对应关系；RFC 105 的 Issue 链接仅提供历史背景。
+
+- [协作拓扑、文件交接与失败恢复协议](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-ensemble.md#L5-L116)：主要说明协议要求，不代表所有要求已由代码强制执行。
+- [Reviewer 的有界恢复](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/aidlc-common/protocols/stage-protocol-reviewer.md#L145-L187)：说明不完整审查如何形成真实终态。
+- [Copilot 的主 Agent 循环](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/harness/copilot/skills/aidlc/SKILL.md#L32-L46)：展示普通执行协议，其他 Harness 的具体能力仍需逐一验证。
+- [引擎的协作完成校验](https://github.com/awslabs/aidlc-workflows/blob/a277af218f0df7f325d3b8be7b6d90fce2c5bd40/core/tools/aidlc-orchestrate.ts#L7095-L7227)：用于核对协议退路与当前代码之间尚未接通的部分。
